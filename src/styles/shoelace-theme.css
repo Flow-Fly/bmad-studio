@@ -1,0 +1,43 @@
+/* Shoelace Compact Theme Overrides */
+
+:root {
+  /* Reduce default Shoelace spacing for compact UI */
+  --sl-spacing-3x-small: var(--bmad-spacing-xs);
+  --sl-spacing-2x-small: var(--bmad-spacing-xs);
+  --sl-spacing-x-small: var(--bmad-spacing-sm);
+  --sl-spacing-small: var(--bmad-spacing-sm);
+  --sl-spacing-medium: var(--bmad-spacing-md);
+  --sl-spacing-large: var(--bmad-spacing-lg);
+  --sl-spacing-x-large: var(--bmad-spacing-xl);
+  --sl-spacing-2x-large: var(--bmad-spacing-2xl);
+  --sl-spacing-3x-large: var(--bmad-spacing-3xl);
+
+  /* Map Shoelace colors to BMAD tokens */
+  --sl-color-primary-600: var(--bmad-color-accent);
+  --sl-color-primary-700: var(--bmad-color-accent-hover);
+  --sl-color-success-600: var(--bmad-color-success);
+  --sl-color-warning-600: var(--bmad-color-warning);
+  --sl-color-danger-600: var(--bmad-color-error);
+
+  /* Typography */
+  --sl-font-sans: var(--bmad-font-family);
+  --sl-font-mono: var(--bmad-font-family-mono);
+  --sl-font-size-small: var(--bmad-font-size-sm);
+  --sl-font-size-medium: var(--bmad-font-size-md);
+  --sl-font-size-large: var(--bmad-font-size-lg);
+
+  /* Border Radius */
+  --sl-border-radius-small: var(--bmad-radius-sm);
+  --sl-border-radius-medium: var(--bmad-radius-md);
+  --sl-border-radius-large: var(--bmad-radius-lg);
+
+  /* Input sizing for compact mode */
+  --sl-input-height-small: 28px;
+  --sl-input-height-medium: 32px;
+  --sl-input-height-large: 40px;
+
+  /* Button sizing for compact mode */
+  --sl-button-font-size-small: var(--bmad-font-size-sm);
+  --sl-button-font-size-medium: var(--bmad-font-size-md);
+  --sl-button-font-size-large: var(--bmad-font-size-lg);
+}
