@@ -12,17 +12,19 @@ import (
 
 // BMadHandler handles BMAD-related API endpoints
 type BMadHandler struct {
-	configService       *services.BMadConfigService
-	workflowPathService *services.WorkflowPathService
-	agentService        *services.AgentService
+	configService         *services.BMadConfigService
+	workflowPathService   *services.WorkflowPathService
+	agentService          *services.AgentService
+	workflowStatusService *services.WorkflowStatusService
 }
 
 // NewBMadHandler creates a new BMadHandler with the given services
-func NewBMadHandler(cs *services.BMadConfigService, wps *services.WorkflowPathService, as *services.AgentService) *BMadHandler {
+func NewBMadHandler(cs *services.BMadConfigService, wps *services.WorkflowPathService, as *services.AgentService, wss *services.WorkflowStatusService) *BMadHandler {
 	return &BMadHandler{
-		configService:       cs,
-		workflowPathService: wps,
-		agentService:        as,
+		configService:         cs,
+		workflowPathService:   wps,
+		agentService:          as,
+		workflowStatusService: wss,
 	}
 }
 
@@ -103,4 +105,25 @@ func (h *BMadHandler) GetAgent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response.WriteJSON(w, http.StatusOK, agent)
+}
+
+// GetStatus handles GET /api/v1/bmad/status
+func (h *BMadHandler) GetStatus(w http.ResponseWriter, r *http.Request) {
+	if h.workflowStatusService == nil {
+		response.WriteError(w, "status_not_loaded", "Workflow status service not available.", http.StatusServiceUnavailable)
+		return
+	}
+
+	status, err := h.workflowStatusService.GetStatus()
+	if err != nil {
+		statusErr, ok := err.(*services.WorkflowStatusError)
+		if ok {
+			response.WriteError(w, statusErr.Code, statusErr.Message, http.StatusServiceUnavailable)
+			return
+		}
+		response.WriteError(w, "internal_error", err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	response.WriteJSON(w, http.StatusOK, status)
 }

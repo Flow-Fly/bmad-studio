@@ -41,7 +41,7 @@ tea_use_playwright_utils: false
 		t.Fatalf("Failed to load config: %v", err)
 	}
 
-	handler := NewBMadHandler(svc, nil, nil)
+	handler := NewBMadHandler(svc, nil, nil, nil)
 
 	req, err := http.NewRequest("GET", "/api/v1/bmad/config", nil)
 	if err != nil {
@@ -76,7 +76,7 @@ tea_use_playwright_utils: false
 func TestGetConfig_ReturnsErrorWhenNotLoaded(t *testing.T) {
 	svc := services.NewBMadConfigService()
 	// Don't load config - should return error
-	handler := NewBMadHandler(svc, nil, nil)
+	handler := NewBMadHandler(svc, nil, nil, nil)
 
 	req, err := http.NewRequest("GET", "/api/v1/bmad/config", nil)
 	if err != nil {

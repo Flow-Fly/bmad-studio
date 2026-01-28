@@ -11,11 +11,11 @@ import (
 
 // NewRouter creates and configures the main router with all routes and middleware
 func NewRouter() *chi.Mux {
-	return NewRouterWithServices(nil, nil, nil)
+	return NewRouterWithServices(nil, nil, nil, nil)
 }
 
 // NewRouterWithServices creates the router with optional service dependencies
-func NewRouterWithServices(bmadConfigService *services.BMadConfigService, workflowPathService *services.WorkflowPathService, agentService *services.AgentService) *chi.Mux {
+func NewRouterWithServices(bmadConfigService *services.BMadConfigService, workflowPathService *services.WorkflowPathService, agentService *services.AgentService, workflowStatusService *services.WorkflowStatusService) *chi.Mux {
 	r := chi.NewRouter()
 
 	// Global middleware
@@ -61,12 +61,13 @@ func NewRouterWithServices(bmadConfigService *services.BMadConfigService, workfl
 
 		// BMAD resource
 		if bmadConfigService != nil {
-			bmadHandler := handlers.NewBMadHandler(bmadConfigService, workflowPathService, agentService)
+			bmadHandler := handlers.NewBMadHandler(bmadConfigService, workflowPathService, agentService, workflowStatusService)
 			r.Route("/bmad", func(r chi.Router) {
 				r.Get("/config", bmadHandler.GetConfig)
 				r.Get("/phases", bmadHandler.GetPhases)
 				r.Get("/agents", bmadHandler.GetAgents)
 				r.Get("/agents/{id}", bmadHandler.GetAgent)
+				r.Get("/status", bmadHandler.GetStatus)
 			})
 		}
 	})
