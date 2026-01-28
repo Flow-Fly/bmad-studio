@@ -47,15 +47,6 @@ type SprintStatusFile struct {
 	DevelopmentStatus map[string]string `json:"development_status" yaml:"development_status"`
 }
 
-// WorkflowCompletion represents computed state for a single workflow
-type WorkflowCompletion struct {
-	WorkflowID   string  `json:"workflow_id"`
-	Status       string  `json:"status"`
-	ArtifactPath *string `json:"artifact_path"`
-	IsComplete   bool    `json:"is_complete"`
-	IsRequired   bool    `json:"is_required"`
-}
-
 // PhaseCompletionStatus represents completion stats for a single phase
 type PhaseCompletionStatus struct {
 	PhaseNum        int    `json:"phase_num"`

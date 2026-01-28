@@ -124,6 +124,11 @@ func (s *WorkflowStatusService) parseSprintStatus(path string) (*types.SprintSta
 	return &status, nil
 }
 
+// looksLikeFilePath checks if a status value appears to be a file path (supports Unix and Windows)
+func looksLikeFilePath(value string) bool {
+	return strings.ContainsAny(value, "/\\") || strings.HasSuffix(value, ".md") || strings.HasSuffix(value, ".yaml")
+}
+
 // isComplete determines if a workflow status value indicates completion
 func (s *WorkflowStatusService) isComplete(statusValue string) bool {
 	// Skipped counts as "complete" for progress tracking
@@ -137,8 +142,8 @@ func (s *WorkflowStatusService) isComplete(statusValue string) bool {
 		return false
 	}
 
-	// Complete if value looks like a file path (supports both Unix and Windows paths)
-	if strings.ContainsAny(statusValue, "/\\") || strings.HasSuffix(statusValue, ".md") || strings.HasSuffix(statusValue, ".yaml") {
+	// Complete if value looks like a file path
+	if looksLikeFilePath(statusValue) {
 		return true
 	}
 
@@ -245,8 +250,8 @@ func (s *WorkflowStatusService) computeWorkflowStatuses(phases []types.PhaseResp
 			} else if s.isComplete(statusValue) {
 				status = types.StatusComplete
 				isComplete = true
-				// If it's a file path, set artifact path (supports both Unix and Windows paths)
-				if strings.ContainsAny(statusValue, "/\\") || strings.HasSuffix(statusValue, ".md") || strings.HasSuffix(statusValue, ".yaml") {
+				// If it's a file path, set artifact path
+				if looksLikeFilePath(statusValue) {
 					artifactPath = &statusValue
 				}
 			} else {
@@ -259,7 +264,7 @@ func (s *WorkflowStatusService) computeWorkflowStatuses(phases []types.PhaseResp
 				Status:       status,
 				ArtifactPath: artifactPath,
 				IsComplete:   isComplete,
-				IsRequired:   wf.Required && !wf.Optional,
+				IsRequired:   s.isWorkflowRequired(wf),
 				IsOptional:   wf.Optional,
 			}
 		}
