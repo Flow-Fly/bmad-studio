@@ -30,7 +30,9 @@ func TestHealthEndpoint(t *testing.T) {
 	}
 
 	// Check response body
-	var response HealthResponse
+	var response struct {
+		Status string `json:"status"`
+	}
 	if err := json.NewDecoder(rr.Body).Decode(&response); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
 	}
@@ -138,5 +140,268 @@ func TestNotFoundRoute(t *testing.T) {
 	// Check 404 status code
 	if status := rr.Code; status != http.StatusNotFound {
 		t.Errorf("handler returned wrong status code for unknown route: got %v want %v", status, http.StatusNotFound)
+	}
+}
+
+// Task 1 Tests: Router Infrastructure
+
+func TestAPIVersionPrefix(t *testing.T) {
+	router := NewRouter()
+
+	// Test that /api/v1/projects route exists (returns 501 Not Implemented for placeholder)
+	req, err := http.NewRequest("GET", "/api/v1/projects", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rr := httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+
+	// Should return 501 Not Implemented (placeholder), not 404 (route doesn't exist)
+	if status := rr.Code; status == http.StatusNotFound {
+		t.Errorf("API route /api/v1/projects should exist: got %v", status)
+	}
+}
+
+func TestPlaceholderEndpointsExist(t *testing.T) {
+	router := NewRouter()
+
+	endpoints := []struct {
+		method string
+		path   string
+	}{
+		{"GET", "/api/v1/projects"},
+		{"POST", "/api/v1/projects"},
+		{"GET", "/api/v1/projects/123"},
+		{"PUT", "/api/v1/projects/123"},
+		{"GET", "/api/v1/sessions"},
+		{"GET", "/api/v1/sessions/123"},
+		{"GET", "/api/v1/settings"},
+		{"PUT", "/api/v1/settings"},
+		{"GET", "/api/v1/providers"},
+		{"POST", "/api/v1/providers"},
+	}
+
+	for _, endpoint := range endpoints {
+		t.Run(endpoint.method+" "+endpoint.path, func(t *testing.T) {
+			req, err := http.NewRequest(endpoint.method, endpoint.path, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			rr := httptest.NewRecorder()
+			router.ServeHTTP(rr, req)
+
+			// Should not be 404 - route must exist
+			if status := rr.Code; status == http.StatusNotFound {
+				t.Errorf("Route %s %s should exist, got 404", endpoint.method, endpoint.path)
+			}
+
+			// Should be 501 Not Implemented for placeholders
+			if status := rr.Code; status != http.StatusNotImplemented {
+				t.Errorf("Placeholder route %s %s should return 501 Not Implemented: got %v", endpoint.method, endpoint.path, status)
+			}
+		})
+	}
+}
+
+func TestHealthEndpointStillWorks(t *testing.T) {
+	router := NewRouter()
+
+	req, err := http.NewRequest("GET", "/health", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rr := httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+
+	// Health should still be at root, not under /api/v1
+	if status := rr.Code; status != http.StatusOK {
+		t.Errorf("Health endpoint should remain at /health: got %v want %v", status, http.StatusOK)
+	}
+
+	var response struct {
+		Status string `json:"status"`
+	}
+	if err := json.NewDecoder(rr.Body).Decode(&response); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	if response.Status != "ok" {
+		t.Errorf("Health endpoint should return ok: got %v", response.Status)
+	}
+}
+
+// Task 2 Tests: Error Response Format
+
+type ErrorResponse struct {
+	Error ErrorDetail `json:"error"`
+}
+
+type ErrorDetail struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+}
+
+func TestErrorResponseFormat(t *testing.T) {
+	router := NewRouter()
+
+	// Request a placeholder endpoint to get a 501 Not Implemented error
+	req, err := http.NewRequest("GET", "/api/v1/projects", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rr := httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+
+	// Check content type
+	contentType := rr.Header().Get("Content-Type")
+	if contentType != "application/json" {
+		t.Errorf("Error response should have application/json content type: got %v", contentType)
+	}
+
+	// Check error response structure
+	var errorResp ErrorResponse
+	if err := json.NewDecoder(rr.Body).Decode(&errorResp); err != nil {
+		t.Fatalf("Failed to decode error response: %v", err)
+	}
+
+	// Verify error object structure
+	if errorResp.Error.Code == "" {
+		t.Error("Error response should have error.code field")
+	}
+	if errorResp.Error.Message == "" {
+		t.Error("Error response should have error.message field")
+	}
+
+	// Check specific values for not implemented
+	if errorResp.Error.Code != "not_implemented" {
+		t.Errorf("Expected error code 'not_implemented': got %v", errorResp.Error.Code)
+	}
+}
+
+func TestErrorResponseCodes(t *testing.T) {
+	// Test that error response format matches {"error": {"code": "...", "message": "..."}}
+	tests := []struct {
+		method       string
+		path         string
+		expectedCode string
+	}{
+		{"GET", "/api/v1/projects", "not_implemented"},
+		{"GET", "/api/v1/sessions", "not_implemented"},
+		{"GET", "/api/v1/settings", "not_implemented"},
+		{"GET", "/api/v1/providers", "not_implemented"},
+	}
+
+	router := NewRouter()
+
+	for _, tc := range tests {
+		t.Run(tc.method+" "+tc.path, func(t *testing.T) {
+			req, err := http.NewRequest(tc.method, tc.path, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			rr := httptest.NewRecorder()
+			router.ServeHTTP(rr, req)
+
+			var errorResp ErrorResponse
+			if err := json.NewDecoder(rr.Body).Decode(&errorResp); err != nil {
+				t.Fatalf("Failed to decode error response: %v", err)
+			}
+
+			if errorResp.Error.Code != tc.expectedCode {
+				t.Errorf("Expected error code %v: got %v", tc.expectedCode, errorResp.Error.Code)
+			}
+		})
+	}
+}
+
+// Task 3 Tests: CORS Configuration
+
+func TestCORSAllowsContentTypeHeader(t *testing.T) {
+	router := NewRouter()
+
+	req, err := http.NewRequest("OPTIONS", "/api/v1/projects", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Origin", "http://localhost:3007")
+	req.Header.Set("Access-Control-Request-Method", "POST")
+	req.Header.Set("Access-Control-Request-Headers", "Content-Type")
+
+	rr := httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+
+	// Check that Content-Type is in allowed headers
+	allowHeaders := rr.Header().Get("Access-Control-Allow-Headers")
+	if allowHeaders == "" {
+		t.Error("Access-Control-Allow-Headers should be set")
+	}
+}
+
+func TestCORSAllowsAuthorizationHeader(t *testing.T) {
+	router := NewRouter()
+
+	req, err := http.NewRequest("OPTIONS", "/api/v1/providers", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Origin", "http://localhost:3007")
+	req.Header.Set("Access-Control-Request-Method", "POST")
+	req.Header.Set("Access-Control-Request-Headers", "Authorization")
+
+	rr := httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+
+	// Check that Authorization is in allowed headers
+	allowHeaders := rr.Header().Get("Access-Control-Allow-Headers")
+	if allowHeaders == "" {
+		t.Error("Access-Control-Allow-Headers should be set for Authorization")
+	}
+}
+
+func TestCORSAllowsCredentials(t *testing.T) {
+	router := NewRouter()
+
+	req, err := http.NewRequest("GET", "/health", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Origin", "http://localhost:3007")
+
+	rr := httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+
+	// Check that credentials are allowed
+	allowCreds := rr.Header().Get("Access-Control-Allow-Credentials")
+	if allowCreds != "true" {
+		t.Errorf("Access-Control-Allow-Credentials should be true: got %v", allowCreds)
+	}
+}
+
+func TestCORSAllowsAllRequiredMethods(t *testing.T) {
+	router := NewRouter()
+	requiredMethods := []string{"GET", "POST", "PUT", "DELETE"}
+
+	for _, method := range requiredMethods {
+		t.Run(method, func(t *testing.T) {
+			req, err := http.NewRequest("OPTIONS", "/api/v1/projects", nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			req.Header.Set("Origin", "http://localhost:3007")
+			req.Header.Set("Access-Control-Request-Method", method)
+
+			rr := httptest.NewRecorder()
+			router.ServeHTTP(rr, req)
+
+			// Check preflight succeeds (200 status)
+			if status := rr.Code; status != http.StatusOK {
+				t.Errorf("Preflight for %s should succeed: got %v", method, status)
+			}
+		})
 	}
 }
