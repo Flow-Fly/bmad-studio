@@ -3,6 +3,7 @@ package api
 import (
 	"bmad-studio/backend/api/handlers"
 	"bmad-studio/backend/api/middleware"
+	"bmad-studio/backend/services"
 
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
@@ -10,6 +11,11 @@ import (
 
 // NewRouter creates and configures the main router with all routes and middleware
 func NewRouter() *chi.Mux {
+	return NewRouterWithServices(nil, nil)
+}
+
+// NewRouterWithServices creates the router with optional service dependencies
+func NewRouterWithServices(bmadConfigService *services.BMadConfigService, workflowPathService *services.WorkflowPathService) *chi.Mux {
 	r := chi.NewRouter()
 
 	// Global middleware
@@ -52,6 +58,15 @@ func NewRouter() *chi.Mux {
 			r.Get("/", handlers.ListProviders)
 			r.Post("/", handlers.AddProvider)
 		})
+
+		// BMAD resource
+		if bmadConfigService != nil {
+			bmadHandler := handlers.NewBMadHandler(bmadConfigService, workflowPathService)
+			r.Route("/bmad", func(r chi.Router) {
+				r.Get("/config", bmadHandler.GetConfig)
+				r.Get("/phases", bmadHandler.GetPhases)
+			})
+		}
 	})
 
 	return r
