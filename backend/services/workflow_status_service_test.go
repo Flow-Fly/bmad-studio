@@ -883,6 +883,316 @@ workflow_status:
 	}
 }
 
+func TestWorkflowStatusService_WindowsPathDetection(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "windows-path-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Set up directory structure
+	planningDir := filepath.Join(tmpDir, "_bmad-output", "planning-artifacts")
+	implDir := filepath.Join(tmpDir, "_bmad-output", "implementation-artifacts")
+	bmadDir := filepath.Join(tmpDir, "_bmad", "bmm")
+	pathsDir := filepath.Join(bmadDir, "workflows", "workflow-status", "paths")
+
+	for _, dir := range []string{planningDir, implDir, pathsDir} {
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			t.Fatalf("Failed to create dir %s: %v", dir, err)
+		}
+	}
+
+	// Create path definition
+	pathDefContent := `method_name: "BMAD Method"
+track: "bmad-method"
+field_type: "greenfield"
+description: "Test track"
+phases:
+  - phase: 1
+    name: "Analysis"
+    required: true
+    optional: false
+    workflows:
+      - id: "brainstorm-project"
+        required: true
+        optional: false
+        agent: "analyst"
+`
+	if err := os.WriteFile(filepath.Join(pathsDir, "method-greenfield.yaml"), []byte(pathDefContent), 0644); err != nil {
+		t.Fatalf("Failed to write path definition: %v", err)
+	}
+
+	// Create BMAD config
+	configContent := `project_name: test-project
+planning_artifacts: "{project-root}/_bmad-output/planning-artifacts"
+implementation_artifacts: "{project-root}/_bmad-output/implementation-artifacts"
+`
+	if err := os.WriteFile(filepath.Join(bmadDir, "config.yaml"), []byte(configContent), 0644); err != nil {
+		t.Fatalf("Failed to write config: %v", err)
+	}
+
+	// Create workflow status with Windows-style path (backslash)
+	workflowStatusContent := `generated: "2026-01-27"
+project: "test-project"
+project_type: "software"
+selected_track: "bmad-method"
+field_type: "greenfield"
+workflow_path: "method-greenfield.yaml"
+
+workflow_status:
+  brainstorm-project: "_bmad-output\\planning-artifacts\\brainstorm.md"
+`
+	if err := os.WriteFile(filepath.Join(planningDir, "bmm-workflow-status.yaml"), []byte(workflowStatusContent), 0644); err != nil {
+		t.Fatalf("Failed to write workflow status: %v", err)
+	}
+
+	// Set up services
+	configService := NewBMadConfigService()
+	if err := configService.LoadConfig(tmpDir); err != nil {
+		t.Fatalf("Failed to load config: %v", err)
+	}
+
+	pathService := NewWorkflowPathService(configService)
+	if err := pathService.LoadPaths(); err != nil {
+		t.Fatalf("Failed to load paths: %v", err)
+	}
+
+	statusService := NewWorkflowStatusService(configService, pathService)
+	if err := statusService.LoadStatus(); err != nil {
+		t.Fatalf("LoadStatus() error = %v", err)
+	}
+
+	status, err := statusService.GetStatus()
+	if err != nil {
+		t.Fatalf("GetStatus() error = %v", err)
+	}
+
+	// Verify Windows path is recognized as complete
+	wfStatus, ok := status.WorkflowStatuses["brainstorm-project"]
+	if !ok {
+		t.Fatal("brainstorm-project not found in workflow statuses")
+	}
+
+	if !wfStatus.IsComplete {
+		t.Error("Expected Windows path to be recognized as complete")
+	}
+	if wfStatus.ArtifactPath == nil {
+		t.Error("Expected ArtifactPath to be set for Windows path")
+	}
+}
+
+func TestWorkflowStatusService_ConcurrentAccess(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "concurrent-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Set up directory structure
+	planningDir := filepath.Join(tmpDir, "_bmad-output", "planning-artifacts")
+	implDir := filepath.Join(tmpDir, "_bmad-output", "implementation-artifacts")
+	bmadDir := filepath.Join(tmpDir, "_bmad", "bmm")
+	pathsDir := filepath.Join(bmadDir, "workflows", "workflow-status", "paths")
+
+	for _, dir := range []string{planningDir, implDir, pathsDir} {
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			t.Fatalf("Failed to create dir %s: %v", dir, err)
+		}
+	}
+
+	// Create path definition
+	pathDefContent := `method_name: "BMAD Method"
+track: "bmad-method"
+field_type: "greenfield"
+description: "Test track"
+phases:
+  - phase: 1
+    name: "Analysis"
+    required: true
+    optional: false
+    workflows:
+      - id: "brainstorm-project"
+        required: true
+        optional: false
+        agent: "analyst"
+`
+	if err := os.WriteFile(filepath.Join(pathsDir, "method-greenfield.yaml"), []byte(pathDefContent), 0644); err != nil {
+		t.Fatalf("Failed to write path definition: %v", err)
+	}
+
+	// Create BMAD config
+	configContent := `project_name: test-project
+planning_artifacts: "{project-root}/_bmad-output/planning-artifacts"
+implementation_artifacts: "{project-root}/_bmad-output/implementation-artifacts"
+`
+	if err := os.WriteFile(filepath.Join(bmadDir, "config.yaml"), []byte(configContent), 0644); err != nil {
+		t.Fatalf("Failed to write config: %v", err)
+	}
+
+	// Create workflow status
+	workflowStatusContent := `generated: "2026-01-27"
+project: "test-project"
+project_type: "software"
+selected_track: "bmad-method"
+field_type: "greenfield"
+workflow_path: "method-greenfield.yaml"
+
+workflow_status:
+  brainstorm-project: "_bmad-output/brainstorm.md"
+`
+	if err := os.WriteFile(filepath.Join(planningDir, "bmm-workflow-status.yaml"), []byte(workflowStatusContent), 0644); err != nil {
+		t.Fatalf("Failed to write workflow status: %v", err)
+	}
+
+	// Set up services
+	configService := NewBMadConfigService()
+	if err := configService.LoadConfig(tmpDir); err != nil {
+		t.Fatalf("Failed to load config: %v", err)
+	}
+
+	pathService := NewWorkflowPathService(configService)
+	if err := pathService.LoadPaths(); err != nil {
+		t.Fatalf("Failed to load paths: %v", err)
+	}
+
+	statusService := NewWorkflowStatusService(configService, pathService)
+	if err := statusService.LoadStatus(); err != nil {
+		t.Fatalf("LoadStatus() error = %v", err)
+	}
+
+	// Run concurrent GetStatus calls
+	const numGoroutines = 10
+	errChan := make(chan error, numGoroutines)
+
+	for i := 0; i < numGoroutines; i++ {
+		go func() {
+			_, err := statusService.GetStatus()
+			errChan <- err
+		}()
+	}
+
+	// Collect results
+	for i := 0; i < numGoroutines; i++ {
+		if err := <-errChan; err != nil {
+			t.Errorf("Concurrent GetStatus() error: %v", err)
+		}
+	}
+}
+
+func TestWorkflowStatusService_ConditionalWorkflowExcludedFromRequired(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "conditional-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Set up directory structure
+	planningDir := filepath.Join(tmpDir, "_bmad-output", "planning-artifacts")
+	implDir := filepath.Join(tmpDir, "_bmad-output", "implementation-artifacts")
+	bmadDir := filepath.Join(tmpDir, "_bmad", "bmm")
+	pathsDir := filepath.Join(bmadDir, "workflows", "workflow-status", "paths")
+
+	for _, dir := range []string{planningDir, implDir, pathsDir} {
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			t.Fatalf("Failed to create dir %s: %v", dir, err)
+		}
+	}
+
+	// Create path definition with a conditional workflow
+	pathDefContent := `method_name: "BMAD Method"
+track: "bmad-method"
+field_type: "greenfield"
+description: "Test track"
+phases:
+  - phase: 1
+    name: "Analysis"
+    required: true
+    optional: false
+    workflows:
+      - id: "brainstorm-project"
+        required: true
+        optional: false
+        agent: "analyst"
+      - id: "conditional-workflow"
+        required: true
+        optional: false
+        agent: "analyst"
+        conditional: "field_type == brownfield"
+`
+	if err := os.WriteFile(filepath.Join(pathsDir, "method-greenfield.yaml"), []byte(pathDefContent), 0644); err != nil {
+		t.Fatalf("Failed to write path definition: %v", err)
+	}
+
+	// Create BMAD config
+	configContent := `project_name: test-project
+planning_artifacts: "{project-root}/_bmad-output/planning-artifacts"
+implementation_artifacts: "{project-root}/_bmad-output/implementation-artifacts"
+`
+	if err := os.WriteFile(filepath.Join(bmadDir, "config.yaml"), []byte(configContent), 0644); err != nil {
+		t.Fatalf("Failed to write config: %v", err)
+	}
+
+	// Create workflow status with only brainstorm-project complete
+	workflowStatusContent := `generated: "2026-01-27"
+project: "test-project"
+project_type: "software"
+selected_track: "bmad-method"
+field_type: "greenfield"
+workflow_path: "method-greenfield.yaml"
+
+workflow_status:
+  brainstorm-project: "_bmad-output/brainstorm.md"
+  conditional-workflow: required
+`
+	if err := os.WriteFile(filepath.Join(planningDir, "bmm-workflow-status.yaml"), []byte(workflowStatusContent), 0644); err != nil {
+		t.Fatalf("Failed to write workflow status: %v", err)
+	}
+
+	// Set up services
+	configService := NewBMadConfigService()
+	if err := configService.LoadConfig(tmpDir); err != nil {
+		t.Fatalf("Failed to load config: %v", err)
+	}
+
+	pathService := NewWorkflowPathService(configService)
+	if err := pathService.LoadPaths(); err != nil {
+		t.Fatalf("Failed to load paths: %v", err)
+	}
+
+	statusService := NewWorkflowStatusService(configService, pathService)
+	if err := statusService.LoadStatus(); err != nil {
+		t.Fatalf("LoadStatus() error = %v", err)
+	}
+
+	status, err := statusService.GetStatus()
+	if err != nil {
+		t.Fatalf("GetStatus() error = %v", err)
+	}
+
+	// Verify conditional workflow is NOT marked as required
+	conditionalWf, ok := status.WorkflowStatuses["conditional-workflow"]
+	if !ok {
+		t.Fatal("conditional-workflow not found in workflow statuses")
+	}
+
+	if conditionalWf.IsRequired {
+		t.Error("Expected conditional workflow to NOT be marked as required (IsRequired should be false)")
+	}
+
+	// Verify that current phase is complete (conditional workflows don't block phase progress)
+	// Since brainstorm-project is complete and conditional-workflow is conditional,
+	// we should be past phase 1
+	if status.CurrentPhase != 2 {
+		t.Errorf("Expected CurrentPhase = 2 (past phase 1 since conditional doesn't block), got %d", status.CurrentPhase)
+	}
+
+	// Verify phase completion counts conditional workflows correctly
+	phase1 := status.PhaseCompletion[0]
+	if phase1.TotalRequired != 1 {
+		t.Errorf("Expected TotalRequired = 1 (only non-conditional workflow), got %d", phase1.TotalRequired)
+	}
+}
+
 // Helper functions
 func strPtr(s string) *string {
 	return &s
