@@ -67,7 +67,7 @@ phases:
 		t.Fatal(err)
 	}
 
-	handler := NewBMadHandler(configSvc, pathSvc)
+	handler := NewBMadHandler(configSvc, pathSvc, nil)
 
 	// Create request
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/bmad/phases", nil)
@@ -124,7 +124,7 @@ output_folder: ""
 	pathSvc := services.NewWorkflowPathService(configSvc)
 	// Don't call LoadPaths - simulates service not loaded
 
-	handler := NewBMadHandler(configSvc, pathSvc)
+	handler := NewBMadHandler(configSvc, pathSvc, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/bmad/phases", nil)
 	w := httptest.NewRecorder()
@@ -173,7 +173,7 @@ output_folder: ""
 	}
 
 	// Create handler with nil path service
-	handler := NewBMadHandler(configSvc, nil)
+	handler := NewBMadHandler(configSvc, nil, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/bmad/phases", nil)
 	w := httptest.NewRecorder()
