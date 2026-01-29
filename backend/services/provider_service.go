@@ -20,11 +20,13 @@ func (s *ProviderService) GetProvider(providerType string, apiKey string) (provi
 	switch providerType {
 	case "claude":
 		return providers.NewClaudeProvider(apiKey), nil
+	case "openai":
+		return providers.NewOpenAIProvider(apiKey), nil
 	default:
 		return nil, &providers.ProviderError{
 			Code:        "unsupported_provider",
 			Message:     fmt.Sprintf("provider type not supported: %s", providerType),
-			UserMessage: fmt.Sprintf("Provider type '%s' is not supported. Available providers: claude.", providerType),
+			UserMessage: fmt.Sprintf("Provider type '%s' is not supported. Available providers: claude, openai.", providerType),
 		}
 	}
 }

@@ -14,9 +14,22 @@ func TestNewProviderService(t *testing.T) {
 	}
 }
 
+// --- GetProvider tests ---
+
 func TestProviderService_GetProvider_Claude(t *testing.T) {
 	svc := NewProviderService()
 	p, err := svc.GetProvider("claude", "test-key")
+	if err != nil {
+		t.Fatalf("Expected no error, got %v", err)
+	}
+	if p == nil {
+		t.Fatal("Expected non-nil provider")
+	}
+}
+
+func TestProviderService_GetProvider_OpenAI(t *testing.T) {
+	svc := NewProviderService()
+	p, err := svc.GetProvider("openai", "test-key")
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}
@@ -41,6 +54,8 @@ func TestProviderService_GetProvider_Unsupported(t *testing.T) {
 	}
 }
 
+// --- ListProviderModels tests ---
+
 func TestProviderService_ListProviderModels_Claude(t *testing.T) {
 	svc := NewProviderService()
 	models, err := svc.ListProviderModels("claude")
@@ -52,6 +67,17 @@ func TestProviderService_ListProviderModels_Claude(t *testing.T) {
 	}
 }
 
+func TestProviderService_ListProviderModels_OpenAI(t *testing.T) {
+	svc := NewProviderService()
+	models, err := svc.ListProviderModels("openai")
+	if err != nil {
+		t.Fatalf("Expected no error, got %v", err)
+	}
+	if len(models) != 4 {
+		t.Errorf("Expected 4 OpenAI models, got %d", len(models))
+	}
+}
+
 func TestProviderService_ListProviderModels_Unsupported(t *testing.T) {
 	svc := NewProviderService()
 	_, err := svc.ListProviderModels("unsupported")
@@ -59,6 +85,8 @@ func TestProviderService_ListProviderModels_Unsupported(t *testing.T) {
 		t.Fatal("Expected error for unsupported provider")
 	}
 }
+
+// --- ValidateProvider tests ---
 
 func TestProviderService_ValidateProvider_UnsupportedType(t *testing.T) {
 	svc := NewProviderService()

@@ -50,7 +50,7 @@ func TestIntegration_ProviderValidate_MissingFields(t *testing.T) {
 func TestIntegration_ProviderValidate_UnsupportedProvider(t *testing.T) {
 	router := newRouterWithProvider()
 
-	body := `{"type":"openai","api_key":"test-key"}`
+	body := `{"type":"unsupported","api_key":"test-key"}`
 	req, _ := http.NewRequest("POST", "/api/v1/providers/validate", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
@@ -115,6 +115,77 @@ func TestIntegration_ProviderModels_Claude(t *testing.T) {
 		if !found {
 			t.Errorf("Expected model ID %s not found", id)
 		}
+	}
+}
+
+func TestIntegration_ProviderModels_OpenAI(t *testing.T) {
+	router := newRouterWithProvider()
+
+	req, _ := http.NewRequest("GET", "/api/v1/providers/openai/models", nil)
+	rr := httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("Expected 200, got %d. Body: %s", rr.Code, rr.Body.String())
+	}
+
+	var models []struct {
+		ID        string `json:"id"`
+		Name      string `json:"name"`
+		Provider  string `json:"provider"`
+		MaxTokens int    `json:"max_tokens"`
+	}
+	if err := json.NewDecoder(rr.Body).Decode(&models); err != nil {
+		t.Fatalf("Failed to decode: %v", err)
+	}
+
+	if len(models) != 4 {
+		t.Fatalf("Expected 4 OpenAI models, got %d", len(models))
+	}
+
+	expectedIDs := map[string]bool{
+		"gpt-4o":      false,
+		"gpt-4o-mini": false,
+		"gpt-4.1":     false,
+		"gpt-4.1-mini": false,
+	}
+
+	for _, m := range models {
+		if _, ok := expectedIDs[m.ID]; !ok {
+			t.Errorf("Unexpected model ID: %s", m.ID)
+		}
+		expectedIDs[m.ID] = true
+		if m.Provider != "openai" {
+			t.Errorf("Expected provider 'openai', got %q for model %s", m.Provider, m.ID)
+		}
+	}
+
+	for id, found := range expectedIDs {
+		if !found {
+			t.Errorf("Expected model ID %s not found", id)
+		}
+	}
+}
+
+func TestIntegration_ProviderValidate_OpenAIAccepted(t *testing.T) {
+	router := newRouterWithProvider()
+
+	// OpenAI should be accepted as a valid provider type (will fail validation without real key,
+	// but should NOT return unsupported_provider error)
+	body := `{"type":"openai","api_key":"sk-test-key"}`
+	req, _ := http.NewRequest("POST", "/api/v1/providers/validate", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+
+	var errResp struct {
+		Error struct {
+			Code string `json:"code"`
+		} `json:"error"`
+	}
+	json.NewDecoder(rr.Body).Decode(&errResp)
+	if errResp.Error.Code == "unsupported_provider" {
+		t.Error("OpenAI should be a supported provider type")
 	}
 }
 
