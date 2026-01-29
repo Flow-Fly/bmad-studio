@@ -71,6 +71,9 @@ func main() {
 		}
 	}
 
+	// Initialize provider service (always available, not BMAD-dependent)
+	providerService := services.NewProviderService()
+
 	// Create router with all services
 	router := api.NewRouterWithServices(api.RouterServices{
 		BMadConfig:     configService,
@@ -78,6 +81,7 @@ func main() {
 		Agent:          agentService,
 		WorkflowStatus: workflowStatusService,
 		Artifact:       artifactService,
+		Provider:       providerService,
 		Hub:            hub,
 	})
 

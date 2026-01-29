@@ -18,6 +18,7 @@ type RouterServices struct {
 	Agent          *services.AgentService
 	WorkflowStatus *services.WorkflowStatusService
 	Artifact       *services.ArtifactService
+	Provider       *services.ProviderService
 	Hub            *websocket.Hub
 }
 
@@ -69,6 +70,12 @@ func NewRouterWithServices(svc RouterServices) *chi.Mux {
 		r.Route("/providers", func(r chi.Router) {
 			r.Get("/", handlers.ListProviders)
 			r.Post("/", handlers.AddProvider)
+
+			if svc.Provider != nil {
+				providerHandler := handlers.NewProviderHandler(svc.Provider)
+				r.Post("/validate", providerHandler.ValidateProvider)
+				r.Get("/{type}/models", providerHandler.ListModels)
+			}
 		})
 
 		// BMAD resource
