@@ -268,6 +268,12 @@ func (s *WorkflowStatusService) computeWorkflowStatuses(phases []types.PhaseResp
 	return result
 }
 
+// Reload reloads the status files from disk
+// Used by file watcher to refresh status after changes
+func (s *WorkflowStatusService) Reload() error {
+	return s.LoadStatus()
+}
+
 // GetStatus returns the computed status response
 func (s *WorkflowStatusService) GetStatus() (*types.StatusResponse, error) {
 	// Get phases from path service OUTSIDE the lock (I/O operation)

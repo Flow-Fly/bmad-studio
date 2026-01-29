@@ -708,6 +708,105 @@ func (s *ArtifactService) SaveRegistry() error {
 	return nil
 }
 
+// ProcessSingleArtifact processes a single artifact file and adds/updates it in the registry
+// Returns the artifact response for broadcasting
+func (s *ArtifactService) ProcessSingleArtifact(path string) (*types.ArtifactResponse, error) {
+	config := s.configService.GetConfig()
+	if config == nil {
+		return nil, &ArtifactServiceError{
+			Code:    ErrCodeArtifactConfigNotLoaded,
+			Message: "BMadConfigService has no config loaded",
+		}
+	}
+
+	// Process the artifact
+	artifact, err := s.processArtifact(path, config.ProjectRoot)
+	if err != nil {
+		return nil, err
+	}
+	if artifact == nil {
+		return nil, nil
+	}
+
+	// Update registry
+	s.mu.Lock()
+	s.artifacts[artifact.ID] = artifact
+	s.mu.Unlock()
+
+	// Save registry
+	if err := s.SaveRegistry(); err != nil {
+		log.Printf("Warning: Failed to save artifact registry: %v", err)
+	}
+
+	resp := s.toResponse(artifact)
+	return &resp, nil
+}
+
+// RemoveArtifact removes an artifact from the registry by path
+// Returns the removed artifact response for broadcasting
+func (s *ArtifactService) RemoveArtifact(path string) (*types.ArtifactResponse, error) {
+	config := s.configService.GetConfig()
+	if config == nil {
+		return nil, &ArtifactServiceError{
+			Code:    ErrCodeArtifactConfigNotLoaded,
+			Message: "BMadConfigService has no config loaded",
+		}
+	}
+
+	// Calculate relative path
+	relativePath, err := filepath.Rel(config.ProjectRoot, path)
+	if err != nil {
+		relativePath = path
+	}
+	relativePath = filepath.ToSlash(relativePath)
+
+	// Generate ID from path
+	id := s.generateArtifactID(relativePath)
+
+	// Remove from registry
+	s.mu.Lock()
+	artifact, exists := s.artifacts[id]
+	if exists {
+		delete(s.artifacts, id)
+	}
+	s.mu.Unlock()
+
+	if !exists {
+		return nil, nil
+	}
+
+	// Save registry
+	if err := s.SaveRegistry(); err != nil {
+		log.Printf("Warning: Failed to save artifact registry: %v", err)
+	}
+
+	resp := s.toResponse(artifact)
+	return &resp, nil
+}
+
+// GetArtifactByPath returns an artifact by its absolute path
+func (s *ArtifactService) GetArtifactByPath(path string) (*types.ArtifactResponse, error) {
+	config := s.configService.GetConfig()
+	if config == nil {
+		return nil, &ArtifactServiceError{
+			Code:    ErrCodeArtifactConfigNotLoaded,
+			Message: "BMadConfigService has no config loaded",
+		}
+	}
+
+	// Calculate relative path
+	relativePath, err := filepath.Rel(config.ProjectRoot, path)
+	if err != nil {
+		relativePath = path
+	}
+	relativePath = filepath.ToSlash(relativePath)
+
+	// Generate ID from path
+	id := s.generateArtifactID(relativePath)
+
+	return s.GetArtifact(id)
+}
+
 // LoadRegistry loads the artifact registry from disk (for cache validation)
 func (s *ArtifactService) LoadRegistry() error {
 	registryPath, err := s.getRegistryPath()

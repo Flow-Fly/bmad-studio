@@ -3,6 +3,7 @@ package api
 import (
 	"bmad-studio/backend/api/handlers"
 	"bmad-studio/backend/api/middleware"
+	"bmad-studio/backend/api/websocket"
 	"bmad-studio/backend/services"
 
 	"github.com/go-chi/chi/v5"
@@ -11,11 +12,11 @@ import (
 
 // NewRouter creates and configures the main router with all routes and middleware
 func NewRouter() *chi.Mux {
-	return NewRouterWithServices(nil, nil, nil, nil, nil)
+	return NewRouterWithServices(nil, nil, nil, nil, nil, nil)
 }
 
 // NewRouterWithServices creates the router with optional service dependencies
-func NewRouterWithServices(bmadConfigService *services.BMadConfigService, workflowPathService *services.WorkflowPathService, agentService *services.AgentService, workflowStatusService *services.WorkflowStatusService, artifactService *services.ArtifactService) *chi.Mux {
+func NewRouterWithServices(bmadConfigService *services.BMadConfigService, workflowPathService *services.WorkflowPathService, agentService *services.AgentService, workflowStatusService *services.WorkflowStatusService, artifactService *services.ArtifactService, hub *websocket.Hub) *chi.Mux {
 	r := chi.NewRouter()
 
 	// Global middleware
@@ -78,6 +79,12 @@ func NewRouterWithServices(bmadConfigService *services.BMadConfigService, workfl
 			})
 		}
 	})
+
+	// WebSocket endpoint (outside /api/v1 for cleaner URL)
+	if hub != nil {
+		wsHandler := handlers.NewWebSocketHandler(hub)
+		r.Get("/ws", wsHandler.HandleWebSocket)
+	}
 
 	return r
 }

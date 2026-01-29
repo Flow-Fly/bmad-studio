@@ -83,7 +83,7 @@ Test Architecture content.
 func TestGetArtifacts_Returns200WithValidList(t *testing.T) {
 	configService, artifactService, _ := setupArtifactTestServices(t)
 
-	router := api.NewRouterWithServices(configService, nil, nil, nil, artifactService)
+	router := api.NewRouterWithServices(configService, nil, nil, nil, artifactService, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/bmad/artifacts", nil)
 	rec := httptest.NewRecorder()
@@ -140,7 +140,7 @@ func TestGetArtifacts_Returns200WithValidList(t *testing.T) {
 func TestGetArtifact_Returns200ForValidID(t *testing.T) {
 	configService, artifactService, _ := setupArtifactTestServices(t)
 
-	router := api.NewRouterWithServices(configService, nil, nil, nil, artifactService)
+	router := api.NewRouterWithServices(configService, nil, nil, nil, artifactService, nil)
 
 	// Get list first to find valid ID
 	listReq := httptest.NewRequest(http.MethodGet, "/api/v1/bmad/artifacts", nil)
@@ -180,7 +180,7 @@ func TestGetArtifact_Returns200ForValidID(t *testing.T) {
 func TestGetArtifact_Returns404ForInvalidID(t *testing.T) {
 	configService, artifactService, _ := setupArtifactTestServices(t)
 
-	router := api.NewRouterWithServices(configService, nil, nil, nil, artifactService)
+	router := api.NewRouterWithServices(configService, nil, nil, nil, artifactService, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/bmad/artifacts/nonexistent-artifact-id", nil)
 	rec := httptest.NewRecorder()
@@ -233,7 +233,7 @@ output_folder: "{project-root}/_bmad-output"
 		t.Fatalf("Failed to load artifacts: %v", err)
 	}
 
-	router := api.NewRouterWithServices(configService, nil, nil, nil, artifactService)
+	router := api.NewRouterWithServices(configService, nil, nil, nil, artifactService, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/bmad/artifacts", nil)
 	rec := httptest.NewRecorder()
@@ -262,7 +262,7 @@ func TestGetArtifacts_Returns404WhenServiceNotAvailable(t *testing.T) {
 	configService := services.NewBMadConfigService()
 
 	// Don't provide artifact service
-	router := api.NewRouterWithServices(configService, nil, nil, nil, nil)
+	router := api.NewRouterWithServices(configService, nil, nil, nil, nil, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/bmad/artifacts", nil)
 	rec := httptest.NewRecorder()

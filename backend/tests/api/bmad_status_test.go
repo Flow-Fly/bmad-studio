@@ -127,7 +127,7 @@ development_status:
 func TestGetStatus_Returns200WithValidStatus(t *testing.T) {
 	configService, pathService, statusService, _ := setupStatusTestServices(t)
 
-	router := api.NewRouterWithServices(configService, pathService, nil, statusService, nil)
+	router := api.NewRouterWithServices(configService, pathService, nil, statusService, nil, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/bmad/status", nil)
 	rec := httptest.NewRecorder()
@@ -255,7 +255,7 @@ phases:
 		t.Fatalf("LoadStatus() error = %v, expected nil for missing files", err)
 	}
 
-	router := api.NewRouterWithServices(configService, pathService, nil, statusService, nil)
+	router := api.NewRouterWithServices(configService, pathService, nil, statusService, nil, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/bmad/status", nil)
 	rec := httptest.NewRecorder()
@@ -296,7 +296,7 @@ phases:
 func TestGetStatus_ReturnsErrorWhenServiceNotLoaded(t *testing.T) {
 	configService := services.NewBMadConfigService()
 
-	router := api.NewRouterWithServices(configService, nil, nil, nil, nil)
+	router := api.NewRouterWithServices(configService, nil, nil, nil, nil, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/bmad/status", nil)
 	rec := httptest.NewRecorder()
