@@ -176,8 +176,6 @@ func TestPlaceholderEndpointsExist(t *testing.T) {
 		{"PUT", "/api/v1/projects/123"},
 		{"GET", "/api/v1/sessions"},
 		{"GET", "/api/v1/sessions/123"},
-		{"GET", "/api/v1/settings"},
-		{"PUT", "/api/v1/settings"},
 		{"GET", "/api/v1/providers"},
 		{"POST", "/api/v1/providers"},
 	}
@@ -291,7 +289,6 @@ func TestErrorResponseCodes(t *testing.T) {
 	}{
 		{"GET", "/api/v1/projects", "not_implemented"},
 		{"GET", "/api/v1/sessions", "not_implemented"},
-		{"GET", "/api/v1/settings", "not_implemented"},
 		{"GET", "/api/v1/providers", "not_implemented"},
 	}
 

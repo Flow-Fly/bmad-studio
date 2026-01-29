@@ -15,7 +15,8 @@
     "@lit-labs/signals": "^0.2.0",
     "@shoelace-style/shoelace": "^2.12.0",
     "lit": "^3.1.0",
-    "lucide": "^0.563.0"
+    "lucide": "^0.563.0",
+    "tauri-plugin-keyring-api": "^0.1.1"
   },
   "devDependencies": {
     "@open-wc/testing": "^4.0.0",
