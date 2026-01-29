@@ -17,8 +17,6 @@ func newRouterWithProvider() http.Handler {
 	})
 }
 
-// --- Integration: Provider validate endpoint ---
-
 func TestIntegration_ProviderValidate_MissingFields(t *testing.T) {
 	router := newRouterWithProvider()
 
@@ -70,8 +68,6 @@ func TestIntegration_ProviderValidate_UnsupportedProvider(t *testing.T) {
 		t.Errorf("Expected error code 'invalid_request', got %q", errResp.Error.Code)
 	}
 }
-
-// --- Integration: Provider models endpoint ---
 
 func TestIntegration_ProviderModels_Claude(t *testing.T) {
 	router := newRouterWithProvider()
@@ -189,6 +185,52 @@ func TestIntegration_ProviderValidate_OpenAIAccepted(t *testing.T) {
 	}
 }
 
+func TestIntegration_ProviderValidate_OllamaAccepted(t *testing.T) {
+	router := newRouterWithProvider()
+
+	// Ollama should be accepted as a valid provider type (will fail validation without running Ollama,
+	// but should NOT return unsupported_provider error)
+	body := `{"type":"ollama","api_key":"http://localhost:11434"}`
+	req, _ := http.NewRequest("POST", "/api/v1/providers/validate", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+
+	var errResp struct {
+		Error struct {
+			Code string `json:"code"`
+		} `json:"error"`
+	}
+	json.NewDecoder(rr.Body).Decode(&errResp)
+	if errResp.Error.Code == "unsupported_provider" {
+		t.Error("Ollama should be a supported provider type")
+	}
+}
+
+func TestIntegration_ProviderModels_Ollama(t *testing.T) {
+	router := newRouterWithProvider()
+
+	// Ollama models endpoint should not return unsupported_provider error.
+	// It may fail to connect (Ollama not running), but it should be recognized.
+	req, _ := http.NewRequest("GET", "/api/v1/providers/ollama/models", nil)
+	rr := httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+
+	// Should NOT be 400 with unsupported_provider
+	if rr.Code == http.StatusBadRequest {
+		var errResp struct {
+			Error struct {
+				Code string `json:"code"`
+			} `json:"error"`
+		}
+		json.NewDecoder(rr.Body).Decode(&errResp)
+		if errResp.Error.Code == "unsupported_provider" {
+			t.Error("Ollama should be a supported provider type for model listing")
+		}
+	}
+	// Note: May return 500 if Ollama is not running locally, which is expected in test environment
+}
+
 func TestIntegration_ProviderModels_UnsupportedType(t *testing.T) {
 	router := newRouterWithProvider()
 
@@ -200,8 +242,6 @@ func TestIntegration_ProviderModels_UnsupportedType(t *testing.T) {
 		t.Errorf("Expected 400, got %d", rr.Code)
 	}
 }
-
-// --- Integration: Existing endpoints still work ---
 
 func TestIntegration_ProviderListStillPlaceholder(t *testing.T) {
 	router := newRouterWithProvider()
@@ -226,8 +266,6 @@ func TestIntegration_ProviderAddStillPlaceholder(t *testing.T) {
 		t.Errorf("POST /api/v1/providers should still be 501 placeholder, got %d", rr.Code)
 	}
 }
-
-// --- NFR6: Security integration test ---
 
 func TestIntegration_ProviderValidate_APIKeyNotInResponse(t *testing.T) {
 	router := newRouterWithProvider()
