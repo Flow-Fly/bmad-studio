@@ -330,13 +330,16 @@ func (s *FileWatcherService) handleEvent(event fsnotify.Event) {
 func (s *FileWatcherService) processFileChange(path string, op fsnotify.Op) {
 	log.Printf("Processing file change: %s (op: %v)", path, op)
 
-	// Check if it's a status file
 	if s.isStatusFile(path) {
 		s.handleStatusFileChange(path)
 		return
 	}
 
-	// Handle based on operation type
+	// Only process .md files for artifact operations
+	if !strings.HasSuffix(path, ".md") {
+		return
+	}
+
 	switch {
 	case op.Has(fsnotify.Remove) || op.Has(fsnotify.Rename):
 		s.handleDelete(path)
@@ -354,13 +357,8 @@ func (s *FileWatcherService) isStatusFile(path string) bool {
 		strings.HasSuffix(filename, "status.yml")
 }
 
-// handleCreate handles a new file being created
+// handleCreate handles a new .md file being created
 func (s *FileWatcherService) handleCreate(path string) {
-	// Only process .md files for artifacts
-	if !strings.HasSuffix(path, ".md") {
-		return
-	}
-
 	artifact, err := s.artifactService.ProcessSingleArtifact(path)
 	if err != nil {
 		log.Printf("Warning: Failed to process new artifact %s: %v", path, err)
@@ -368,19 +366,13 @@ func (s *FileWatcherService) handleCreate(path string) {
 	}
 
 	if artifact != nil {
-		event := types.NewArtifactCreatedEvent(artifact)
-		s.hub.BroadcastEvent(event)
+		s.hub.BroadcastEvent(types.NewArtifactCreatedEvent(artifact))
 		log.Printf("Broadcast artifact:created for %s", artifact.ID)
 	}
 }
 
-// handleModify handles a file being modified
+// handleModify handles a .md file being modified
 func (s *FileWatcherService) handleModify(path string) {
-	// Only process .md files for artifacts
-	if !strings.HasSuffix(path, ".md") {
-		return
-	}
-
 	artifact, err := s.artifactService.ProcessSingleArtifact(path)
 	if err != nil {
 		log.Printf("Warning: Failed to re-process artifact %s: %v", path, err)
@@ -388,19 +380,13 @@ func (s *FileWatcherService) handleModify(path string) {
 	}
 
 	if artifact != nil {
-		event := types.NewArtifactUpdatedEvent(artifact)
-		s.hub.BroadcastEvent(event)
+		s.hub.BroadcastEvent(types.NewArtifactUpdatedEvent(artifact))
 		log.Printf("Broadcast artifact:updated for %s", artifact.ID)
 	}
 }
 
-// handleDelete handles a file being deleted
+// handleDelete handles a .md file being deleted
 func (s *FileWatcherService) handleDelete(path string) {
-	// Only process .md files for artifacts
-	if !strings.HasSuffix(path, ".md") {
-		return
-	}
-
 	artifact, err := s.artifactService.RemoveArtifact(path)
 	if err != nil {
 		log.Printf("Warning: Failed to remove artifact %s: %v", path, err)
@@ -408,8 +394,7 @@ func (s *FileWatcherService) handleDelete(path string) {
 	}
 
 	if artifact != nil {
-		event := types.NewArtifactDeletedEvent(artifact.ID, artifact.Path)
-		s.hub.BroadcastEvent(event)
+		s.hub.BroadcastEvent(types.NewArtifactDeletedEvent(artifact.ID, artifact.Path))
 		log.Printf("Broadcast artifact:deleted for %s", artifact.ID)
 	}
 }
@@ -461,46 +446,41 @@ func (s *FileWatcherService) scanDirectoryForExistingFiles(dirPath string) {
 	}
 
 	for _, entry := range entries {
-		if entry.IsDir() {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".md") {
 			continue
 		}
+
 		filePath := filepath.Join(dirPath, entry.Name())
-		ext := strings.ToLower(filepath.Ext(entry.Name()))
-		if ext == ".md" {
-			// Process as if it were a Create event, with debouncing
-			s.debounceMu.Lock()
-			if _, exists := s.debounceMap[filePath]; !exists {
-				s.debounceMap[filePath] = &debounceEntry{
-					timer: time.AfterFunc(debounceInterval, func() {
-						s.processFileChange(filePath, fsnotify.Create)
-						s.debounceMu.Lock()
-						delete(s.debounceMap, filePath)
-						s.debounceMu.Unlock()
-					}),
-					lastOp: fsnotify.Create,
-				}
+
+		s.debounceMu.Lock()
+		if _, exists := s.debounceMap[filePath]; !exists {
+			s.debounceMap[filePath] = &debounceEntry{
+				timer: time.AfterFunc(debounceInterval, func() {
+					s.processFileChange(filePath, fsnotify.Create)
+					s.debounceMu.Lock()
+					delete(s.debounceMap, filePath)
+					s.debounceMu.Unlock()
+				}),
+				lastOp: fsnotify.Create,
 			}
-			s.debounceMu.Unlock()
 		}
+		s.debounceMu.Unlock()
 	}
 }
 
-// handleStatusFileChange handles a workflow/sprint status file change
+// handleStatusFileChange reloads workflow status and broadcasts the change
 func (s *FileWatcherService) handleStatusFileChange(path string) {
-	// Reload workflow status
 	if err := s.workflowStatusService.Reload(); err != nil {
 		log.Printf("Warning: Failed to reload workflow status: %v", err)
 		return
 	}
 
-	// Get updated status and broadcast
 	status, err := s.workflowStatusService.GetStatus()
 	if err != nil {
 		log.Printf("Warning: Failed to get workflow status: %v", err)
 		return
 	}
 
-	event := types.NewWorkflowStatusChangedEvent(status.WorkflowStatuses)
-	s.hub.BroadcastEvent(event)
+	s.hub.BroadcastEvent(types.NewWorkflowStatusChangedEvent(status.WorkflowStatuses))
 	log.Printf("Broadcast workflow:status-changed")
 }

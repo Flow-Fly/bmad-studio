@@ -56,9 +56,9 @@ func NewWebSocketEvent(eventType string, payload interface{}) *WebSocketEvent {
 	}
 }
 
-// NewArtifactCreatedEvent creates an artifact:created event from an ArtifactResponse
-func NewArtifactCreatedEvent(artifact *ArtifactResponse) *WebSocketEvent {
-	payload := &ArtifactEventPayload{
+// newArtifactEventPayload builds the shared payload for artifact create/update events
+func newArtifactEventPayload(artifact *ArtifactResponse) *ArtifactEventPayload {
+	return &ArtifactEventPayload{
 		ID:        artifact.ID,
 		Name:      artifact.Name,
 		Type:      artifact.Type,
@@ -69,23 +69,16 @@ func NewArtifactCreatedEvent(artifact *ArtifactResponse) *WebSocketEvent {
 		IsSharded: artifact.IsSharded,
 		ParentID:  artifact.ParentID,
 	}
-	return NewWebSocketEvent(EventTypeArtifactCreated, payload)
+}
+
+// NewArtifactCreatedEvent creates an artifact:created event from an ArtifactResponse
+func NewArtifactCreatedEvent(artifact *ArtifactResponse) *WebSocketEvent {
+	return NewWebSocketEvent(EventTypeArtifactCreated, newArtifactEventPayload(artifact))
 }
 
 // NewArtifactUpdatedEvent creates an artifact:updated event from an ArtifactResponse
 func NewArtifactUpdatedEvent(artifact *ArtifactResponse) *WebSocketEvent {
-	payload := &ArtifactEventPayload{
-		ID:        artifact.ID,
-		Name:      artifact.Name,
-		Type:      artifact.Type,
-		Path:      artifact.Path,
-		Status:    artifact.Status,
-		Phase:     artifact.Phase,
-		PhaseName: artifact.PhaseName,
-		IsSharded: artifact.IsSharded,
-		ParentID:  artifact.ParentID,
-	}
-	return NewWebSocketEvent(EventTypeArtifactUpdated, payload)
+	return NewWebSocketEvent(EventTypeArtifactUpdated, newArtifactEventPayload(artifact))
 }
 
 // NewArtifactDeletedEvent creates an artifact:deleted event

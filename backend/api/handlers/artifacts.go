@@ -22,18 +22,35 @@ func NewArtifactHandler(artifactService *services.ArtifactService) *ArtifactHand
 	}
 }
 
+// writeArtifactError maps ArtifactServiceError codes to HTTP status codes and writes the response.
+// Returns true if the error was handled, false if the caller should use a generic fallback.
+func writeArtifactError(w http.ResponseWriter, err error) bool {
+	svcErr, ok := err.(*services.ArtifactServiceError)
+	if !ok {
+		return false
+	}
+
+	var status int
+	switch svcErr.Code {
+	case services.ErrCodeArtifactNotFound:
+		status = http.StatusNotFound
+	case services.ErrCodeArtifactConfigNotLoaded, services.ErrCodeArtifactsNotLoaded:
+		status = http.StatusServiceUnavailable
+	default:
+		return false
+	}
+
+	response.WriteError(w, svcErr.Code, svcErr.Message, status)
+	return true
+}
+
 // GetArtifacts handles GET /api/v1/bmad/artifacts
 func (h *ArtifactHandler) GetArtifacts(w http.ResponseWriter, r *http.Request) {
 	artifacts, err := h.artifactService.GetArtifacts()
 	if err != nil {
-		if svcErr, ok := err.(*services.ArtifactServiceError); ok {
-			switch svcErr.Code {
-			case services.ErrCodeArtifactConfigNotLoaded, services.ErrCodeArtifactsNotLoaded:
-				response.WriteError(w, svcErr.Code, svcErr.Message, http.StatusServiceUnavailable)
-				return
-			}
+		if !writeArtifactError(w, err) {
+			response.WriteError(w, "internal_error", err.Error(), http.StatusInternalServerError)
 		}
-		response.WriteError(w, "internal_error", err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -46,17 +63,9 @@ func (h *ArtifactHandler) GetArtifact(w http.ResponseWriter, r *http.Request) {
 
 	artifact, err := h.artifactService.GetArtifact(id)
 	if err != nil {
-		if svcErr, ok := err.(*services.ArtifactServiceError); ok {
-			switch svcErr.Code {
-			case services.ErrCodeArtifactNotFound:
-				response.WriteError(w, svcErr.Code, svcErr.Message, http.StatusNotFound)
-				return
-			case services.ErrCodeArtifactConfigNotLoaded, services.ErrCodeArtifactsNotLoaded:
-				response.WriteError(w, svcErr.Code, svcErr.Message, http.StatusServiceUnavailable)
-				return
-			}
+		if !writeArtifactError(w, err) {
+			response.WriteError(w, "internal_error", err.Error(), http.StatusInternalServerError)
 		}
-		response.WriteError(w, "internal_error", err.Error(), http.StatusInternalServerError)
 		return
 	}
 

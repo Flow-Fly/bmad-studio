@@ -291,48 +291,29 @@ func (s *ArtifactService) processShardedArtifact(dirPath, projectRoot string) ([
 	return results, nil
 }
 
-// parseFrontmatter extracts YAML frontmatter from markdown content
+// parseFrontmatter extracts YAML frontmatter from markdown content.
+// Handles both LF and CRLF line endings.
 func (s *ArtifactService) parseFrontmatter(content []byte) (*types.ArtifactFrontmatter, error) {
-	// Bounds check for minimum valid frontmatter (---\n---\n = 8 bytes minimum)
-	if len(content) < 3 {
-		return nil, nil // Too short to have frontmatter
-	}
-
-	// Check for frontmatter delimiter (handles both LF and CRLF)
-	if !bytes.HasPrefix(content, []byte("---")) {
-		return nil, nil // No frontmatter is not an error
-	}
-
-	// Find the first newline after opening delimiter (handles both \n and \r\n)
-	firstNewline := bytes.IndexAny(content[3:], "\r\n")
-	if firstNewline == -1 {
+	if len(content) < 3 || !bytes.HasPrefix(content, []byte("---")) {
 		return nil, nil
 	}
 
-	// Calculate start of frontmatter content (skip --- and newline(s))
-	startIdx := 3 + firstNewline
-	if startIdx < len(content) && content[startIdx] == '\n' {
-		startIdx++
-	} else if startIdx < len(content) && content[startIdx] == '\r' && startIdx+1 < len(content) && content[startIdx+1] == '\n' {
-		startIdx += 2
-	} else {
-		startIdx++
+	// Find end of the opening "---" line
+	firstNewline := bytes.IndexByte(content[3:], '\n')
+	if firstNewline == -1 {
+		return nil, nil
 	}
+	startIdx := 3 + firstNewline + 1 // skip past "---\n"
 
-	// Find closing delimiter
+	// Find closing "---" on its own line
 	rest := content[startIdx:]
 	endIdx := bytes.Index(rest, []byte("\n---"))
 	if endIdx == -1 {
-		// Also check for CRLF variant
-		endIdx = bytes.Index(rest, []byte("\r\n---"))
-		if endIdx == -1 {
-			return nil, nil // Frontmatter not closed
-		}
+		return nil, nil
 	}
 
-	frontmatterBytes := rest[:endIdx]
 	var fm types.ArtifactFrontmatter
-	if err := yaml.Unmarshal(frontmatterBytes, &fm); err != nil {
+	if err := yaml.Unmarshal(rest[:endIdx], &fm); err != nil {
 		return nil, err
 	}
 
@@ -655,19 +636,9 @@ func (s *ArtifactService) SaveRegistry() error {
 		return err
 	}
 
-	s.mu.RLock()
-	artifacts := s.artifacts
-	s.mu.RUnlock()
-
-	// Convert to response format for JSON
-	responses := make([]types.ArtifactResponse, 0, len(artifacts))
-	ids := make([]string, 0, len(artifacts))
-	for id := range artifacts {
-		ids = append(ids, id)
-	}
-	sort.Strings(ids)
-	for _, id := range ids {
-		responses = append(responses, s.toResponse(artifacts[id]))
+	responses, err := s.GetArtifacts()
+	if err != nil {
+		return err
 	}
 
 	wrapper := types.ArtifactsResponse{Artifacts: responses}
@@ -742,28 +713,34 @@ func (s *ArtifactService) ProcessSingleArtifact(path string) (*types.ArtifactRes
 	return &resp, nil
 }
 
-// RemoveArtifact removes an artifact from the registry by path
-// Returns the removed artifact response for broadcasting
-func (s *ArtifactService) RemoveArtifact(path string) (*types.ArtifactResponse, error) {
+// idFromAbsPath converts an absolute file path to an artifact ID.
+// Returns the ID and an error if the config is not loaded.
+func (s *ArtifactService) idFromAbsPath(path string) (string, error) {
 	config := s.configService.GetConfig()
 	if config == nil {
-		return nil, &ArtifactServiceError{
+		return "", &ArtifactServiceError{
 			Code:    ErrCodeArtifactConfigNotLoaded,
 			Message: "BMadConfigService has no config loaded",
 		}
 	}
 
-	// Calculate relative path
 	relativePath, err := filepath.Rel(config.ProjectRoot, path)
 	if err != nil {
 		relativePath = path
 	}
 	relativePath = filepath.ToSlash(relativePath)
 
-	// Generate ID from path
-	id := s.generateArtifactID(relativePath)
+	return s.generateArtifactID(relativePath), nil
+}
 
-	// Remove from registry
+// RemoveArtifact removes an artifact from the registry by path
+// Returns the removed artifact response for broadcasting
+func (s *ArtifactService) RemoveArtifact(path string) (*types.ArtifactResponse, error) {
+	id, err := s.idFromAbsPath(path)
+	if err != nil {
+		return nil, err
+	}
+
 	s.mu.Lock()
 	artifact, exists := s.artifacts[id]
 	if exists {
@@ -775,7 +752,6 @@ func (s *ArtifactService) RemoveArtifact(path string) (*types.ArtifactResponse, 
 		return nil, nil
 	}
 
-	// Save registry
 	if err := s.SaveRegistry(); err != nil {
 		log.Printf("Warning: Failed to save artifact registry: %v", err)
 	}
@@ -786,23 +762,10 @@ func (s *ArtifactService) RemoveArtifact(path string) (*types.ArtifactResponse, 
 
 // GetArtifactByPath returns an artifact by its absolute path
 func (s *ArtifactService) GetArtifactByPath(path string) (*types.ArtifactResponse, error) {
-	config := s.configService.GetConfig()
-	if config == nil {
-		return nil, &ArtifactServiceError{
-			Code:    ErrCodeArtifactConfigNotLoaded,
-			Message: "BMadConfigService has no config loaded",
-		}
-	}
-
-	// Calculate relative path
-	relativePath, err := filepath.Rel(config.ProjectRoot, path)
+	id, err := s.idFromAbsPath(path)
 	if err != nil {
-		relativePath = path
+		return nil, err
 	}
-	relativePath = filepath.ToSlash(relativePath)
-
-	// Generate ID from path
-	id := s.generateArtifactID(relativePath)
 
 	return s.GetArtifact(id)
 }

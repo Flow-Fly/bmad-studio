@@ -27,56 +27,59 @@ func main() {
 	configService := services.NewBMadConfigService()
 	if err := configService.LoadConfig(projectRoot); err != nil {
 		log.Printf("Warning: Failed to load BMAD config: %v", err)
-		// Continue with nil config - endpoints will return appropriate errors
 	}
 
 	var workflowPathService *services.WorkflowPathService
+	var agentService *services.AgentService
+	var workflowStatusService *services.WorkflowStatusService
+	var artifactService *services.ArtifactService
+	var fileWatcherService *services.FileWatcherService
+
+	// Create WebSocket hub (always available, even without BMAD config)
+	hub := websocket.NewHub()
+	go hub.Run()
+
+	// Initialize BMAD-dependent services only when config is available
 	if configService.GetConfig() != nil {
 		workflowPathService = services.NewWorkflowPathService(configService)
 		if err := workflowPathService.LoadPaths(); err != nil {
 			log.Printf("Warning: Failed to load workflow paths: %v", err)
 		}
-	}
 
-	var agentService *services.AgentService
-	if configService.GetConfig() != nil {
 		agentService = services.NewAgentService(configService)
 		if err := agentService.LoadAgents(); err != nil {
 			log.Printf("Warning: Failed to load agents: %v", err)
 		}
-	}
 
-	var workflowStatusService *services.WorkflowStatusService
-	if configService.GetConfig() != nil && workflowPathService != nil {
-		workflowStatusService = services.NewWorkflowStatusService(configService, workflowPathService)
-		if err := workflowStatusService.LoadStatus(); err != nil {
-			log.Printf("Warning: Failed to load workflow status: %v", err)
+		if workflowPathService != nil {
+			workflowStatusService = services.NewWorkflowStatusService(configService, workflowPathService)
+			if err := workflowStatusService.LoadStatus(); err != nil {
+				log.Printf("Warning: Failed to load workflow status: %v", err)
+			}
 		}
-	}
 
-	var artifactService *services.ArtifactService
-	if configService.GetConfig() != nil {
 		artifactService = services.NewArtifactService(configService, workflowStatusService)
 		if err := artifactService.LoadArtifacts(); err != nil {
 			log.Printf("Warning: Failed to load artifacts: %v", err)
 		}
-	}
 
-	// Create WebSocket hub
-	hub := websocket.NewHub()
-	go hub.Run()
-
-	// Create and start file watcher
-	var fileWatcherService *services.FileWatcherService
-	if configService.GetConfig() != nil && artifactService != nil && workflowStatusService != nil {
-		fileWatcherService = services.NewFileWatcherService(hub, configService, artifactService, workflowStatusService)
-		if err := fileWatcherService.Start(); err != nil {
-			log.Printf("Warning: Failed to start file watcher: %v", err)
+		if artifactService != nil && workflowStatusService != nil {
+			fileWatcherService = services.NewFileWatcherService(hub, configService, artifactService, workflowStatusService)
+			if err := fileWatcherService.Start(); err != nil {
+				log.Printf("Warning: Failed to start file watcher: %v", err)
+			}
 		}
 	}
 
 	// Create router with all services
-	router := api.NewRouterWithServices(configService, workflowPathService, agentService, workflowStatusService, artifactService, hub)
+	router := api.NewRouterWithServices(api.RouterServices{
+		BMadConfig:     configService,
+		WorkflowPath:   workflowPathService,
+		Agent:          agentService,
+		WorkflowStatus: workflowStatusService,
+		Artifact:       artifactService,
+		Hub:            hub,
+	})
 
 	// Setup graceful shutdown
 	stop := make(chan os.Signal, 1)

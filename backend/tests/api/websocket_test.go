@@ -18,7 +18,7 @@ func TestWebSocketUpgrade(t *testing.T) {
 	go hub.Run()
 	defer hub.Stop()
 
-	router := api.NewRouterWithServices(nil, nil, nil, nil, nil, hub)
+	router := api.NewRouterWithServices(api.RouterServices{Hub: hub})
 
 	// Create test server
 	server := httptest.NewServer(router)
@@ -45,7 +45,7 @@ func TestWebSocketReceivesBroadcast(t *testing.T) {
 	go hub.Run()
 	defer hub.Stop()
 
-	router := api.NewRouterWithServices(nil, nil, nil, nil, nil, hub)
+	router := api.NewRouterWithServices(api.RouterServices{Hub: hub})
 
 	server := httptest.NewServer(router)
 	defer server.Close()
@@ -83,7 +83,7 @@ func TestMultipleWebSocketClientsReceiveBroadcast(t *testing.T) {
 	go hub.Run()
 	defer hub.Stop()
 
-	router := api.NewRouterWithServices(nil, nil, nil, nil, nil, hub)
+	router := api.NewRouterWithServices(api.RouterServices{Hub: hub})
 
 	server := httptest.NewServer(router)
 	defer server.Close()
@@ -133,7 +133,7 @@ func TestWebSocketDisconnectionHandled(t *testing.T) {
 	go hub.Run()
 	defer hub.Stop()
 
-	router := api.NewRouterWithServices(nil, nil, nil, nil, nil, hub)
+	router := api.NewRouterWithServices(api.RouterServices{Hub: hub})
 
 	server := httptest.NewServer(router)
 	defer server.Close()
@@ -168,7 +168,7 @@ func TestWebSocketDisconnectionHandled(t *testing.T) {
 
 func TestWebSocketRouteNotExistsWithoutHub(t *testing.T) {
 	// Router without hub
-	router := api.NewRouterWithServices(nil, nil, nil, nil, nil, nil)
+	router := api.NewRouterWithServices(api.RouterServices{})
 
 	req := httptest.NewRequest(http.MethodGet, "/ws", nil)
 	rec := httptest.NewRecorder()
@@ -186,7 +186,7 @@ func TestWebSocketCheckOrigin(t *testing.T) {
 	go hub.Run()
 	defer hub.Stop()
 
-	router := api.NewRouterWithServices(nil, nil, nil, nil, nil, hub)
+	router := api.NewRouterWithServices(api.RouterServices{Hub: hub})
 
 	server := httptest.NewServer(router)
 	defer server.Close()

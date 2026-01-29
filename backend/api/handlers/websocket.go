@@ -3,26 +3,39 @@ package handlers
 import (
 	"log"
 	"net/http"
+	"strings"
 
 	"bmad-studio/backend/api/websocket"
 
 	ws "github.com/gorilla/websocket"
 )
 
+// allowedOrigins lists the localhost origins permitted during development
+var allowedOrigins = map[string]bool{
+	"":                          true,
+	"http://localhost:5173":     true,
+	"http://localhost:3007":     true,
+	"http://localhost:3008":     true,
+	"http://127.0.0.1:5173":    true,
+	"http://127.0.0.1:3007":    true,
+	"http://127.0.0.1:3008":    true,
+}
+
 var upgrader = ws.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
-	// Allow connections from localhost for development
 	CheckOrigin: func(r *http.Request) bool {
 		origin := r.Header.Get("Origin")
-		// Allow localhost origins (development)
-		if origin == "" || origin == "http://localhost:5173" || origin == "http://localhost:3007" || origin == "http://localhost:3008" || origin == "http://127.0.0.1:5173" || origin == "http://127.0.0.1:3007" || origin == "http://127.0.0.1:3008" {
+
+		if allowedOrigins[origin] {
 			return true
 		}
+
 		// Allow tauri:// and file:// origins for desktop app
-		if len(origin) >= 6 && (origin[:6] == "tauri:" || origin[:5] == "file:") {
+		if strings.HasPrefix(origin, "tauri:") || strings.HasPrefix(origin, "file:") {
 			return true
 		}
+
 		log.Printf("WebSocket connection rejected from origin: %s", origin)
 		return false
 	},

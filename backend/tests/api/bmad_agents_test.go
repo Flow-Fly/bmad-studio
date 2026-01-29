@@ -83,7 +83,7 @@ output_folder: "{project-root}/_bmad-output"
 func TestGetAgents_Returns200WithValidAgentList(t *testing.T) {
 	configService, workflowPathService, agentService, _ := setupTestServices(t)
 
-	router := api.NewRouterWithServices(configService, workflowPathService, agentService, nil, nil, nil)
+	router := api.NewRouterWithServices(api.RouterServices{BMadConfig: configService, WorkflowPath: workflowPathService, Agent: agentService})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/bmad/agents", nil)
 	rec := httptest.NewRecorder()
@@ -119,7 +119,7 @@ func TestGetAgents_ReturnsErrorWhenServiceNotLoaded(t *testing.T) {
 	configService := services.NewBMadConfigService()
 	// Don't load config - service is not available
 
-	router := api.NewRouterWithServices(configService, nil, nil, nil, nil, nil)
+	router := api.NewRouterWithServices(api.RouterServices{BMadConfig: configService})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/bmad/agents", nil)
 	rec := httptest.NewRecorder()
@@ -143,7 +143,7 @@ func TestGetAgents_ReturnsErrorWhenServiceNotLoaded(t *testing.T) {
 func TestGetAgent_Returns200WithValidAgent(t *testing.T) {
 	configService, workflowPathService, agentService, _ := setupTestServices(t)
 
-	router := api.NewRouterWithServices(configService, workflowPathService, agentService, nil, nil, nil)
+	router := api.NewRouterWithServices(api.RouterServices{BMadConfig: configService, WorkflowPath: workflowPathService, Agent: agentService})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/bmad/agents/pm.agent.yaml", nil)
 	rec := httptest.NewRecorder()
@@ -167,7 +167,7 @@ func TestGetAgent_Returns200WithValidAgent(t *testing.T) {
 func TestGetAgent_Returns404WhenNotFound(t *testing.T) {
 	configService, workflowPathService, agentService, _ := setupTestServices(t)
 
-	router := api.NewRouterWithServices(configService, workflowPathService, agentService, nil, nil, nil)
+	router := api.NewRouterWithServices(api.RouterServices{BMadConfig: configService, WorkflowPath: workflowPathService, Agent: agentService})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/bmad/agents/nonexistent.agent.yaml", nil)
 	rec := httptest.NewRecorder()
