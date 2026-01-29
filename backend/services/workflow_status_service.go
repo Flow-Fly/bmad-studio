@@ -143,6 +143,7 @@ func (s *WorkflowStatusService) isComplete(statusValue string) bool {
 		return false
 	}
 
+	// Complete if value looks like a file path
 	if looksLikeFilePath(statusValue) {
 		return true
 	}
@@ -250,6 +251,7 @@ func (s *WorkflowStatusService) computeWorkflowStatuses(phases []types.PhaseResp
 			} else if s.isComplete(statusValue) {
 				status = types.StatusComplete
 				isComplete = true
+				// If it's a file path, set artifact path
 				if looksLikeFilePath(statusValue) {
 					artifactPath = &statusValue
 				}
@@ -263,7 +265,7 @@ func (s *WorkflowStatusService) computeWorkflowStatuses(phases []types.PhaseResp
 				Status:       status,
 				ArtifactPath: artifactPath,
 				IsComplete:   isComplete,
-				IsRequired:   wf.Required && !wf.Optional,
+				IsRequired:   s.isWorkflowRequired(wf),
 				IsOptional:   wf.Optional,
 			}
 		}
