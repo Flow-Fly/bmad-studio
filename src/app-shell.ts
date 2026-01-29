@@ -1,5 +1,10 @@
 import { LitElement, html, css } from 'lit';
-import { customElement } from 'lit/decorators.js';
+import { customElement, query } from 'lit/decorators.js';
+
+import '@shoelace-style/shoelace/dist/components/icon-button/icon-button.js';
+
+import './components/core/settings/provider-settings.js';
+import type { ProviderSettings } from './components/core/settings/provider-settings.js';
 
 @customElement('app-shell')
 export class AppShell extends LitElement {
@@ -19,6 +24,22 @@ export class AppShell extends LitElement {
       padding: var(--bmad-spacing-lg);
     }
 
+    .toolbar {
+      position: fixed;
+      top: 0;
+      right: 0;
+      padding: var(--bmad-spacing-md);
+      z-index: var(--bmad-z-sticky);
+    }
+
+    sl-icon-button {
+      font-size: var(--bmad-font-size-xl);
+      color: var(--bmad-color-text-secondary);
+    }
+    sl-icon-button:hover {
+      color: var(--bmad-color-text-primary);
+    }
+
     h1 {
       font-size: var(--bmad-font-size-xl);
       font-weight: var(--bmad-font-weight-semibold);
@@ -26,11 +47,27 @@ export class AppShell extends LitElement {
     }
   `;
 
+  @query('provider-settings') _settingsPanel!: ProviderSettings;
+
+  private _openSettings(): void {
+    this._settingsPanel.open();
+  }
+
   render() {
     return html`
+      <div class="toolbar">
+        <sl-icon-button
+          name="gear"
+          label="Settings"
+          @click=${this._openSettings}
+        ></sl-icon-button>
+      </div>
+
       <div class="container">
         <h1>BMAD Studio</h1>
       </div>
+
+      <provider-settings></provider-settings>
     `;
   }
 }
