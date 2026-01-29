@@ -3,19 +3,31 @@ package api
 import (
 	"bmad-studio/backend/api/handlers"
 	"bmad-studio/backend/api/middleware"
+	"bmad-studio/backend/api/websocket"
 	"bmad-studio/backend/services"
 
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 )
 
+// RouterServices groups the optional service dependencies for the router.
+// All fields are optional and may be nil.
+type RouterServices struct {
+	BMadConfig     *services.BMadConfigService
+	WorkflowPath   *services.WorkflowPathService
+	Agent          *services.AgentService
+	WorkflowStatus *services.WorkflowStatusService
+	Artifact       *services.ArtifactService
+	Hub            *websocket.Hub
+}
+
 // NewRouter creates and configures the main router with all routes and middleware
 func NewRouter() *chi.Mux {
-	return NewRouterWithServices(nil, nil, nil, nil)
+	return NewRouterWithServices(RouterServices{})
 }
 
 // NewRouterWithServices creates the router with optional service dependencies
-func NewRouterWithServices(bmadConfigService *services.BMadConfigService, workflowPathService *services.WorkflowPathService, agentService *services.AgentService, workflowStatusService *services.WorkflowStatusService) *chi.Mux {
+func NewRouterWithServices(svc RouterServices) *chi.Mux {
 	r := chi.NewRouter()
 
 	// Global middleware
@@ -60,17 +72,30 @@ func NewRouterWithServices(bmadConfigService *services.BMadConfigService, workfl
 		})
 
 		// BMAD resource
-		if bmadConfigService != nil {
-			bmadHandler := handlers.NewBMadHandler(bmadConfigService, workflowPathService, agentService, workflowStatusService)
+		if svc.BMadConfig != nil {
+			bmadHandler := handlers.NewBMadHandler(svc.BMadConfig, svc.WorkflowPath, svc.Agent, svc.WorkflowStatus)
 			r.Route("/bmad", func(r chi.Router) {
 				r.Get("/config", bmadHandler.GetConfig)
 				r.Get("/phases", bmadHandler.GetPhases)
 				r.Get("/agents", bmadHandler.GetAgents)
 				r.Get("/agents/{id}", bmadHandler.GetAgent)
 				r.Get("/status", bmadHandler.GetStatus)
+
+				// Artifact routes
+				if svc.Artifact != nil {
+					artifactHandler := handlers.NewArtifactHandler(svc.Artifact)
+					r.Get("/artifacts", artifactHandler.GetArtifacts)
+					r.Get("/artifacts/{id}", artifactHandler.GetArtifact)
+				}
 			})
 		}
 	})
+
+	// WebSocket endpoint (outside /api/v1 for cleaner URL)
+	if svc.Hub != nil {
+		wsHandler := handlers.NewWebSocketHandler(svc.Hub)
+		r.Get("/ws", wsHandler.HandleWebSocket)
+	}
 
 	return r
 }

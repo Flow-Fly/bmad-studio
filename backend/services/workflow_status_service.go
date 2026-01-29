@@ -124,19 +124,20 @@ func (s *WorkflowStatusService) parseSprintStatus(path string) (*types.SprintSta
 	return &status, nil
 }
 
-// looksLikeFilePath checks if a status value appears to be a file path (supports Unix and Windows)
+// looksLikeFilePath returns true if the value appears to be a file path
+// (contains path separators or has a recognized file extension)
 func looksLikeFilePath(value string) bool {
-	return strings.ContainsAny(value, "/\\") || strings.HasSuffix(value, ".md") || strings.HasSuffix(value, ".yaml")
+	return strings.ContainsAny(value, "/\\") ||
+		strings.HasSuffix(value, ".md") ||
+		strings.HasSuffix(value, ".yaml")
 }
 
 // isComplete determines if a workflow status value indicates completion
 func (s *WorkflowStatusService) isComplete(statusValue string) bool {
-	// Skipped counts as "complete" for progress tracking
 	if statusValue == types.StatusSkipped {
 		return true
 	}
 
-	// Not complete for known status keywords
 	switch statusValue {
 	case types.StatusRequired, types.StatusOptional, types.StatusRecommended, types.StatusConditional, types.StatusNotStarted:
 		return false
@@ -271,6 +272,12 @@ func (s *WorkflowStatusService) computeWorkflowStatuses(phases []types.PhaseResp
 	}
 
 	return result
+}
+
+// Reload reloads the status files from disk
+// Used by file watcher to refresh status after changes
+func (s *WorkflowStatusService) Reload() error {
+	return s.LoadStatus()
 }
 
 // GetStatus returns the computed status response
