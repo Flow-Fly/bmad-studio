@@ -10,6 +10,7 @@ import (
 	"bmad-studio/backend/api"
 	"bmad-studio/backend/api/websocket"
 	"bmad-studio/backend/services"
+	"bmad-studio/backend/storage"
 )
 
 func main() {
@@ -74,6 +75,12 @@ func main() {
 	// Initialize provider service (always available, not BMAD-dependent)
 	providerService := services.NewProviderService()
 
+	// Initialize config store for settings persistence
+	configStore, err := storage.NewConfigStore()
+	if err != nil {
+		log.Printf("Warning: Failed to initialize config store: %v", err)
+	}
+
 	// Create router with all services
 	router := api.NewRouterWithServices(api.RouterServices{
 		BMadConfig:     configService,
@@ -82,6 +89,7 @@ func main() {
 		WorkflowStatus: workflowStatusService,
 		Artifact:       artifactService,
 		Provider:       providerService,
+		ConfigStore:    configStore,
 		Hub:            hub,
 	})
 

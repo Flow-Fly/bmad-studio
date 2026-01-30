@@ -1,6 +1,24 @@
 import { expect, fixture, html } from '@open-wc/testing';
 import { AppShell } from '../../../src/app-shell.ts';
 
+// Stub fetch globally for component tests
+beforeEach(() => {
+  (globalThis as any).fetch = async () =>
+    new Response(
+      JSON.stringify({
+        default_provider: 'claude',
+        default_model: '',
+        ollama_endpoint: 'http://localhost:11434',
+        providers: {
+          claude: { enabled: false },
+          openai: { enabled: false },
+          ollama: { enabled: false },
+        },
+      }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } }
+    );
+});
+
 describe('AppShell', () => {
   it('renders with default values', async () => {
     const el = await fixture<AppShell>(html`<app-shell></app-shell>`);
@@ -26,7 +44,6 @@ describe('AppShell', () => {
   it('uses semantic heading element for title', async () => {
     const el = await fixture<AppShell>(html`<app-shell></app-shell>`);
     await el.updateComplete;
-    // Verify h1 is used for main title (accessibility best practice)
     const h1 = el.shadowRoot!.querySelector('h1');
     expect(h1).to.exist;
     expect(h1!.tagName.toLowerCase()).to.equal('h1');
@@ -35,9 +52,31 @@ describe('AppShell', () => {
   it('has shadow root with styles attached', async () => {
     const el = await fixture<AppShell>(html`<app-shell></app-shell>`);
     await el.updateComplete;
-    // Verify component has shadow DOM with adopted stylesheets (Lit pattern)
     expect(el.shadowRoot).to.exist;
-    // Lit components use adoptedStyleSheets for styles
     expect(el.shadowRoot!.adoptedStyleSheets.length).to.be.greaterThan(0);
+  });
+
+  it('contains a settings icon button', async () => {
+    const el = await fixture<AppShell>(html`<app-shell></app-shell>`);
+    await el.updateComplete;
+    const iconButton = el.shadowRoot!.querySelector('sl-icon-button');
+    expect(iconButton).to.exist;
+    expect(iconButton!.getAttribute('name')).to.equal('gear');
+  });
+
+  it('contains the provider-settings component', async () => {
+    const el = await fixture<AppShell>(html`<app-shell></app-shell>`);
+    await el.updateComplete;
+    const settings = el.shadowRoot!.querySelector('provider-settings');
+    expect(settings).to.exist;
+  });
+
+  it('has a toolbar with the settings button', async () => {
+    const el = await fixture<AppShell>(html`<app-shell></app-shell>`);
+    await el.updateComplete;
+    const toolbar = el.shadowRoot!.querySelector('.toolbar');
+    expect(toolbar).to.exist;
+    const button = toolbar!.querySelector('sl-icon-button');
+    expect(button).to.exist;
   });
 });
