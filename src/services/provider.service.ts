@@ -1,31 +1,9 @@
 import type { ProviderType, Model, AppSettings } from '../types/provider.js';
 import { getApiKey, setApiKey, hasApiKey } from './keychain.service.js';
-
-const API_BASE = '/api/v1';
+import { apiFetch, API_BASE } from './api.service.js';
 
 interface ValidateResponse {
   valid: boolean;
-}
-
-interface ApiError {
-  error: { code: string; message: string };
-}
-
-async function apiFetch<T>(url: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(url, init);
-  if (!response.ok) {
-    let message = `Request failed (${response.status})`;
-    try {
-      const body: ApiError = await response.json();
-      if (body.error?.message) {
-        message = body.error.message;
-      }
-    } catch {
-      // Use default message
-    }
-    throw new Error(message);
-  }
-  return response.json();
 }
 
 export function friendlyValidationError(type: ProviderType, err: unknown): string {

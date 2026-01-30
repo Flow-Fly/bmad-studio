@@ -22,6 +22,7 @@ type RouterServices struct {
 	Provider       *services.ProviderService
 	ConfigStore    *storage.ConfigStore
 	Hub            *websocket.Hub
+	ProjectManager *services.ProjectManager
 }
 
 // NewRouter creates and configures the main router with all routes and middleware
@@ -48,6 +49,12 @@ func NewRouterWithServices(svc RouterServices) *chi.Mux {
 		r.Route("/projects", func(r chi.Router) {
 			r.Get("/", handlers.ListProjects)
 			r.Post("/", handlers.CreateProject)
+
+			if svc.ProjectManager != nil {
+				projectHandler := handlers.NewProjectHandler(svc.ProjectManager)
+				r.Post("/open", projectHandler.OpenProject)
+			}
+
 			r.Route("/{id}", func(r chi.Router) {
 				r.Get("/", handlers.GetProject)
 				r.Put("/", handlers.UpdateProject)
@@ -83,22 +90,19 @@ func NewRouterWithServices(svc RouterServices) *chi.Mux {
 			}
 		})
 
-		// BMAD resource
-		if svc.BMadConfig != nil {
-			bmadHandler := handlers.NewBMadHandler(svc.BMadConfig, svc.WorkflowPath, svc.Agent, svc.WorkflowStatus)
+		// BMAD resource — always registered when ProjectManager is available;
+		// handlers resolve services dynamically per request to support project switching
+		if svc.ProjectManager != nil {
+			bmadHandler := handlers.NewBMadHandler(svc.ProjectManager)
+			artifactHandler := handlers.NewArtifactHandler(svc.ProjectManager)
 			r.Route("/bmad", func(r chi.Router) {
 				r.Get("/config", bmadHandler.GetConfig)
 				r.Get("/phases", bmadHandler.GetPhases)
 				r.Get("/agents", bmadHandler.GetAgents)
 				r.Get("/agents/{id}", bmadHandler.GetAgent)
 				r.Get("/status", bmadHandler.GetStatus)
-
-				// Artifact routes
-				if svc.Artifact != nil {
-					artifactHandler := handlers.NewArtifactHandler(svc.Artifact)
-					r.Get("/artifacts", artifactHandler.GetArtifacts)
-					r.Get("/artifacts/{id}", artifactHandler.GetArtifact)
-				}
+				r.Get("/artifacts", artifactHandler.GetArtifacts)
+				r.Get("/artifacts/{id}", artifactHandler.GetArtifact)
 			})
 		}
 	})
