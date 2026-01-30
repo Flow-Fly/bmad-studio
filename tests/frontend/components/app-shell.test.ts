@@ -1,8 +1,6 @@
 import { expect, fixture, html } from '@open-wc/testing';
 import { AppShell } from '../../../src/app-shell.ts';
 import {
-  projectState,
-  projectLoadingState,
   clearProject,
   setProjectSuccess,
   setProjectError,

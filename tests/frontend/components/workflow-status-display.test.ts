@@ -1,7 +1,6 @@
 import { expect, fixture, html } from '@open-wc/testing';
 import { WorkflowStatusDisplay } from '../../../src/components/core/workflow/workflow-status-display.ts';
 import {
-  workflowState,
   workflowLoadingState,
   clearWorkflowState,
   updateWorkflowState,

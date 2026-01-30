@@ -17,9 +17,10 @@ import type {
   PhaseCompletionStatus,
   WorkflowCompletionStatus,
   WorkflowStatusValue,
+  WorkflowStatus,
 } from '../../../types/workflow.js';
 
-const STATUS_BADGE_VARIANT: Record<string, string> = {
+const STATUS_BADGE_VARIANT: Record<WorkflowStatusValue, string> = {
   complete: 'success',
   required: 'primary',
   not_started: 'neutral',
@@ -28,7 +29,7 @@ const STATUS_BADGE_VARIANT: Record<string, string> = {
   recommended: 'primary',
 };
 
-const STATUS_LABELS: Record<string, string> = {
+const STATUS_LABELS: Record<WorkflowStatusValue, string> = {
   complete: 'Complete',
   required: 'Required',
   not_started: 'Not Started',
@@ -242,7 +243,7 @@ export class WorkflowStatusDisplay extends SignalWatcher(LitElement) {
       return this._renderEmpty();
     }
 
-    return this._renderLoaded();
+    return this._renderLoaded(status);
   }
 
   private _renderEmpty() {
@@ -282,11 +283,10 @@ export class WorkflowStatusDisplay extends SignalWatcher(LitElement) {
     `;
   }
 
-  private _renderLoaded() {
+  private _renderLoaded(status: WorkflowStatus) {
     const phase = currentPhase$.get();
     const phases = phaseCompletions$.get();
     const next = nextWorkflow$.get();
-    const status = workflowState.get()!;
 
     return html`
       <div class="status-summary">
@@ -311,7 +311,7 @@ export class WorkflowStatusDisplay extends SignalWatcher(LitElement) {
   private _renderPhaseRow(
     phase: PhaseCompletionStatus,
     isCurrent: boolean,
-    status: { workflow_statuses: Record<string, WorkflowCompletionStatus> },
+    status: WorkflowStatus,
   ) {
     const phaseWorkflows = this._getWorkflowsForPhase(phase, status.workflow_statuses);
 
@@ -332,8 +332,8 @@ export class WorkflowStatusDisplay extends SignalWatcher(LitElement) {
   }
 
   private _renderWorkflowItem(workflow: WorkflowCompletionStatus) {
-    const variant = STATUS_BADGE_VARIANT[workflow.status] ?? 'neutral';
-    const label = STATUS_LABELS[workflow.status] ?? workflow.status;
+    const variant = STATUS_BADGE_VARIANT[workflow.status];
+    const label = STATUS_LABELS[workflow.status];
 
     return html`
       <div class="workflow-item">
@@ -346,29 +346,14 @@ export class WorkflowStatusDisplay extends SignalWatcher(LitElement) {
   }
 
   /**
-   * Groups workflows by phase. Since the API doesn't provide a direct phase→workflow mapping,
-   * we distribute workflows across phases based on phase order. This is a simplified approach
-   * that works for the current BMAD workflow structure.
-   *
-   * The backend's phase_completion already gives us counts, so the visual grouping here
-   * distributes all known workflow_statuses into phase buckets by index allocation.
+   * MVP placeholder: shows all workflows under phase 1 to avoid duplication.
+   * Stories 2.3/2.4 will add proper phase-to-workflow mapping from the backend.
    */
   private _getWorkflowsForPhase(
     phase: PhaseCompletionStatus,
     allWorkflows: Record<string, WorkflowCompletionStatus>,
   ): WorkflowCompletionStatus[] {
-    // The API response includes all workflows in a flat map.
-    // Without explicit phase→workflow mapping from the backend, we show all
-    // workflows in the first phase that has capacity. For MVP, showing all
-    // workflows under their completion status is sufficient — Stories 2.3/2.4
-    // will implement the proper phase graph with correct grouping.
-    //
-    // For now, show all workflows under the first phase only to avoid duplication.
-    const allValues = Object.values(allWorkflows);
-    if (phase.phase_num === 1) {
-      return allValues;
-    }
-    return [];
+    return phase.phase_num === 1 ? Object.values(allWorkflows) : [];
   }
 }
 
