@@ -8,7 +8,6 @@ export interface WebSocketEvent {
 
 type EventHandler = (event: WebSocketEvent) => void;
 
-const WS_URL = `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/ws`;
 const INITIAL_BACKOFF = 1000;
 const MAX_BACKOFF = 30000;
 const JITTER_FACTOR = 0.2;
@@ -19,6 +18,11 @@ let backoff = INITIAL_BACKOFF;
 let intentionalClose = false;
 
 const handlers = new Map<string, Set<EventHandler>>();
+
+function getWsUrl(): string {
+  const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  return `${protocol}//${location.host}/ws`;
+}
 
 function jitter(base: number): number {
   const range = base * JITTER_FACTOR;
@@ -33,7 +37,7 @@ export function connect(): void {
   intentionalClose = false;
   connectionState.set('connecting');
 
-  ws = new WebSocket(WS_URL);
+  ws = new WebSocket(getWsUrl());
 
   ws.onopen = () => {
     connectionState.set('connected');

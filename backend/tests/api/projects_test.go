@@ -183,8 +183,15 @@ func TestIntegration_OpenProject_MalformedConfig(t *testing.T) {
 	rr := httptest.NewRecorder()
 	router.ServeHTTP(rr, req)
 
-	// Should be 422 (config invalid) or 500 (internal error) - either indicates proper error handling
-	if rr.Code == http.StatusOK {
-		t.Fatalf("expected error for malformed config, got 200. Body: %s", rr.Body.String())
+	if rr.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("expected 422, got %d. Body: %s", rr.Code, rr.Body.String())
+	}
+
+	var errResp response.ErrorResponse
+	if err := json.NewDecoder(rr.Body).Decode(&errResp); err != nil {
+		t.Fatalf("decode error: %v", err)
+	}
+	if errResp.Error.Code != "bmad_config_invalid" {
+		t.Errorf("expected error code 'bmad_config_invalid', got %q", errResp.Error.Code)
 	}
 }

@@ -45,11 +45,6 @@ func main() {
 	}
 
 	router := api.NewRouterWithServices(api.RouterServices{
-		BMadConfig:     projectManager.ConfigService(),
-		WorkflowPath:   projectManager.WorkflowPathService(),
-		Agent:          projectManager.AgentService(),
-		WorkflowStatus: projectManager.WorkflowStatusService(),
-		Artifact:       projectManager.ArtifactService(),
 		Provider:       providerService,
 		ConfigStore:    configStore,
 		Hub:            hub,

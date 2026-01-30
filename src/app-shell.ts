@@ -13,6 +13,7 @@ import type { ProviderSettings } from './components/core/settings/provider-setti
 import { projectState, projectLoadingState, bmadServicesAvailable$ } from './state/project.state.js';
 import { openProject } from './services/project.service.js';
 import { selectProjectFolder } from './services/dialog.service.js';
+import { connect as wsConnect, disconnect as wsDisconnect } from './services/websocket.service.js';
 
 @customElement('app-shell')
 export class AppShell extends SignalWatcher(LitElement) {
@@ -159,10 +160,19 @@ export class AppShell extends SignalWatcher(LitElement) {
     this._settingsPanel.open();
   }
 
+  disconnectedCallback(): void {
+    super.disconnectedCallback();
+    wsDisconnect();
+  }
+
   private async _handleOpenProject(): Promise<void> {
     const folder = await selectProjectFolder();
     if (folder) {
+      wsDisconnect();
       await openProject(folder);
+      if (projectState.get()) {
+        wsConnect();
+      }
     }
   }
 

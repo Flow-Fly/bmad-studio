@@ -55,10 +55,18 @@ func NewProjectManager(hub *websocket.Hub) *ProjectManager {
 }
 
 // LoadProject initializes all BMAD services for the given project path.
-// It stops any existing services first, then re-initializes for the new path.
+// It validates the new project fully before stopping existing services,
+// ensuring a failed switch preserves the current project (atomic switch pattern).
 func (pm *ProjectManager) LoadProject(projectRoot string) (*ProjectInfo, error) {
-	pm.mu.Lock()
-	defer pm.mu.Unlock()
+	// Phase 1: Sanitize and validate path (no lock needed)
+	absPath, err := filepath.Abs(projectRoot)
+	if err != nil {
+		return nil, &ProjectError{
+			Code:    "path_invalid",
+			Message: fmt.Sprintf("Invalid path: %v", err),
+		}
+	}
+	projectRoot = absPath
 
 	info, err := os.Stat(projectRoot)
 	if err != nil {
@@ -82,8 +90,7 @@ func (pm *ProjectManager) LoadProject(projectRoot string) (*ProjectInfo, error) 
 		}
 	}
 
-	pm.stopServicesLocked()
-
+	// Phase 2: Initialize all new services before stopping old ones
 	configService := NewBMadConfigService()
 	if err := configService.LoadConfig(projectRoot); err != nil {
 		return nil, &ProjectError{
@@ -99,59 +106,76 @@ func (pm *ProjectManager) LoadProject(projectRoot string) (*ProjectInfo, error) 
 		}
 	}
 
-	pm.configService = configService
-	pm.projectRoot = projectRoot
-	pm.projectName = filepath.Base(projectRoot)
-
+	projectName := filepath.Base(projectRoot)
 	status := ServiceStatus{Config: true}
 
-	workflowPathService := NewWorkflowPathService(configService)
-	if err := workflowPathService.LoadPaths(); err != nil {
+	var workflowPathService *WorkflowPathService
+	wps := NewWorkflowPathService(configService)
+	if err := wps.LoadPaths(); err != nil {
 		log.Printf("Warning: Failed to load workflow paths: %v", err)
 	} else {
-		pm.workflowPathService = workflowPathService
+		workflowPathService = wps
 		status.Phases = true
 	}
 
-	agentService := NewAgentService(configService)
-	if err := agentService.LoadAgents(); err != nil {
+	var agentService *AgentService
+	as := NewAgentService(configService)
+	if err := as.LoadAgents(); err != nil {
 		log.Printf("Warning: Failed to load agents: %v", err)
 	} else {
-		pm.agentService = agentService
+		agentService = as
 		status.Agents = true
 	}
 
-	if pm.workflowPathService != nil {
-		workflowStatusService := NewWorkflowStatusService(configService, pm.workflowPathService)
-		if err := workflowStatusService.LoadStatus(); err != nil {
+	var workflowStatusService *WorkflowStatusService
+	if workflowPathService != nil {
+		wss := NewWorkflowStatusService(configService, workflowPathService)
+		if err := wss.LoadStatus(); err != nil {
 			log.Printf("Warning: Failed to load workflow status: %v", err)
 		} else {
-			pm.workflowStatusService = workflowStatusService
+			workflowStatusService = wss
 			status.Status = true
 		}
 	}
 
-	artifactService := NewArtifactService(configService, pm.workflowStatusService)
-	if err := artifactService.LoadArtifacts(); err != nil {
+	var artifactService *ArtifactService
+	arts := NewArtifactService(configService, workflowStatusService)
+	if err := arts.LoadArtifacts(); err != nil {
 		log.Printf("Warning: Failed to load artifacts: %v", err)
 	} else {
-		pm.artifactService = artifactService
+		artifactService = arts
 		status.Artifacts = true
 	}
 
-	if pm.artifactService != nil && pm.workflowStatusService != nil {
-		fileWatcherService := NewFileWatcherService(pm.hub, configService, pm.artifactService, pm.workflowStatusService)
-		if err := fileWatcherService.Start(); err != nil {
+	var fileWatcherService *FileWatcherService
+	if artifactService != nil && workflowStatusService != nil {
+		fws := NewFileWatcherService(pm.hub, configService, artifactService, workflowStatusService)
+		if err := fws.Start(); err != nil {
 			log.Printf("Warning: Failed to start file watcher: %v", err)
 		} else {
-			pm.fileWatcherService = fileWatcherService
+			fileWatcherService = fws
 			status.Watcher = true
 		}
 	}
 
+	// Phase 3: Atomic swap — acquire lock only to stop old services and assign new ones
+	pm.mu.Lock()
+	defer pm.mu.Unlock()
+
+	pm.stopServicesLocked()
+
+	pm.configService = configService
+	pm.projectRoot = projectRoot
+	pm.projectName = projectName
+	pm.workflowPathService = workflowPathService
+	pm.agentService = agentService
+	pm.workflowStatusService = workflowStatusService
+	pm.artifactService = artifactService
+	pm.fileWatcherService = fileWatcherService
+
 	return &ProjectInfo{
-		ProjectName: pm.projectName,
-		ProjectRoot: pm.projectRoot,
+		ProjectName: projectName,
+		ProjectRoot: projectRoot,
 		BmadLoaded:  true,
 		Services:    status,
 	}, nil

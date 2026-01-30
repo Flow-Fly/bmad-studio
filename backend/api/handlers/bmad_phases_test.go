@@ -67,7 +67,7 @@ phases:
 		t.Fatal(err)
 	}
 
-	handler := NewBMadHandler(configSvc, pathSvc, nil, nil)
+	handler := NewBMadHandler(&mockServiceProvider{config: configSvc, paths: pathSvc})
 
 	// Create request
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/bmad/phases", nil)
@@ -124,7 +124,7 @@ output_folder: ""
 	pathSvc := services.NewWorkflowPathService(configSvc)
 	// Don't call LoadPaths - simulates service not loaded
 
-	handler := NewBMadHandler(configSvc, pathSvc, nil, nil)
+	handler := NewBMadHandler(&mockServiceProvider{config: configSvc, paths: pathSvc})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/bmad/phases", nil)
 	w := httptest.NewRecorder()
@@ -151,29 +151,8 @@ output_folder: ""
 }
 
 func TestGetPhases_ReturnsErrorWhenServiceNil(t *testing.T) {
-	tmpDir := t.TempDir()
-
-	configDir := filepath.Join(tmpDir, "_bmad", "bmm")
-	if err := os.MkdirAll(configDir, 0755); err != nil {
-		t.Fatal(err)
-	}
-	configContent := `project_name: test
-planning_artifacts: ""
-implementation_artifacts: ""
-project_knowledge: ""
-output_folder: ""
-`
-	if err := os.WriteFile(filepath.Join(configDir, "config.yaml"), []byte(configContent), 0644); err != nil {
-		t.Fatal(err)
-	}
-
-	configSvc := services.NewBMadConfigService()
-	if err := configSvc.LoadConfig(tmpDir); err != nil {
-		t.Fatal(err)
-	}
-
-	// Create handler with nil path service
-	handler := NewBMadHandler(configSvc, nil, nil, nil)
+	// Create handler with nil path service via mock provider
+	handler := NewBMadHandler(&mockServiceProvider{})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/bmad/phases", nil)
 	w := httptest.NewRecorder()

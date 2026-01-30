@@ -20,6 +20,7 @@ func NewProjectHandler(pm *services.ProjectManager) *ProjectHandler {
 
 // OpenProject handles POST /api/v1/projects/open
 func (h *ProjectHandler) OpenProject(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 4096)
 	var req struct {
 		Path string `json:"path"`
 	}

@@ -12,6 +12,23 @@ import (
 	"bmad-studio/backend/types"
 )
 
+// mockServiceProvider implements ServiceProvider for tests
+type mockServiceProvider struct {
+	config    *services.BMadConfigService
+	paths     *services.WorkflowPathService
+	agents    *services.AgentService
+	status    *services.WorkflowStatusService
+	artifacts *services.ArtifactService
+}
+
+func (m *mockServiceProvider) ConfigService() *services.BMadConfigService       { return m.config }
+func (m *mockServiceProvider) WorkflowPathService() *services.WorkflowPathService { return m.paths }
+func (m *mockServiceProvider) AgentService() *services.AgentService               { return m.agents }
+func (m *mockServiceProvider) WorkflowStatusService() *services.WorkflowStatusService {
+	return m.status
+}
+func (m *mockServiceProvider) ArtifactService() *services.ArtifactService { return m.artifacts }
+
 func TestGetConfig_ReturnsConfig(t *testing.T) {
 	// Set up a temp project with valid config
 	tmpDir := t.TempDir()
@@ -41,7 +58,7 @@ tea_use_playwright_utils: false
 		t.Fatalf("Failed to load config: %v", err)
 	}
 
-	handler := NewBMadHandler(svc, nil, nil, nil)
+	handler := NewBMadHandler(&mockServiceProvider{config: svc})
 
 	req, err := http.NewRequest("GET", "/api/v1/bmad/config", nil)
 	if err != nil {
@@ -76,7 +93,7 @@ tea_use_playwright_utils: false
 func TestGetConfig_ReturnsErrorWhenNotLoaded(t *testing.T) {
 	svc := services.NewBMadConfigService()
 	// Don't load config - should return error
-	handler := NewBMadHandler(svc, nil, nil, nil)
+	handler := NewBMadHandler(&mockServiceProvider{config: svc})
 
 	req, err := http.NewRequest("GET", "/api/v1/bmad/config", nil)
 	if err != nil {
