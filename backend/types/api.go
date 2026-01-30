@@ -30,10 +30,18 @@ type Session struct {
 	Title     string `json:"title,omitempty"`
 }
 
+// ProviderSettings holds per-provider configuration (keys are NOT stored here)
+type ProviderSettings struct {
+	Enabled  bool   `json:"enabled"`
+	Endpoint string `json:"endpoint,omitempty"`
+}
+
 // Settings represents global application settings
 type Settings struct {
-	DefaultProvider string `json:"default_provider,omitempty"`
-	Theme           string `json:"theme,omitempty"`
+	DefaultProvider string                      `json:"default_provider"`
+	DefaultModel    string                      `json:"default_model"`
+	OllamaEndpoint  string                      `json:"ollama_endpoint"`
+	Providers       map[string]ProviderSettings `json:"providers"`
 }
 
 // Provider represents a configured LLM provider

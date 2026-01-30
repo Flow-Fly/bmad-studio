@@ -5,6 +5,7 @@ import (
 	"bmad-studio/backend/api/middleware"
 	"bmad-studio/backend/api/websocket"
 	"bmad-studio/backend/services"
+	"bmad-studio/backend/storage"
 
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
@@ -19,6 +20,7 @@ type RouterServices struct {
 	WorkflowStatus *services.WorkflowStatusService
 	Artifact       *services.ArtifactService
 	Provider       *services.ProviderService
+	ConfigStore    *storage.ConfigStore
 	Hub            *websocket.Hub
 }
 
@@ -62,8 +64,11 @@ func NewRouterWithServices(svc RouterServices) *chi.Mux {
 
 		// Settings resource
 		r.Route("/settings", func(r chi.Router) {
-			r.Get("/", handlers.GetSettings)
-			r.Put("/", handlers.UpdateSettings)
+			if svc.ConfigStore != nil {
+				settingsHandler := handlers.NewSettingsHandler(svc.ConfigStore)
+				r.Get("/", settingsHandler.GetSettings)
+				r.Put("/", settingsHandler.UpdateSettings)
+			}
 		})
 
 		// Providers resource
