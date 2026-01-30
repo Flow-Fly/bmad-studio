@@ -28,8 +28,7 @@ async function apiFetch<T>(url: string, init?: RequestInit): Promise<T> {
   return response.json();
 }
 
-/** Map provider validation errors to user-friendly messages */
-function friendlyValidationError(type: ProviderType, err: unknown): string {
+export function friendlyValidationError(type: ProviderType, err: unknown): string {
   const raw = err instanceof Error ? err.message : 'Validation failed';
 
   // Network error
@@ -81,5 +80,4 @@ export function saveSettings(settings: AppSettings): Promise<AppSettings> {
   });
 }
 
-// Re-export keychain operations for convenience
-export { getApiKey, setApiKey, hasApiKey, friendlyValidationError };
+export { getApiKey, setApiKey, hasApiKey };

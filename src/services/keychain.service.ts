@@ -41,8 +41,8 @@ export async function setApiKey(provider: ProviderType, key: string): Promise<vo
       const { setPassword } = await import('tauri-plugin-keyring-api');
       await setPassword(SERVICE_NAME, keyNameFor(provider), key);
       return;
-    } catch (err) {
-      throw new Error(`Could not save API key to system keychain. Please check your OS keychain settings.`);
+    } catch {
+      throw new Error('Could not save API key to system keychain. Please check your OS keychain settings.');
     }
   }
   warnFallback();

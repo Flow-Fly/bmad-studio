@@ -32,23 +32,6 @@ func NewOllamaProvider(endpoint string) *OllamaProvider {
 	}
 }
 
-// ValidateCredentials checks if Ollama is reachable by calling GET /api/tags.
-func (p *OllamaProvider) ValidateCredentials(ctx context.Context) error {
-	req, err := http.NewRequestWithContext(ctx, "GET", p.baseURL+"/api/tags", nil)
-	if err != nil {
-		return mapOllamaProviderError(err, 0)
-	}
-	resp, err := p.httpClient.Do(req)
-	if err != nil {
-		return mapOllamaProviderError(err, 0)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return mapOllamaProviderError(nil, resp.StatusCode)
-	}
-	return nil
-}
-
 // ollamaTagsResponse is the response from GET /api/tags.
 type ollamaTagsResponse struct {
 	Models []ollamaModelInfo `json:"models"`
@@ -62,11 +45,8 @@ type ollamaModelInfo struct {
 	Size       int64  `json:"size"`
 }
 
-// ListModels returns models dynamically fetched from the local Ollama instance.
-func (p *OllamaProvider) ListModels() ([]Model, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
+// fetchTags calls GET /api/tags and returns the parsed response.
+func (p *OllamaProvider) fetchTags(ctx context.Context) (*ollamaTagsResponse, error) {
 	req, err := http.NewRequestWithContext(ctx, "GET", p.baseURL+"/api/tags", nil)
 	if err != nil {
 		return nil, mapOllamaProviderError(err, 0)
@@ -88,6 +68,24 @@ func (p *OllamaProvider) ListModels() ([]Model, error) {
 			Message:     "failed to parse model list",
 			UserMessage: "Failed to parse Ollama model list. Please check your Ollama installation.",
 		}
+	}
+	return &tagsResp, nil
+}
+
+// ValidateCredentials checks if Ollama is reachable by calling GET /api/tags.
+func (p *OllamaProvider) ValidateCredentials(ctx context.Context) error {
+	_, err := p.fetchTags(ctx)
+	return err
+}
+
+// ListModels returns models dynamically fetched from the local Ollama instance.
+func (p *OllamaProvider) ListModels() ([]Model, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	tagsResp, err := p.fetchTags(ctx)
+	if err != nil {
+		return nil, err
 	}
 
 	models := make([]Model, 0, len(tagsResp.Models))
