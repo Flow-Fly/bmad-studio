@@ -155,4 +155,19 @@ describe('AppShell', () => {
     expect(button).to.exist;
     expect(button!.textContent).to.include('Select Different Folder');
   });
+
+  it('renders workflow-status-display when project is loaded', async () => {
+    setProjectSuccess(mockProject);
+    const el = await fixture<AppShell>(html`<app-shell></app-shell>`);
+    await el.updateComplete;
+    const workflowDisplay = el.shadowRoot!.querySelector('workflow-status-display');
+    expect(workflowDisplay).to.exist;
+  });
+
+  it('does not render workflow-status-display when no project loaded', async () => {
+    const el = await fixture<AppShell>(html`<app-shell></app-shell>`);
+    await el.updateComplete;
+    const workflowDisplay = el.shadowRoot!.querySelector('workflow-status-display');
+    expect(workflowDisplay).to.be.null;
+  });
 });

@@ -13,7 +13,11 @@ import type { ProviderSettings } from './components/core/settings/provider-setti
 import { projectState, projectLoadingState, bmadServicesAvailable$ } from './state/project.state.js';
 import { openProject } from './services/project.service.js';
 import { selectProjectFolder } from './services/dialog.service.js';
-import { connect as wsConnect, disconnect as wsDisconnect } from './services/websocket.service.js';
+import { connect as wsConnect, disconnect as wsDisconnect, on as wsOn } from './services/websocket.service.js';
+import { loadWorkflowStatus } from './services/workflow.service.js';
+import { clearWorkflowState } from './state/workflow.state.js';
+
+import './components/core/workflow/workflow-status-display.js';
 
 @customElement('app-shell')
 export class AppShell extends SignalWatcher(LitElement) {
@@ -156,22 +160,43 @@ export class AppShell extends SignalWatcher(LitElement) {
 
   @query('provider-settings') _settingsPanel!: ProviderSettings;
 
+  private _wsUnsubscribe: (() => void) | null = null;
+
   private _openSettings(): void {
     this._settingsPanel.open();
   }
 
   disconnectedCallback(): void {
     super.disconnectedCallback();
+    this._cleanupWorkflow();
     wsDisconnect();
+  }
+
+  private _setupWorkflowSubscription(): void {
+    this._cleanupWorkflow();
+    this._wsUnsubscribe = wsOn('workflow:status-changed', () => {
+      loadWorkflowStatus();
+    });
+    loadWorkflowStatus();
+  }
+
+  private _cleanupWorkflow(): void {
+    if (this._wsUnsubscribe) {
+      this._wsUnsubscribe();
+      this._wsUnsubscribe = null;
+    }
+    clearWorkflowState();
   }
 
   private async _handleOpenProject(): Promise<void> {
     const folder = await selectProjectFolder();
     if (folder) {
+      this._cleanupWorkflow();
       wsDisconnect();
       await openProject(folder);
       if (projectState.get()) {
         wsConnect();
+        this._setupWorkflowSubscription();
       }
     }
   }
@@ -253,7 +278,7 @@ export class AppShell extends SignalWatcher(LitElement) {
           ${bmadAvailable ? html`<span class="bmad-badge">BMAD</span>` : nothing}
         </div>
         <div class="main-content">
-          Project loaded — phase graph will appear here
+          <workflow-status-display></workflow-status-display>
         </div>
       </div>
     `;
