@@ -22,6 +22,7 @@ type RouterServices struct {
 	Provider       *services.ProviderService
 	ConfigStore    *storage.ConfigStore
 	Hub            *websocket.Hub
+	ProjectManager *services.ProjectManager
 }
 
 // NewRouter creates and configures the main router with all routes and middleware
@@ -48,6 +49,12 @@ func NewRouterWithServices(svc RouterServices) *chi.Mux {
 		r.Route("/projects", func(r chi.Router) {
 			r.Get("/", handlers.ListProjects)
 			r.Post("/", handlers.CreateProject)
+
+			if svc.ProjectManager != nil {
+				projectHandler := handlers.NewProjectHandler(svc.ProjectManager)
+				r.Post("/open", projectHandler.OpenProject)
+			}
+
 			r.Route("/{id}", func(r chi.Router) {
 				r.Get("/", handlers.GetProject)
 				r.Put("/", handlers.UpdateProject)
