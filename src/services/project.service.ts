@@ -1,4 +1,4 @@
-import { apiFetch, API_BASE } from './api.service.js';
+import { apiFetch, ApiRequestError, API_BASE } from './api.service.js';
 import type { OpenProjectResponse } from '../types/project.js';
 import {
   setProjectLoading,
@@ -21,8 +21,9 @@ export async function openProject(folderPath: string): Promise<void> {
       services: data.services,
     });
   } catch (err) {
-    const error = err as Error & { code?: string };
-    setProjectError(error.message, error.code);
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    const code = err instanceof ApiRequestError ? err.code : undefined;
+    setProjectError(message, code);
   }
 }
 

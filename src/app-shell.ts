@@ -76,6 +76,10 @@ export class AppShell extends SignalWatcher(LitElement) {
       gap: var(--bmad-spacing-lg);
     }
 
+    .loading-state sl-spinner {
+      font-size: var(--bmad-font-size-2xl);
+    }
+
     .loading-state p {
       font-size: var(--bmad-font-size-md);
       color: var(--bmad-color-text-secondary);
@@ -207,7 +211,7 @@ export class AppShell extends SignalWatcher(LitElement) {
   private _renderLoading() {
     return html`
       <div class="loading-state">
-        <sl-spinner style="font-size: 2rem;"></sl-spinner>
+        <sl-spinner></sl-spinner>
         <p>Loading project...</p>
       </div>
     `;

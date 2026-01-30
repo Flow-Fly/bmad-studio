@@ -56,12 +56,10 @@ export function connect(): void {
 
   ws.onclose = () => {
     ws = null;
-    if (intentionalClose) {
-      connectionState.set('disconnected');
-      return;
-    }
     connectionState.set('disconnected');
-    scheduleReconnect();
+    if (!intentionalClose) {
+      scheduleReconnect();
+    }
   };
 
   ws.onerror = () => {
@@ -93,14 +91,16 @@ export function disconnect(): void {
 }
 
 export function on(eventType: string, handler: EventHandler): () => void {
-  let set = handlers.get(eventType);
-  if (!set) {
-    set = new Set();
-    handlers.set(eventType, set);
+  let handlerSet = handlers.get(eventType);
+  if (!handlerSet) {
+    handlerSet = new Set();
+    handlers.set(eventType, handlerSet);
   }
-  set.add(handler);
+  handlerSet.add(handler);
+
+  const captured = handlerSet;
   return () => {
-    set!.delete(handler);
-    if (set!.size === 0) handlers.delete(eventType);
+    captured.delete(handler);
+    if (captured.size === 0) handlers.delete(eventType);
   };
 }

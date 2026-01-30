@@ -56,21 +56,21 @@ func (h *ProjectHandler) OpenProject(w http.ResponseWriter, r *http.Request) {
 }
 
 // ListProjects handles GET /api/v1/projects
-func ListProjects(w http.ResponseWriter, r *http.Request) {
+func ListProjects(w http.ResponseWriter, _ *http.Request) {
 	response.WriteNotImplemented(w)
 }
 
 // CreateProject handles POST /api/v1/projects
-func CreateProject(w http.ResponseWriter, r *http.Request) {
+func CreateProject(w http.ResponseWriter, _ *http.Request) {
 	response.WriteNotImplemented(w)
 }
 
 // GetProject handles GET /api/v1/projects/{id}
-func GetProject(w http.ResponseWriter, r *http.Request) {
+func GetProject(w http.ResponseWriter, _ *http.Request) {
 	response.WriteNotImplemented(w)
 }
 
 // UpdateProject handles PUT /api/v1/projects/{id}
-func UpdateProject(w http.ResponseWriter, r *http.Request) {
+func UpdateProject(w http.ResponseWriter, _ *http.Request) {
 	response.WriteNotImplemented(w)
 }

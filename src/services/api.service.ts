@@ -4,11 +4,6 @@ interface ApiError {
   error: { code: string; message: string };
 }
 
-export interface ApiErrorDetail {
-  message: string;
-  code?: string;
-}
-
 export class ApiRequestError extends Error {
   code?: string;
 

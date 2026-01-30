@@ -18,11 +18,9 @@ type ProjectManager struct {
 
 	hub *websocket.Hub
 
-	// Current project info
 	projectRoot string
 	projectName string
 
-	// BMAD services (nil when no project loaded)
 	configService         *BMadConfigService
 	workflowPathService   *WorkflowPathService
 	agentService          *AgentService
@@ -62,7 +60,6 @@ func (pm *ProjectManager) LoadProject(projectRoot string) (*ProjectInfo, error) 
 	pm.mu.Lock()
 	defer pm.mu.Unlock()
 
-	// Validate path exists
 	info, err := os.Stat(projectRoot)
 	if err != nil {
 		return nil, &ProjectError{
@@ -77,7 +74,6 @@ func (pm *ProjectManager) LoadProject(projectRoot string) (*ProjectInfo, error) 
 		}
 	}
 
-	// Check for _bmad/ directory
 	bmadPath := filepath.Join(projectRoot, "_bmad")
 	if _, err := os.Stat(bmadPath); os.IsNotExist(err) {
 		return nil, &ProjectError{
@@ -86,10 +82,8 @@ func (pm *ProjectManager) LoadProject(projectRoot string) (*ProjectInfo, error) 
 		}
 	}
 
-	// Stop existing services
 	pm.stopServicesLocked()
 
-	// Initialize config service
 	configService := NewBMadConfigService()
 	if err := configService.LoadConfig(projectRoot); err != nil {
 		return nil, &ProjectError{
@@ -111,7 +105,6 @@ func (pm *ProjectManager) LoadProject(projectRoot string) (*ProjectInfo, error) 
 
 	status := ServiceStatus{Config: true}
 
-	// Initialize workflow path service
 	workflowPathService := NewWorkflowPathService(configService)
 	if err := workflowPathService.LoadPaths(); err != nil {
 		log.Printf("Warning: Failed to load workflow paths: %v", err)
@@ -120,7 +113,6 @@ func (pm *ProjectManager) LoadProject(projectRoot string) (*ProjectInfo, error) 
 		status.Phases = true
 	}
 
-	// Initialize agent service
 	agentService := NewAgentService(configService)
 	if err := agentService.LoadAgents(); err != nil {
 		log.Printf("Warning: Failed to load agents: %v", err)
@@ -129,7 +121,6 @@ func (pm *ProjectManager) LoadProject(projectRoot string) (*ProjectInfo, error) 
 		status.Agents = true
 	}
 
-	// Initialize workflow status service
 	if pm.workflowPathService != nil {
 		workflowStatusService := NewWorkflowStatusService(configService, pm.workflowPathService)
 		if err := workflowStatusService.LoadStatus(); err != nil {
@@ -140,7 +131,6 @@ func (pm *ProjectManager) LoadProject(projectRoot string) (*ProjectInfo, error) 
 		}
 	}
 
-	// Initialize artifact service
 	artifactService := NewArtifactService(configService, pm.workflowStatusService)
 	if err := artifactService.LoadArtifacts(); err != nil {
 		log.Printf("Warning: Failed to load artifacts: %v", err)
@@ -149,7 +139,6 @@ func (pm *ProjectManager) LoadProject(projectRoot string) (*ProjectInfo, error) 
 		status.Artifacts = true
 	}
 
-	// Initialize file watcher service
 	if pm.artifactService != nil && pm.workflowStatusService != nil {
 		fileWatcherService := NewFileWatcherService(pm.hub, configService, pm.artifactService, pm.workflowStatusService)
 		if err := fileWatcherService.Start(); err != nil {
@@ -189,8 +178,6 @@ func (pm *ProjectManager) Stop() {
 	defer pm.mu.Unlock()
 	pm.stopServicesLocked()
 }
-
-// Getters for handler access (thread-safe)
 
 func (pm *ProjectManager) ConfigService() *BMadConfigService {
 	pm.mu.RLock()

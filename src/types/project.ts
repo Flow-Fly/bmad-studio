@@ -26,14 +26,7 @@ export interface OpenProjectResponse {
   project_name: string;
   project_root: string;
   bmad_loaded: boolean;
-  services: {
-    config: boolean;
-    phases: boolean;
-    agents: boolean;
-    status: boolean;
-    artifacts: boolean;
-    watcher: boolean;
-  };
+  services: ServiceAvailability;
 }
 
 export interface ProjectErrorResponse {

@@ -21,7 +21,6 @@ export async function selectProjectFolder(): Promise<string | null> {
   }
 
   // Dev mode fallback: prompt for path
-  const path = window.prompt('Enter the absolute path to your BMAD project folder:');
-  if (!path || path.trim() === '') return null;
-  return path.trim();
+  const path = window.prompt('Enter the absolute path to your BMAD project folder:')?.trim();
+  return path || null;
 }
