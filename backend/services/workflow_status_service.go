@@ -162,7 +162,8 @@ func (s *WorkflowStatusService) reconcileWithFileSystem(statusFile *types.Workfl
 
 		relPath, err := filepath.Rel(projectRoot, absPath)
 		if err != nil {
-			relPath = absPath
+			log.Printf("Cannot compute relative path for %q: %v", absPath, err)
+			continue
 		}
 		relPath = filepath.ToSlash(relPath)
 

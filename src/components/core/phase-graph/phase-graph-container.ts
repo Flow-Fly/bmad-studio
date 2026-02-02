@@ -410,6 +410,7 @@ export class PhaseGraphContainer extends SignalWatcher(LitElement) {
 
     const columns = this._buildColumns(phases, nodes);
     const currentPhaseNum = ws.current_phase;
+    const nodeIndexMap = new Map(nodes.map((n, i) => [n.workflow_id, i]));
 
     return html`
       <div
@@ -418,7 +419,7 @@ export class PhaseGraphContainer extends SignalWatcher(LitElement) {
         aria-label="BMAD phase graph"
         @keydown=${this._handleKeydown}
       >
-        ${columns.map(col => this._renderPhaseColumn(col, col.num === currentPhaseNum))}
+        ${columns.map(col => this._renderPhaseColumn(col, col.num === currentPhaseNum, nodeIndexMap))}
         <svg class="edges-overlay" aria-hidden="true">
           ${this._renderEdges(edges)}
         </svg>
@@ -437,7 +438,7 @@ export class PhaseGraphContainer extends SignalWatcher(LitElement) {
     }));
   }
 
-  private _renderPhaseColumn(col: PhaseColumn, isCurrent: boolean) {
+  private _renderPhaseColumn(col: PhaseColumn, isCurrent: boolean, nodeIndexMap: Map<string, number>) {
     const label = this._compact ? (PHASE_ABBR[col.name] ?? col.name) : col.name;
 
     const regularNodes = col.nodes.filter(n => !DEV_LOOP_IDS.has(n.workflow_id));
@@ -447,16 +448,14 @@ export class PhaseGraphContainer extends SignalWatcher(LitElement) {
       <div class="phase-column ${isCurrent ? 'current-phase' : ''}">
         <span class="phase-label">${label}</span>
         <div class="nodes-stack">
-          ${regularNodes.map(node => this._renderNode(node))}
+          ${regularNodes.map(node => this._renderNode(node, nodeIndexMap.get(node.workflow_id) ?? -1))}
           ${hasDevLoop ? this._renderDevLoop() : nothing}
         </div>
       </div>
     `;
   }
 
-  private _renderNode(node: PhaseGraphNode) {
-    const allNodes = phaseGraphNodes$.get();
-    const nodeIndex = allNodes.indexOf(node);
+  private _renderNode(node: PhaseGraphNode, nodeIndex: number) {
     const visualState = getNodeVisualState(node.status, node.is_current);
     const iconName = STATE_ICONS[visualState];
     const isFocused = nodeIndex === this._focusedIndex;
@@ -473,6 +472,7 @@ export class PhaseGraphContainer extends SignalWatcher(LitElement) {
           tabindex="${isFocused ? 0 : -1}"
           aria-label="${ariaLabel}"
           data-node-index="${nodeIndex}"
+          data-workflow-id="${node.workflow_id}"
           @focus=${() => { this._focusedIndex = nodeIndex; }}
         >
           <span class="node-icon">${this._renderIcon(iconName)}</span>
@@ -484,7 +484,7 @@ export class PhaseGraphContainer extends SignalWatcher(LitElement) {
 
   private _renderDevLoop() {
     return html`
-      <div class="dev-loop">
+      <div class="dev-loop" role="group" aria-label="Development loop: create-story, dev-story, code-review">
         <span class="node-icon">${this._renderIcon('repeat')}</span>
         <span class="node-label">${this._compact ? 'Dev' : 'Dev Loop'}</span>
       </div>
@@ -520,7 +520,8 @@ export class PhaseGraphContainer extends SignalWatcher(LitElement) {
     `);
   }
 
-  protected updated(): void {
+  protected updated(changedProperties: Map<PropertyKey, unknown>): void {
+    if (changedProperties.size === 1 && changedProperties.has('_focusedIndex')) return;
     requestAnimationFrame(() => this._computeEdgePaths());
   }
 
@@ -532,6 +533,14 @@ export class PhaseGraphContainer extends SignalWatcher(LitElement) {
     if (!container) return;
 
     const containerRect = container.getBoundingClientRect();
+
+    // Pre-build element map for O(1) lookups
+    const nodeElements = new Map<string, HTMLElement>();
+    for (const el of this.renderRoot.querySelectorAll<HTMLElement>('[data-workflow-id]')) {
+      const id = el.dataset.workflowId;
+      if (id) nodeElements.set(id, el);
+    }
+
     const paths = svgEl.querySelectorAll('path.edge-line');
 
     for (const pathEl of paths) {
@@ -539,30 +548,39 @@ export class PhaseGraphContainer extends SignalWatcher(LitElement) {
       const toId = pathEl.getAttribute('data-to');
       if (!fromId || !toId) continue;
 
-      const fromNode = this._findNodeElement(fromId);
-      const toNode = this._findNodeElement(toId);
+      const fromNode = nodeElements.get(fromId);
+      const toNode = nodeElements.get(toId);
       if (!fromNode || !toNode) continue;
 
       const fromRect = fromNode.getBoundingClientRect();
       const toRect = toNode.getBoundingClientRect();
 
-      const x1 = fromRect.right - containerRect.left;
-      const y1 = fromRect.top + fromRect.height / 2 - containerRect.top;
-      const x2 = toRect.left - containerRect.left;
-      const y2 = toRect.top + toRect.height / 2 - containerRect.top;
+      // Detect same-column (within-phase) vs cross-column edges
+      const fromCenterX = fromRect.left + fromRect.width / 2;
+      const toCenterX = toRect.left + toRect.width / 2;
+      const sameColumn = Math.abs(fromCenterX - toCenterX) < fromRect.width;
 
-      const dx = Math.abs(x2 - x1) * 0.4;
-      const d = `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`;
+      let d: string;
+      if (sameColumn) {
+        // Vertical: bottom of source to top of target
+        const x1 = fromCenterX - containerRect.left;
+        const y1 = fromRect.bottom - containerRect.top;
+        const x2 = toCenterX - containerRect.left;
+        const y2 = toRect.top - containerRect.top;
+        const dy = Math.abs(y2 - y1) * 0.4;
+        d = `M ${x1} ${y1} C ${x1} ${y1 + dy}, ${x2} ${y2 - dy}, ${x2} ${y2}`;
+      } else {
+        // Horizontal: right of source to left of target
+        const x1 = fromRect.right - containerRect.left;
+        const y1 = fromRect.top + fromRect.height / 2 - containerRect.top;
+        const x2 = toRect.left - containerRect.left;
+        const y2 = toRect.top + toRect.height / 2 - containerRect.top;
+        const dx = Math.abs(x2 - x1) * 0.4;
+        d = `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`;
+      }
 
       pathEl.setAttribute('d', d);
     }
-  }
-
-  private _findNodeElement(workflowId: string): HTMLElement | null {
-    const nodes = phaseGraphNodes$.get();
-    const index = nodes.findIndex(n => n.workflow_id === workflowId);
-    if (index === -1) return null;
-    return this.renderRoot.querySelector(`[data-node-index="${index}"]`) as HTMLElement | null;
   }
 
   private _handleKeydown(e: KeyboardEvent): void {

@@ -13,14 +13,13 @@ import {
 import type { PhasesResponse } from '../../../src/types/phases.ts';
 import type { WorkflowStatus } from '../../../src/types/workflow.ts';
 
-// Mock ResizeObserver to avoid loop errors in tests
-const OriginalResizeObserver = window.ResizeObserver;
+// Mock ResizeObserver to avoid loop errors in tests — stores callback for manual triggering
+let resizeCallback: ResizeObserverCallback | null = null;
 class MockResizeObserver {
-  private _cb: ResizeObserverCallback;
-  constructor(cb: ResizeObserverCallback) { this._cb = cb; }
+  constructor(cb: ResizeObserverCallback) { resizeCallback = cb; }
   observe() { /* no-op in tests */ }
   unobserve() {}
-  disconnect() {}
+  disconnect() { resizeCallback = null; }
 }
 (window as any).ResizeObserver = MockResizeObserver;
 
@@ -362,6 +361,36 @@ describe('PhaseGraphContainer', () => {
     });
   });
 
+  describe('compact mode', () => {
+    it('uses abbreviated labels when width drops below 1280px', async () => {
+      updatePhasesState(mockPhasesResponse);
+      workflowState.set(mockWorkflowStatus);
+      const el = await fixture<PhaseGraphContainer>(
+        html`<phase-graph-container></phase-graph-container>`,
+      );
+      await el.updateComplete;
+
+      // Trigger compact mode via ResizeObserver callback
+      if (resizeCallback) {
+        resizeCallback(
+          [{ contentRect: { width: 1000 } } as unknown as ResizeObserverEntry],
+          {} as ResizeObserver,
+        );
+      }
+      await el.updateComplete;
+
+      const graph = el.shadowRoot!.querySelector('.graph');
+      expect(graph!.classList.contains('compact')).to.be.true;
+
+      const labels = el.shadowRoot!.querySelectorAll('.phase-label');
+      const labelTexts = Array.from(labels).map(l => l.textContent!.trim());
+      expect(labelTexts).to.include('Anl');
+      expect(labelTexts).to.include('Pln');
+      expect(labelTexts).to.include('Sol');
+      expect(labelTexts).to.include('Impl');
+    });
+  });
+
   describe('signal reactivity', () => {
     it('updates node CSS classes when workflowState changes', async () => {
       updatePhasesState(mockPhasesResponse);
@@ -431,6 +460,20 @@ describe('PhaseGraphContainer', () => {
         expect(node.getAttribute('aria-label')).to.not.be.null;
         expect(node.getAttribute('aria-label')!.length).to.be.greaterThan(0);
       }
+    });
+
+    it('has role and aria-label on dev loop group', async () => {
+      updatePhasesState(mockPhasesResponse);
+      workflowState.set(mockWorkflowStatus);
+      const el = await fixture<PhaseGraphContainer>(
+        html`<phase-graph-container></phase-graph-container>`,
+      );
+      await el.updateComplete;
+
+      const devLoop = el.shadowRoot!.querySelector('.dev-loop');
+      expect(devLoop).to.exist;
+      expect(devLoop!.getAttribute('role')).to.equal('group');
+      expect(devLoop!.getAttribute('aria-label')).to.include('Development loop');
     });
 
     it('has aria-live region for announcements', async () => {
