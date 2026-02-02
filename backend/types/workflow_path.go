@@ -21,17 +21,17 @@ type Phase struct {
 
 // Workflow represents a single workflow within a phase
 type Workflow struct {
-	ID          string `json:"id" yaml:"id"`
-	Exec        string `json:"exec,omitempty" yaml:"exec,omitempty"`
-	WorkflowRef string `json:"workflow,omitempty" yaml:"workflow,omitempty"`
-	Required    bool   `json:"required" yaml:"required"`
-	Optional    bool   `json:"optional" yaml:"optional"`
-	Conditional string `json:"conditional,omitempty" yaml:"conditional,omitempty"`
-	Agent       string `json:"agent,omitempty" yaml:"agent,omitempty"`
-	Command     string `json:"command,omitempty" yaml:"command,omitempty"`
-	Output      string `json:"output,omitempty" yaml:"output,omitempty"`
-	Note        string `json:"note,omitempty" yaml:"note,omitempty"`
-	IncludedBy  string `json:"included_by,omitempty" yaml:"included_by,omitempty"`
+	ID                  string   `json:"id" yaml:"id"`
+	Exec                string   `json:"exec,omitempty" yaml:"exec,omitempty"`
+	WorkflowRef         string   `json:"workflow,omitempty" yaml:"workflow,omitempty"`
+	Required            bool     `json:"required" yaml:"required"`
+	Optional            bool     `json:"optional" yaml:"optional"`
+	Conditional         string   `json:"conditional,omitempty" yaml:"conditional,omitempty"`
+	Agent               string   `json:"agent,omitempty" yaml:"agent,omitempty"`
+	Command             string   `json:"command,omitempty" yaml:"command,omitempty"`
+	Output              string   `json:"output,omitempty" yaml:"output,omitempty"`
+	Note                string   `json:"note,omitempty" yaml:"note,omitempty"`
+	IncludedBy          string   `json:"included_by,omitempty" yaml:"included_by,omitempty"`
 	Purpose             string   `json:"purpose,omitempty" yaml:"purpose,omitempty"`
 	CompletionArtifacts []string `json:"completion_artifacts,omitempty" yaml:"completion_artifacts,omitempty"`
 }
