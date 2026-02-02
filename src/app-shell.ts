@@ -1,5 +1,5 @@
 import { LitElement, html, css, nothing } from 'lit';
-import { customElement, query } from 'lit/decorators.js';
+import { customElement, query, state } from 'lit/decorators.js';
 import { SignalWatcher } from '@lit-labs/signals';
 
 import '@shoelace-style/shoelace/dist/components/icon-button/icon-button.js';
@@ -20,6 +20,7 @@ import { loadPhases } from './services/phases.service.js';
 import { clearPhasesState } from './state/phases.state.js';
 
 import './components/core/phase-graph/phase-graph-container.js';
+import './components/core/layout/activity-bar.js';
 
 @customElement('app-shell')
 export class AppShell extends SignalWatcher(LitElement) {
@@ -29,16 +30,6 @@ export class AppShell extends SignalWatcher(LitElement) {
       min-height: 100vh;
       background-color: var(--bmad-color-bg-primary);
       color: var(--bmad-color-text-primary);
-    }
-
-    .toolbar {
-      position: fixed;
-      top: 0;
-      right: 0;
-      display: flex;
-      gap: var(--bmad-spacing-sm);
-      padding: var(--bmad-spacing-md);
-      z-index: var(--bmad-z-sticky);
     }
 
     sl-icon-button {
@@ -123,8 +114,15 @@ export class AppShell extends SignalWatcher(LitElement) {
     /* Loaded state - project active */
     .loaded-state {
       display: flex;
-      flex-direction: column;
+      flex-direction: row;
       min-height: 100vh;
+    }
+
+    .main-area {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
     }
 
     .header {
@@ -150,29 +148,74 @@ export class AppShell extends SignalWatcher(LitElement) {
       border-radius: var(--bmad-radius-sm);
     }
 
-    .main-content {
+    .header-actions {
+      display: flex;
+      gap: var(--bmad-spacing-sm);
+      margin-left: auto;
+    }
+
+    .content-area {
       flex: 1;
+      display: flex;
+      align-items: stretch;
+      justify-content: center;
+    }
+
+    .placeholder {
       display: flex;
       align-items: center;
       justify-content: center;
-      color: var(--bmad-color-text-secondary);
+      flex: 1;
+      color: var(--bmad-color-text-muted);
       font-size: var(--bmad-font-size-md);
     }
   `;
 
   @query('provider-settings') _settingsPanel!: ProviderSettings;
+  @state() _activeSection = 'graph';
 
   private _wsUnsubscribe: (() => void) | null = null;
   private _debounceTimer: ReturnType<typeof setTimeout> | null = null;
+  private _boundKeyHandler = this._handleKeydown.bind(this);
 
   private _openSettings(): void {
     this._settingsPanel.open();
   }
 
+  connectedCallback(): void {
+    super.connectedCallback();
+    window.addEventListener('keydown', this._boundKeyHandler);
+  }
+
   disconnectedCallback(): void {
     super.disconnectedCallback();
+    window.removeEventListener('keydown', this._boundKeyHandler);
     this._cleanupWorkflow();
     wsDisconnect();
+  }
+
+  private _handleKeydown(e: KeyboardEvent): void {
+    if (!e.metaKey) return;
+    if (projectLoadingState.get().status !== 'success') return;
+    const sectionMap: Record<string, string> = { '1': 'graph', '2': 'chat', '3': 'artifacts' };
+    const section = sectionMap[e.key];
+    if (section) {
+      e.preventDefault();
+      this._activeSection = section;
+      this.updateComplete.then(async () => {
+        const contentArea = this.shadowRoot!.querySelector('.content-area');
+        const target = contentArea?.querySelector('phase-graph-container') as HTMLElement
+          ?? contentArea?.querySelector('.placeholder') as HTMLElement;
+        if (target && 'updateComplete' in target) {
+          await (target as any).updateComplete;
+        }
+        target?.focus();
+      });
+    }
+  }
+
+  private _handleSectionChange(e: CustomEvent): void {
+    this._activeSection = e.detail.section;
   }
 
   private _setupWorkflowSubscription(): void {
@@ -220,21 +263,6 @@ export class AppShell extends SignalWatcher(LitElement) {
     const bmadAvailable = bmadServicesAvailable$.get();
 
     return html`
-      <div class="toolbar">
-        ${project ? html`
-          <sl-icon-button
-            name="folder2-open"
-            label="Open Project"
-            @click=${this._handleOpenProject}
-          ></sl-icon-button>
-        ` : nothing}
-        <sl-icon-button
-          name="gear"
-          label="Settings"
-          @click=${this._openSettings}
-        ></sl-icon-button>
-      </div>
-
       ${loadState.status === 'loading' ? this._renderLoading() : nothing}
       ${loadState.status === 'error' ? this._renderError(loadState.error ?? 'Unknown error', loadState.errorCode) : nothing}
       ${loadState.status === 'idle' && !project ? this._renderEmpty() : nothing}
@@ -283,15 +311,46 @@ export class AppShell extends SignalWatcher(LitElement) {
     `;
   }
 
+  private _renderContent() {
+    switch (this._activeSection) {
+      case 'graph':
+        return html`<phase-graph-container tabindex="-1"></phase-graph-container>`;
+      case 'chat':
+        return html`<div class="placeholder" tabindex="-1">Chat panel (Epic 3)</div>`;
+      case 'artifacts':
+        return html`<div class="placeholder" tabindex="-1">Artifacts panel (Epic 6)</div>`;
+      default:
+        return html`<phase-graph-container tabindex="-1"></phase-graph-container>`;
+    }
+  }
+
   private _renderLoaded(name: string, bmadAvailable: boolean) {
     return html`
       <div class="loaded-state">
-        <div class="header">
-          <span class="project-name">${name}</span>
-          ${bmadAvailable ? html`<span class="bmad-badge">BMAD</span>` : nothing}
-        </div>
-        <div class="main-content">
-          <phase-graph-container></phase-graph-container>
+        <activity-bar
+          .activeSection=${this._activeSection}
+          @section-change=${this._handleSectionChange}
+        ></activity-bar>
+        <div class="main-area">
+          <div class="header">
+            <span class="project-name">${name}</span>
+            ${bmadAvailable ? html`<span class="bmad-badge">BMAD</span>` : nothing}
+            <div class="header-actions">
+              <sl-icon-button
+                name="folder2-open"
+                label="Open Project"
+                @click=${this._handleOpenProject}
+              ></sl-icon-button>
+              <sl-icon-button
+                name="gear"
+                label="Settings"
+                @click=${this._openSettings}
+              ></sl-icon-button>
+            </div>
+          </div>
+          <div class="content-area">
+            ${this._renderContent()}
+          </div>
         </div>
       </div>
     `;
