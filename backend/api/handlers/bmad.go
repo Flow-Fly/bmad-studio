@@ -10,27 +10,37 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-// BMadHandler handles BMAD-related API endpoints
-type BMadHandler struct {
-	configService         *services.BMadConfigService
-	workflowPathService   *services.WorkflowPathService
-	agentService          *services.AgentService
-	workflowStatusService *services.WorkflowStatusService
+// ServiceProvider resolves BMAD services dynamically per request.
+// *services.ProjectManager satisfies this interface.
+type ServiceProvider interface {
+	ConfigService() *services.BMadConfigService
+	WorkflowPathService() *services.WorkflowPathService
+	AgentService() *services.AgentService
+	WorkflowStatusService() *services.WorkflowStatusService
+	ArtifactService() *services.ArtifactService
 }
 
-// NewBMadHandler creates a new BMadHandler with the given services
-func NewBMadHandler(cs *services.BMadConfigService, wps *services.WorkflowPathService, as *services.AgentService, wss *services.WorkflowStatusService) *BMadHandler {
+// BMadHandler handles BMAD-related API endpoints
+type BMadHandler struct {
+	services ServiceProvider
+}
+
+// NewBMadHandler creates a new BMadHandler that resolves services dynamically
+func NewBMadHandler(sp ServiceProvider) *BMadHandler {
 	return &BMadHandler{
-		configService:         cs,
-		workflowPathService:   wps,
-		agentService:          as,
-		workflowStatusService: wss,
+		services: sp,
 	}
 }
 
 // GetConfig handles GET /api/v1/bmad/config
 func (h *BMadHandler) GetConfig(w http.ResponseWriter, r *http.Request) {
-	config := h.configService.GetConfig()
+	configService := h.services.ConfigService()
+	if configService == nil {
+		response.WriteError(w, "bmad_not_installed", "BMAD configuration not loaded. Ensure the project has _bmad/bmm/config.yaml.", http.StatusServiceUnavailable)
+		return
+	}
+
+	config := configService.GetConfig()
 	if config == nil {
 		response.WriteError(w, "bmad_not_installed", "BMAD configuration not loaded. Ensure the project has _bmad/bmm/config.yaml.", http.StatusServiceUnavailable)
 		return
@@ -41,12 +51,13 @@ func (h *BMadHandler) GetConfig(w http.ResponseWriter, r *http.Request) {
 
 // GetPhases handles GET /api/v1/bmad/phases
 func (h *BMadHandler) GetPhases(w http.ResponseWriter, r *http.Request) {
-	if h.workflowPathService == nil {
+	workflowPathService := h.services.WorkflowPathService()
+	if workflowPathService == nil {
 		response.WriteError(w, "path_files_not_found", "Workflow path service not available.", http.StatusServiceUnavailable)
 		return
 	}
 
-	phases, err := h.workflowPathService.GetPhases()
+	phases, err := workflowPathService.GetPhases()
 	if err != nil {
 		pathErr, ok := err.(*services.WorkflowPathError)
 		if ok {
@@ -62,12 +73,13 @@ func (h *BMadHandler) GetPhases(w http.ResponseWriter, r *http.Request) {
 
 // GetAgents handles GET /api/v1/bmad/agents
 func (h *BMadHandler) GetAgents(w http.ResponseWriter, r *http.Request) {
-	if h.agentService == nil {
+	agentService := h.services.AgentService()
+	if agentService == nil {
 		response.WriteError(w, "agents_not_loaded", "Agent service not available.", http.StatusServiceUnavailable)
 		return
 	}
 
-	agents, err := h.agentService.GetAgents()
+	agents, err := agentService.GetAgents()
 	if err != nil {
 		agentErr, ok := err.(*services.AgentServiceError)
 		if ok {
@@ -83,13 +95,14 @@ func (h *BMadHandler) GetAgents(w http.ResponseWriter, r *http.Request) {
 
 // GetAgent handles GET /api/v1/bmad/agents/{id}
 func (h *BMadHandler) GetAgent(w http.ResponseWriter, r *http.Request) {
-	if h.agentService == nil {
+	agentService := h.services.AgentService()
+	if agentService == nil {
 		response.WriteError(w, "agents_not_loaded", "Agent service not available.", http.StatusServiceUnavailable)
 		return
 	}
 
 	agentID := chi.URLParam(r, "id")
-	agent, err := h.agentService.GetAgent(agentID)
+	agent, err := agentService.GetAgent(agentID)
 	if err != nil {
 		agentErr, ok := err.(*services.AgentServiceError)
 		if ok {
@@ -109,12 +122,13 @@ func (h *BMadHandler) GetAgent(w http.ResponseWriter, r *http.Request) {
 
 // GetStatus handles GET /api/v1/bmad/status
 func (h *BMadHandler) GetStatus(w http.ResponseWriter, r *http.Request) {
-	if h.workflowStatusService == nil {
+	workflowStatusService := h.services.WorkflowStatusService()
+	if workflowStatusService == nil {
 		response.WriteError(w, "status_not_loaded", "Workflow status service not available.", http.StatusServiceUnavailable)
 		return
 	}
 
-	status, err := h.workflowStatusService.GetStatus()
+	status, err := workflowStatusService.GetStatus()
 	if err != nil {
 		statusErr, ok := err.(*services.WorkflowStatusError)
 		if ok {

@@ -3,6 +3,7 @@ package services
 import (
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -80,6 +81,11 @@ func (s *WorkflowStatusService) LoadStatus() error {
 		sprintStatus = nil
 	}
 
+	// Reconcile workflow statuses with file system before storing
+	if workflowStatus != nil {
+		s.reconcileWithFileSystem(workflowStatus)
+	}
+
 	s.mu.Lock()
 	s.workflowStatus = workflowStatus
 	s.sprintStatus = sprintStatus
@@ -122,6 +128,63 @@ func (s *WorkflowStatusService) parseSprintStatus(path string) (*types.SprintSta
 	}
 
 	return &status, nil
+}
+
+// reconcileWithFileSystem checks each incomplete workflow status against the file system.
+// If completion artifact files exist on disk, the status is patched to the found file path.
+func (s *WorkflowStatusService) reconcileWithFileSystem(statusFile *types.WorkflowStatusFile) {
+	if statusFile.WorkflowStatus == nil {
+		return
+	}
+
+	config := s.configService.GetConfig()
+	if config == nil {
+		return
+	}
+
+	outputFolder := config.OutputFolder
+	projectRoot := config.ProjectRoot
+
+	for workflowID, statusValue := range statusFile.WorkflowStatus {
+		if s.isComplete(statusValue) {
+			continue
+		}
+
+		globs := s.pathService.GetCompletionArtifacts(workflowID)
+		if len(globs) == 0 {
+			continue
+		}
+
+		absPath := s.findCompletionArtifact(outputFolder, globs)
+		if absPath == "" {
+			continue
+		}
+
+		relPath, err := filepath.Rel(projectRoot, absPath)
+		if err != nil {
+			log.Printf("Cannot compute relative path for %q: %v", absPath, err)
+			continue
+		}
+		relPath = filepath.ToSlash(relPath)
+
+		log.Printf("Reconciled workflow %q: %q -> %q", workflowID, statusValue, relPath)
+		statusFile.WorkflowStatus[workflowID] = relPath
+	}
+}
+
+// findCompletionArtifact resolves each glob against the output folder, returns the first match.
+func (s *WorkflowStatusService) findCompletionArtifact(outputFolder string, globs []string) string {
+	for _, pattern := range globs {
+		fullPattern := filepath.Join(outputFolder, pattern)
+		matches, err := filepath.Glob(fullPattern)
+		if err != nil {
+			continue
+		}
+		if len(matches) > 0 {
+			return matches[0]
+		}
+	}
+	return ""
 }
 
 // looksLikeFilePath returns true if the value appears to be a file path
@@ -282,6 +345,13 @@ func (s *WorkflowStatusService) Reload() error {
 
 // GetStatus returns the computed status response
 func (s *WorkflowStatusService) GetStatus() (*types.StatusResponse, error) {
+	if s.pathService == nil {
+		return nil, &WorkflowStatusError{
+			Code:    ErrCodePathsNotLoaded,
+			Message: "WorkflowPathService not initialized",
+		}
+	}
+
 	// Get phases from path service OUTSIDE the lock (I/O operation)
 	phasesResp, err := s.pathService.GetPhases()
 	if err != nil {

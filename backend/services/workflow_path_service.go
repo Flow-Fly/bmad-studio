@@ -173,6 +173,27 @@ func (s *WorkflowPathService) GetPhases() (*types.PhasesResponse, error) {
 	return s.toResponse(pathDef), nil
 }
 
+// GetCompletionArtifacts returns the completion artifact glob patterns for a workflow ID
+// in the currently selected track. Returns nil if the workflow is not found or has no artifacts.
+func (s *WorkflowPathService) GetCompletionArtifacts(workflowID string) []string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	pathDef, ok := s.pathDefs[s.selectedTrack]
+	if !ok {
+		return nil
+	}
+
+	for _, phase := range pathDef.Phases {
+		for _, wf := range phase.Workflows {
+			if wf.ID == workflowID {
+				return wf.CompletionArtifacts
+			}
+		}
+	}
+	return nil
+}
+
 // resolveWorkflowVariables replaces {project-root} in workflow exec and workflow paths
 func (s *WorkflowPathService) resolveWorkflowVariables(pathDef *types.PathDefinition, projectRoot string) {
 	for i := range pathDef.Phases {
