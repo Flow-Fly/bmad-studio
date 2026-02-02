@@ -76,7 +76,7 @@ describe('WorkflowService', () => {
       expect(state!.next_workflow_id).to.equal('create-architecture');
 
       const loadState = workflowLoadingState.get();
-      expect(loadState.status).to.equal('idle');
+      expect(loadState.status).to.equal('success');
     });
 
     it('handles no-status-files case with default response', async () => {

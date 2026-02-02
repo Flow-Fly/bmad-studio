@@ -161,6 +161,7 @@ export class AppShell extends SignalWatcher(LitElement) {
   @query('provider-settings') _settingsPanel!: ProviderSettings;
 
   private _wsUnsubscribe: (() => void) | null = null;
+  private _debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
   private _openSettings(): void {
     this._settingsPanel.open();
@@ -175,12 +176,20 @@ export class AppShell extends SignalWatcher(LitElement) {
   private _setupWorkflowSubscription(): void {
     this._cleanupWorkflow();
     this._wsUnsubscribe = wsOn('workflow:status-changed', () => {
-      loadWorkflowStatus();
+      if (this._debounceTimer) clearTimeout(this._debounceTimer);
+      this._debounceTimer = setTimeout(() => {
+        this._debounceTimer = null;
+        loadWorkflowStatus();
+      }, 300);
     });
     loadWorkflowStatus();
   }
 
   private _cleanupWorkflow(): void {
+    if (this._debounceTimer) {
+      clearTimeout(this._debounceTimer);
+      this._debounceTimer = null;
+    }
     if (this._wsUnsubscribe) {
       this._wsUnsubscribe();
       this._wsUnsubscribe = null;

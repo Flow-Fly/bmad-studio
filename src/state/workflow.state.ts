@@ -25,7 +25,7 @@ export const nextWorkflow$ = new Signal.Computed<{ id: string; agent: string } |
 
 export function updateWorkflowState(status: WorkflowStatus): void {
   workflowState.set(status);
-  workflowLoadingState.set({ status: 'idle' });
+  workflowLoadingState.set({ status: 'success' });
 }
 
 export function clearWorkflowState(): void {

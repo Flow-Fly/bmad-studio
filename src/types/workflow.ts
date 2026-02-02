@@ -12,7 +12,8 @@ export type WorkflowStatusValue =
   | 'required'
   | 'optional'
   | 'skipped'
-  | 'recommended';
+  | 'recommended'
+  | 'conditional';
 
 export interface WorkflowCompletionStatus {
   workflow_id: string;

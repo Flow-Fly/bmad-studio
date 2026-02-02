@@ -156,7 +156,7 @@ describe('WorkflowStatusDisplay', () => {
       expect(phaseNames[1].textContent).to.include('Planning');
     });
 
-    it('renders progress bars for each phase', async () => {
+    it('renders progress bars for each phase with correct values', async () => {
       updateWorkflowState(mockWorkflowStatus);
       const el = await fixture<WorkflowStatusDisplay>(
         html`<workflow-status-display></workflow-status-display>`
@@ -164,6 +164,8 @@ describe('WorkflowStatusDisplay', () => {
       await el.updateComplete;
       const progressBars = el.shadowRoot!.querySelectorAll('sl-progress-bar');
       expect(progressBars.length).to.equal(2);
+      expect(progressBars[0].getAttribute('value')).to.equal('100');
+      expect(progressBars[1].getAttribute('value')).to.equal('33');
     });
 
     it('shows next recommended workflow', async () => {
@@ -176,14 +178,16 @@ describe('WorkflowStatusDisplay', () => {
       expect(summary!.textContent).to.include('create-architecture');
     });
 
-    it('renders workflow items with status badges', async () => {
+    it('renders workflow items with status badges in flat section', async () => {
       updateWorkflowState(mockWorkflowStatus);
       const el = await fixture<WorkflowStatusDisplay>(
         html`<workflow-status-display></workflow-status-display>`
       );
       await el.updateComplete;
-      const badges = el.shadowRoot!.querySelectorAll('sl-badge');
-      expect(badges.length).to.be.greaterThan(0);
+      const workflowsSection = el.shadowRoot!.querySelector('.workflows-section');
+      expect(workflowsSection).to.exist;
+      const badges = workflowsSection!.querySelectorAll('sl-badge');
+      expect(badges.length).to.equal(2);
     });
   });
 });

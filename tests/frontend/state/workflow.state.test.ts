@@ -113,12 +113,12 @@ describe('WorkflowState', () => {
   });
 
   describe('updateWorkflowState', () => {
-    it('sets workflow state and resets loading to idle', () => {
+    it('sets workflow state and sets loading to success', () => {
       workflowLoadingState.set({ status: 'loading' });
       updateWorkflowState(mockWorkflowStatus);
 
       expect(workflowState.get()).to.deep.equal(mockWorkflowStatus);
-      expect(workflowLoadingState.get().status).to.equal('idle');
+      expect(workflowLoadingState.get().status).to.equal('success');
     });
   });
 

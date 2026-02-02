@@ -27,6 +27,7 @@ const STATUS_BADGE_VARIANT: Record<WorkflowStatusValue, string> = {
   optional: 'neutral',
   skipped: 'neutral',
   recommended: 'primary',
+  conditional: 'warning',
 };
 
 const STATUS_LABELS: Record<WorkflowStatusValue, string> = {
@@ -36,6 +37,7 @@ const STATUS_LABELS: Record<WorkflowStatusValue, string> = {
   optional: 'Optional',
   skipped: 'Skipped',
   recommended: 'Recommended',
+  conditional: 'Conditional',
 };
 
 @customElement('workflow-status-display')
@@ -121,6 +123,21 @@ export class WorkflowStatusDisplay extends SignalWatcher(LitElement) {
       margin-bottom: var(--bmad-spacing-md);
     }
 
+    .workflows-section {
+      background-color: var(--bmad-color-bg-secondary);
+      border: 1px solid var(--bmad-color-border-primary);
+      border-radius: var(--bmad-radius-md);
+      padding: var(--bmad-spacing-md) var(--bmad-spacing-lg);
+      margin-top: var(--bmad-spacing-lg);
+    }
+
+    .section-title {
+      font-size: var(--bmad-font-size-md);
+      font-weight: var(--bmad-font-weight-medium);
+      color: var(--bmad-color-text-primary);
+      margin: 0 0 var(--bmad-spacing-sm) 0;
+    }
+
     .workflow-list {
       display: flex;
       flex-direction: column;
@@ -168,6 +185,7 @@ export class WorkflowStatusDisplay extends SignalWatcher(LitElement) {
       border: 1px solid var(--bmad-color-border-primary);
       border-radius: var(--bmad-radius-md);
       padding: var(--bmad-spacing-lg);
+      animation: skeleton-pulse 1.5s ease-in-out infinite;
     }
 
     .skeleton-line {
@@ -193,10 +211,6 @@ export class WorkflowStatusDisplay extends SignalWatcher(LitElement) {
     @keyframes skeleton-pulse {
       0%, 100% { opacity: 0.4; }
       50% { opacity: 0.8; }
-    }
-
-    .skeleton-card {
-      animation: skeleton-pulse 1.5s ease-in-out infinite;
     }
 
     /* Error state */
@@ -287,6 +301,7 @@ export class WorkflowStatusDisplay extends SignalWatcher(LitElement) {
     const phase = currentPhase$.get();
     const phases = phaseCompletions$.get();
     const next = nextWorkflow$.get();
+    const workflows = Object.values(status.workflow_statuses);
 
     return html`
       <div class="status-summary">
@@ -303,18 +318,24 @@ export class WorkflowStatusDisplay extends SignalWatcher(LitElement) {
       </div>
 
       <div class="phases-section">
-        ${phases.map(p => this._renderPhaseRow(p, p.phase_num === phase?.num, status))}
+        ${phases.map(p => this._renderPhaseRow(p, p.phase_num === phase?.num))}
       </div>
+
+      ${workflows.length > 0 ? html`
+        <div class="workflows-section">
+          <p class="section-title">Workflows</p>
+          <div class="workflow-list">
+            ${workflows.map(w => this._renderWorkflowItem(w))}
+          </div>
+        </div>
+      ` : nothing}
     `;
   }
 
   private _renderPhaseRow(
     phase: PhaseCompletionStatus,
     isCurrent: boolean,
-    status: WorkflowStatus,
   ) {
-    const phaseWorkflows = this._getWorkflowsForPhase(phase, status.workflow_statuses);
-
     return html`
       <div class="phase-row ${isCurrent ? 'current' : ''}">
         <div class="phase-header">
@@ -322,11 +343,6 @@ export class WorkflowStatusDisplay extends SignalWatcher(LitElement) {
           <span class="phase-count">${phase.completed_count}/${phase.total_required}</span>
         </div>
         <sl-progress-bar value=${phase.percent_complete}></sl-progress-bar>
-        ${phaseWorkflows.length > 0 ? html`
-          <div class="workflow-list">
-            ${phaseWorkflows.map(w => this._renderWorkflowItem(w))}
-          </div>
-        ` : nothing}
       </div>
     `;
   }
@@ -345,16 +361,6 @@ export class WorkflowStatusDisplay extends SignalWatcher(LitElement) {
     `;
   }
 
-  /**
-   * MVP placeholder: shows all workflows under phase 1 to avoid duplication.
-   * Stories 2.3/2.4 will add proper phase-to-workflow mapping from the backend.
-   */
-  private _getWorkflowsForPhase(
-    phase: PhaseCompletionStatus,
-    allWorkflows: Record<string, WorkflowCompletionStatus>,
-  ): WorkflowCompletionStatus[] {
-    return phase.phase_num === 1 ? Object.values(allWorkflows) : [];
-  }
 }
 
 declare global {

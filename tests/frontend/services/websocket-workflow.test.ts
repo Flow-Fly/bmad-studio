@@ -46,6 +46,6 @@ describe('WebSocket workflow integration', () => {
 
     expect(workflowState.get()).to.not.be.null;
     expect(workflowState.get()!.current_phase).to.equal(1);
-    expect(workflowLoadingState.get().status).to.equal('idle');
+    expect(workflowLoadingState.get().status).to.equal('success');
   });
 });
