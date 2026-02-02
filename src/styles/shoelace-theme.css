@@ -19,6 +19,29 @@
   --sl-color-warning-600: var(--bmad-color-warning);
   --sl-color-danger-600: var(--bmad-color-error);
 
+  /* Neutral scale for dark mode backgrounds */
+  --sl-color-neutral-0: var(--bmad-color-bg-primary);
+  --sl-color-neutral-50: var(--bmad-color-bg-secondary);
+  --sl-color-neutral-100: var(--bmad-color-bg-tertiary);
+  --sl-color-neutral-200: var(--bmad-color-bg-elevated);
+  --sl-color-neutral-1000: var(--bmad-color-text-primary);
+
+  /* Panel, tooltip, overlay backgrounds */
+  --sl-panel-background-color: var(--bmad-color-bg-secondary);
+  --sl-overlay-background-color: hsl(0 0% 0% / 60%);
+  --sl-tooltip-background-color: var(--bmad-color-bg-elevated);
+  --sl-tooltip-color: var(--bmad-color-text-primary);
+
+  /* Input backgrounds */
+  --sl-input-background-color: var(--bmad-color-bg-primary);
+  --sl-input-background-color-hover: var(--bmad-color-bg-tertiary);
+  --sl-input-background-color-focus: var(--bmad-color-bg-primary);
+  --sl-input-border-color: var(--bmad-color-border-primary);
+  --sl-input-border-color-hover: var(--bmad-color-accent);
+  --sl-input-border-color-focus: var(--bmad-color-accent);
+  --sl-input-color: var(--bmad-color-text-primary);
+  --sl-input-placeholder-color: var(--bmad-color-text-muted);
+
   /* Typography */
   --sl-font-sans: var(--bmad-font-family);
   --sl-font-mono: var(--bmad-font-family-mono);
