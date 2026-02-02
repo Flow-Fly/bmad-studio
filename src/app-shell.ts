@@ -16,8 +16,10 @@ import { selectProjectFolder } from './services/dialog.service.js';
 import { connect as wsConnect, disconnect as wsDisconnect, on as wsOn } from './services/websocket.service.js';
 import { loadWorkflowStatus } from './services/workflow.service.js';
 import { clearWorkflowState } from './state/workflow.state.js';
+import { loadPhases } from './services/phases.service.js';
+import { clearPhasesState } from './state/phases.state.js';
 
-import './components/core/workflow/workflow-status-display.js';
+import './components/core/phase-graph/phase-graph-container.js';
 
 @customElement('app-shell')
 export class AppShell extends SignalWatcher(LitElement) {
@@ -183,6 +185,7 @@ export class AppShell extends SignalWatcher(LitElement) {
       }, 300);
     });
     loadWorkflowStatus();
+    loadPhases();
   }
 
   private _cleanupWorkflow(): void {
@@ -195,6 +198,7 @@ export class AppShell extends SignalWatcher(LitElement) {
       this._wsUnsubscribe = null;
     }
     clearWorkflowState();
+    clearPhasesState();
   }
 
   private async _handleOpenProject(): Promise<void> {
@@ -287,7 +291,7 @@ export class AppShell extends SignalWatcher(LitElement) {
           ${bmadAvailable ? html`<span class="bmad-badge">BMAD</span>` : nothing}
         </div>
         <div class="main-content">
-          <workflow-status-display></workflow-status-display>
+          <phase-graph-container></phase-graph-container>
         </div>
       </div>
     `;
