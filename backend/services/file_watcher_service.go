@@ -345,6 +345,7 @@ func (s *FileWatcherService) processFileChange(path string, op fsnotify.Op) {
 		s.handleDelete(path)
 	case op.Has(fsnotify.Create):
 		s.handleCreate(path)
+		s.handleStatusFileChange(path)
 	case op.Has(fsnotify.Write):
 		s.handleModify(path)
 	}

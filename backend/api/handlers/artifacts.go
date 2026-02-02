@@ -12,13 +12,13 @@ import (
 
 // ArtifactHandler handles artifact-related API requests
 type ArtifactHandler struct {
-	artifactService *services.ArtifactService
+	services ServiceProvider
 }
 
 // NewArtifactHandler creates a new ArtifactHandler instance
-func NewArtifactHandler(artifactService *services.ArtifactService) *ArtifactHandler {
+func NewArtifactHandler(sp ServiceProvider) *ArtifactHandler {
 	return &ArtifactHandler{
-		artifactService: artifactService,
+		services: sp,
 	}
 }
 
@@ -46,7 +46,13 @@ func writeArtifactError(w http.ResponseWriter, err error) bool {
 
 // GetArtifacts handles GET /api/v1/bmad/artifacts
 func (h *ArtifactHandler) GetArtifacts(w http.ResponseWriter, r *http.Request) {
-	artifacts, err := h.artifactService.GetArtifacts()
+	artifactService := h.services.ArtifactService()
+	if artifactService == nil {
+		response.WriteError(w, "artifacts_not_loaded", "Artifact service not available.", http.StatusServiceUnavailable)
+		return
+	}
+
+	artifacts, err := artifactService.GetArtifacts()
 	if err != nil {
 		if !writeArtifactError(w, err) {
 			response.WriteError(w, "internal_error", err.Error(), http.StatusInternalServerError)
@@ -59,9 +65,15 @@ func (h *ArtifactHandler) GetArtifacts(w http.ResponseWriter, r *http.Request) {
 
 // GetArtifact handles GET /api/v1/bmad/artifacts/{id}
 func (h *ArtifactHandler) GetArtifact(w http.ResponseWriter, r *http.Request) {
+	artifactService := h.services.ArtifactService()
+	if artifactService == nil {
+		response.WriteError(w, "artifacts_not_loaded", "Artifact service not available.", http.StatusServiceUnavailable)
+		return
+	}
+
 	id := chi.URLParam(r, "id")
 
-	artifact, err := h.artifactService.GetArtifact(id)
+	artifact, err := artifactService.GetArtifact(id)
 	if err != nil {
 		if !writeArtifactError(w, err) {
 			response.WriteError(w, "internal_error", err.Error(), http.StatusInternalServerError)
