@@ -32,7 +32,8 @@ type Workflow struct {
 	Output      string `json:"output,omitempty" yaml:"output,omitempty"`
 	Note        string `json:"note,omitempty" yaml:"note,omitempty"`
 	IncludedBy  string `json:"included_by,omitempty" yaml:"included_by,omitempty"`
-	Purpose     string `json:"purpose,omitempty" yaml:"purpose,omitempty"`
+	Purpose             string   `json:"purpose,omitempty" yaml:"purpose,omitempty"`
+	CompletionArtifacts []string `json:"completion_artifacts,omitempty" yaml:"completion_artifacts,omitempty"`
 }
 
 // PhaseResponse is the API response format for phases
