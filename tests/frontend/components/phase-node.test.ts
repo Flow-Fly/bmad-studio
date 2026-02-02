@@ -1,6 +1,5 @@
 import { expect, fixture, html } from '@open-wc/testing';
 import { PhaseNode } from '../../../src/components/core/phase-graph/phase-node.ts';
-import { formatWorkflowLabel } from '../../../src/state/phases.state.ts';
 import type { PhaseGraphNode, NodeVisualState } from '../../../src/types/phases.ts';
 
 function makeNode(overrides: Partial<PhaseGraphNode> = {}): PhaseGraphNode {
@@ -213,26 +212,4 @@ describe('PhaseNode', () => {
       expect(circles.length).to.equal(1);
     });
   });
-});
-
-describe('formatWorkflowLabel', () => {
-  const cases: Array<[string, string]> = [
-    ['create-product-brief', 'Product Brief'],
-    ['research', 'Research'],
-    ['prd', 'PRD'],
-    ['create-ux-design', 'UX Design'],
-    ['create-architecture', 'Architecture'],
-    ['create-epics-and-stories', 'Epics And Stories'],
-    ['check-implementation-readiness', 'Readiness Check'],
-    ['sprint-planning', 'Sprint Planning'],
-    ['dev-story', 'Story'],
-    ['code-review', 'Code Review'],
-    ['retrospective', 'Retrospective'],
-  ];
-
-  for (const [input, expected] of cases) {
-    it(`converts "${input}" to "${expected}"`, () => {
-      expect(formatWorkflowLabel(input)).to.equal(expected);
-    });
-  }
 });

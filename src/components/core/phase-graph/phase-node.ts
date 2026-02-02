@@ -81,12 +81,9 @@ export class PhaseNode extends LitElement {
       min-width: 0;
     }
 
-    .node-agent {
-      font-size: var(--bmad-font-size-xs);
-      color: var(--bmad-color-text-muted);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
+    /* Tooltip multiline support */
+    sl-tooltip::part(body) {
+      white-space: pre-line;
     }
 
     /* Node visual states */
@@ -121,6 +118,7 @@ export class PhaseNode extends LitElement {
     }
     .node--locked .node-label { color: var(--bmad-color-text-muted); }
     .node--locked .node-icon { color: var(--bmad-color-text-muted); }
+    .node--locked:hover { border-color: var(--bmad-color-border-primary); }
 
     .node--conditional {
       border-color: var(--bmad-color-warning);
@@ -160,10 +158,6 @@ export class PhaseNode extends LitElement {
 
     :host([compact]) .node-label {
       font-size: var(--bmad-font-size-xs);
-    }
-
-    :host([compact]) .node-agent {
-      display: none;
     }
 
     :host([compact]) .node-icon {

@@ -440,9 +440,15 @@ describe('PhaseGraphContainer', () => {
       });
       await el.updateComplete;
 
-      // Verify phase-node elements still render after state change
-      const phaseNodes = el.shadowRoot!.querySelectorAll('phase-node');
-      expect(phaseNodes.length).to.be.greaterThan(0);
+      // Verify visual state actually updated: create-architecture should now be current
+      const archNode = el.shadowRoot!.querySelector('phase-node[data-workflow-id="create-architecture"]') as any;
+      expect(archNode).to.exist;
+      expect(archNode.visualState).to.equal('current');
+
+      // prd should now be complete, not current
+      const prdNodeAfter = el.shadowRoot!.querySelector('phase-node[data-workflow-id="prd"]') as any;
+      expect(prdNodeAfter).to.exist;
+      expect(prdNodeAfter.visualState).to.equal('complete');
     });
   });
 

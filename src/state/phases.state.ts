@@ -158,17 +158,20 @@ export const phaseGraphEdges$ = new Signal.Computed<PhaseGraphEdge[]>(() => {
     }
   }
 
-  // Cross-phase sequential edges: last required in phase N -> first required in phase N+1
+  // Cross-phase sequential edges: last required in phase N -> first required in next phase with required workflows
   const sortedPhases = [...phases.phases].sort((a, b) => a.phase - b.phase);
-  for (let i = 0; i < sortedPhases.length - 1; i++) {
-    const currentRequired = sortedPhases[i].workflows.filter(wf => wf.required);
-    const nextRequired = sortedPhases[i + 1].workflows.filter(wf => wf.required);
-    if (currentRequired.length > 0 && nextRequired.length > 0) {
-      edges.push({
-        from: currentRequired[currentRequired.length - 1].id,
-        to: nextRequired[0].id,
-        is_optional: false,
-      });
+  let lastCrossPhaseRequiredId: string | null = null;
+  for (const phase of sortedPhases) {
+    const phaseRequired = phase.workflows.filter(wf => wf.required);
+    if (phaseRequired.length > 0) {
+      if (lastCrossPhaseRequiredId) {
+        edges.push({
+          from: lastCrossPhaseRequiredId,
+          to: phaseRequired[0].id,
+          is_optional: false,
+        });
+      }
+      lastCrossPhaseRequiredId = phaseRequired[phaseRequired.length - 1].id;
     }
   }
 
