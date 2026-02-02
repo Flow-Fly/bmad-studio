@@ -41,8 +41,11 @@ export interface PhaseGraphNode {
   is_conditional: boolean;
   agent?: string;
   included_by?: string;
+  purpose?: string;
   status: WorkflowStatusValue;
   is_current: boolean;
+  dependencies_met: boolean;
+  unmet_dependencies: string[];
 }
 
 export interface PhaseGraphEdge {
@@ -55,6 +58,7 @@ export type NodeVisualState =
   | 'current'
   | 'complete'
   | 'skipped'
+  | 'locked'
   | 'conditional'
   | 'required'
   | 'recommended'

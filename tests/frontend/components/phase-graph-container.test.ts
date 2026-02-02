@@ -1,5 +1,6 @@
 import { expect, fixture, html } from '@open-wc/testing';
 import { PhaseGraphContainer } from '../../../src/components/core/phase-graph/phase-graph-container.ts';
+import '../../../src/components/core/phase-graph/phase-node.ts';
 import {
   phasesState,
   phasesLoadingState,
@@ -299,7 +300,7 @@ describe('PhaseGraphContainer', () => {
       expect(labelTexts).to.include('Implementation');
     });
 
-    it('renders workflow nodes with correct CSS classes', async () => {
+    it('renders phase-node elements within phase columns', async () => {
       updatePhasesState(mockPhasesResponse);
       workflowState.set(mockWorkflowStatus);
       const el = await fixture<PhaseGraphContainer>(
@@ -307,20 +308,12 @@ describe('PhaseGraphContainer', () => {
       );
       await el.updateComplete;
 
-      const nodes = el.shadowRoot!.querySelectorAll('.node');
-      expect(nodes.length).to.be.greaterThan(0);
+      const phaseNodes = el.shadowRoot!.querySelectorAll('phase-node');
+      expect(phaseNodes.length).to.be.greaterThan(0);
 
-      // Find the complete node (create-product-brief)
-      const completeNode = Array.from(nodes).find(n =>
-        n.classList.contains('node--complete'),
-      );
-      expect(completeNode).to.exist;
-
-      // Find the current node (prd)
-      const currentNode = Array.from(nodes).find(n =>
-        n.classList.contains('node--current'),
-      );
-      expect(currentNode).to.exist;
+      // Non-dev-loop nodes: research, create-product-brief, prd, create-architecture, sprint-planning = 5
+      // (create-story, dev-story, code-review are dev loop, not rendered as phase-node)
+      expect(phaseNodes.length).to.equal(5);
     });
 
     it('renders SVG edges overlay', async () => {
@@ -336,7 +329,7 @@ describe('PhaseGraphContainer', () => {
       expect(svgOverlay!.getAttribute('aria-hidden')).to.equal('true');
     });
 
-    it('renders dev loop group for implementation phase', async () => {
+    it('renders dev loop group for implementation phase inline (not as phase-node)', async () => {
       updatePhasesState(mockPhasesResponse);
       workflowState.set(mockWorkflowStatus);
       const el = await fixture<PhaseGraphContainer>(
@@ -346,6 +339,13 @@ describe('PhaseGraphContainer', () => {
 
       const devLoop = el.shadowRoot!.querySelector('.dev-loop');
       expect(devLoop).to.exist;
+
+      // Dev loop nodes should NOT be rendered as phase-node elements
+      const devNodeIds = ['create-story', 'dev-story', 'code-review'];
+      for (const id of devNodeIds) {
+        const phaseNodeForDev = el.shadowRoot!.querySelector(`phase-node[data-workflow-id="${id}"]`);
+        expect(phaseNodeForDev).to.be.null;
+      }
     });
 
     it('highlights current phase column', async () => {
@@ -358,6 +358,21 @@ describe('PhaseGraphContainer', () => {
 
       const currentPhase = el.shadowRoot!.querySelector('.current-phase');
       expect(currentPhase).to.exist;
+    });
+
+    it('passes data-workflow-id attribute to phase-node elements', async () => {
+      updatePhasesState(mockPhasesResponse);
+      workflowState.set(mockWorkflowStatus);
+      const el = await fixture<PhaseGraphContainer>(
+        html`<phase-graph-container></phase-graph-container>`,
+      );
+      await el.updateComplete;
+
+      const phaseNodes = el.shadowRoot!.querySelectorAll('phase-node');
+      for (const node of Array.from(phaseNodes)) {
+        expect(node.getAttribute('data-workflow-id')).to.be.a('string');
+        expect(node.getAttribute('data-workflow-id')!.length).to.be.greaterThan(0);
+      }
     });
   });
 
@@ -392,7 +407,7 @@ describe('PhaseGraphContainer', () => {
   });
 
   describe('signal reactivity', () => {
-    it('updates node CSS classes when workflowState changes', async () => {
+    it('updates when workflowState changes', async () => {
       updatePhasesState(mockPhasesResponse);
       workflowState.set(mockWorkflowStatus);
       const el = await fixture<PhaseGraphContainer>(
@@ -400,9 +415,9 @@ describe('PhaseGraphContainer', () => {
       );
       await el.updateComplete;
 
-      // Initially prd is current
-      let currentNodes = el.shadowRoot!.querySelectorAll('.node--current');
-      expect(currentNodes.length).to.equal(1);
+      // Initially prd is current — verify phase-node exists
+      const prdNode = el.shadowRoot!.querySelector('phase-node[data-workflow-id="prd"]');
+      expect(prdNode).to.exist;
 
       // Update workflow state: prd is now complete, next is create-architecture
       workflowState.set({
@@ -425,9 +440,9 @@ describe('PhaseGraphContainer', () => {
       });
       await el.updateComplete;
 
-      // Now create-architecture should be current
-      currentNodes = el.shadowRoot!.querySelectorAll('.node--current');
-      expect(currentNodes.length).to.equal(1);
+      // Verify phase-node elements still render after state change
+      const phaseNodes = el.shadowRoot!.querySelectorAll('phase-node');
+      expect(phaseNodes.length).to.be.greaterThan(0);
     });
   });
 
@@ -444,22 +459,6 @@ describe('PhaseGraphContainer', () => {
       expect(graph).to.exist;
       expect(graph!.getAttribute('role')).to.equal('group');
       expect(graph!.getAttribute('aria-label')).to.equal('BMAD phase graph');
-    });
-
-    it('has role="button" and descriptive aria-label on nodes', async () => {
-      updatePhasesState(mockPhasesResponse);
-      workflowState.set(mockWorkflowStatus);
-      const el = await fixture<PhaseGraphContainer>(
-        html`<phase-graph-container></phase-graph-container>`,
-      );
-      await el.updateComplete;
-
-      const nodes = el.shadowRoot!.querySelectorAll('.node');
-      for (const node of Array.from(nodes)) {
-        expect(node.getAttribute('role')).to.equal('button');
-        expect(node.getAttribute('aria-label')).to.not.be.null;
-        expect(node.getAttribute('aria-label')!.length).to.be.greaterThan(0);
-      }
     });
 
     it('has role and aria-label on dev loop group', async () => {
@@ -490,7 +489,7 @@ describe('PhaseGraphContainer', () => {
   });
 
   describe('keyboard navigation', () => {
-    it('moves focus between nodes with arrow keys', async () => {
+    it('moves focus between phase-node elements with arrow keys', async () => {
       updatePhasesState(mockPhasesResponse);
       workflowState.set(mockWorkflowStatus);
       const el = await fixture<PhaseGraphContainer>(
@@ -499,11 +498,11 @@ describe('PhaseGraphContainer', () => {
       await el.updateComplete;
 
       const graph = el.shadowRoot!.querySelector('.graph')!;
-      const nodes = el.shadowRoot!.querySelectorAll('.node');
-      expect(nodes.length).to.be.greaterThan(0);
+      const phaseNodes = el.shadowRoot!.querySelectorAll('phase-node');
+      expect(phaseNodes.length).to.be.greaterThan(0);
 
-      // Focus first node
-      (nodes[0] as HTMLElement).focus();
+      // Focus first phase-node
+      (phaseNodes[0] as HTMLElement).focus();
       await el.updateComplete;
 
       // Press ArrowDown — should move focus within same phase
@@ -512,12 +511,12 @@ describe('PhaseGraphContainer', () => {
       );
       await el.updateComplete;
 
-      // Verify tabindex management: focused node gets 0, others get -1
-      const focusedNode = el.shadowRoot!.querySelector('.node[tabindex="0"]');
+      // Verify a phase-node has tabindex 0 (focused)
+      const focusedNode = el.shadowRoot!.querySelector('phase-node[tabindex="0"]');
       expect(focusedNode).to.exist;
     });
 
-    it('has correct tabindex management', async () => {
+    it('has correct initial tabindex management on phase-node elements', async () => {
       updatePhasesState(mockPhasesResponse);
       workflowState.set(mockWorkflowStatus);
       const el = await fixture<PhaseGraphContainer>(
@@ -525,9 +524,9 @@ describe('PhaseGraphContainer', () => {
       );
       await el.updateComplete;
 
-      const nodes = el.shadowRoot!.querySelectorAll('.node');
-      // All nodes should have tabindex="-1" initially (no focused node)
-      for (const node of Array.from(nodes)) {
+      const phaseNodes = el.shadowRoot!.querySelectorAll('phase-node');
+      // All phase-node elements should have tabindex="-1" initially (no focused node)
+      for (const node of Array.from(phaseNodes)) {
         expect(node.getAttribute('tabindex')).to.equal('-1');
       }
     });

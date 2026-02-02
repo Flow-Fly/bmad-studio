@@ -7,6 +7,7 @@ import {
   getNodeVisualState,
   updatePhasesState,
   clearPhasesState,
+  formatWorkflowLabel,
 } from '../../../src/state/phases.state.ts';
 import {
   workflowState,
@@ -178,6 +179,30 @@ describe('PhasesState', () => {
     });
   });
 
+  describe('formatWorkflowLabel', () => {
+    it('strips create- prefix', () => {
+      expect(formatWorkflowLabel('create-product-brief')).to.equal('Product Brief');
+    });
+
+    it('strips dev- prefix', () => {
+      expect(formatWorkflowLabel('dev-story')).to.equal('Story');
+    });
+
+    it('uppercases known tokens', () => {
+      expect(formatWorkflowLabel('prd')).to.equal('PRD');
+      expect(formatWorkflowLabel('create-ux-design')).to.equal('UX Design');
+    });
+
+    it('handles special case for check-implementation-readiness', () => {
+      expect(formatWorkflowLabel('check-implementation-readiness')).to.equal('Readiness Check');
+    });
+
+    it('capitalizes simple words', () => {
+      expect(formatWorkflowLabel('research')).to.equal('Research');
+      expect(formatWorkflowLabel('code-review')).to.equal('Code Review');
+    });
+  });
+
   describe('phaseGraphNodes$', () => {
     it('returns empty array when phasesState is null', () => {
       workflowState.set(mockWorkflowStatus);
@@ -250,6 +275,143 @@ describe('PhasesState', () => {
       expect(currentNodes).to.have.length(1);
       expect(currentNodes[0].workflow_id).to.equal('create-product-brief');
     });
+
+    it('sets human-readable labels via formatWorkflowLabel', () => {
+      updatePhasesState(mockPhasesResponse);
+      workflowState.set(mockWorkflowStatus);
+
+      const nodes = phaseGraphNodes$.get();
+      expect(nodes[0].label).to.equal('Research');
+      expect(nodes[1].label).to.equal('Product Brief');
+      expect(nodes[2].label).to.equal('PRD');
+      expect(nodes[3].label).to.equal('UX Design');
+    });
+
+    it('populates purpose field from workflow response', () => {
+      updatePhasesState(mockPhasesResponse);
+      workflowState.set(mockWorkflowStatus);
+
+      const nodes = phaseGraphNodes$.get();
+      expect(nodes[0].purpose).to.equal('Research and discovery');
+      expect(nodes[1].purpose).to.equal('Product brief creation');
+      expect(nodes[2].purpose).to.equal('PRD creation');
+    });
+
+    describe('dependencies_met computation', () => {
+      it('first workflow in first phase has dependencies_met: true', () => {
+        updatePhasesState(mockPhasesResponse);
+        workflowState.set({
+          ...mockWorkflowStatus,
+          workflow_statuses: {},
+        });
+
+        const nodes = phaseGraphNodes$.get();
+        // research is optional, not required — no required deps to check
+        expect(nodes[0].dependencies_met).to.be.true;
+        // create-product-brief is first required in phase 1 — no prior phase
+        expect(nodes[1].dependencies_met).to.be.true;
+      });
+
+      it('cross-phase dep: prd depends on create-product-brief being complete', () => {
+        updatePhasesState(mockPhasesResponse);
+
+        // create-product-brief NOT complete
+        workflowState.set({
+          ...mockWorkflowStatus,
+          workflow_statuses: {
+            'create-product-brief': {
+              workflow_id: 'create-product-brief',
+              status: 'required',
+              artifact_path: null,
+              is_complete: false,
+              is_required: true,
+              is_optional: false,
+            },
+          },
+        });
+
+        const nodes = phaseGraphNodes$.get();
+        const prdNode = nodes.find(n => n.workflow_id === 'prd')!;
+        expect(prdNode.dependencies_met).to.be.false;
+        expect(prdNode.unmet_dependencies).to.include('create-product-brief');
+      });
+
+      it('cross-phase dep: prd dependencies_met when predecessor is complete', () => {
+        updatePhasesState(mockPhasesResponse);
+        workflowState.set(mockWorkflowStatus); // create-product-brief is complete
+
+        const nodes = phaseGraphNodes$.get();
+        const prdNode = nodes.find(n => n.workflow_id === 'prd')!;
+        expect(prdNode.dependencies_met).to.be.true;
+        expect(prdNode.unmet_dependencies).to.deep.equal([]);
+      });
+
+      it('cross-phase dep: prd dependencies_met when predecessor is skipped', () => {
+        updatePhasesState(mockPhasesResponse);
+        workflowState.set({
+          ...mockWorkflowStatus,
+          workflow_statuses: {
+            ...mockWorkflowStatus.workflow_statuses,
+            'create-product-brief': {
+              workflow_id: 'create-product-brief',
+              status: 'skipped',
+              artifact_path: null,
+              is_complete: false,
+              is_required: true,
+              is_optional: false,
+            },
+          },
+        });
+
+        const nodes = phaseGraphNodes$.get();
+        const prdNode = nodes.find(n => n.workflow_id === 'prd')!;
+        expect(prdNode.dependencies_met).to.be.true;
+      });
+
+      it('included_by dep: create-ux-design blocked when prd not complete', () => {
+        updatePhasesState(mockPhasesResponse);
+        workflowState.set({
+          ...mockWorkflowStatus,
+          workflow_statuses: {
+            ...mockWorkflowStatus.workflow_statuses,
+            prd: {
+              workflow_id: 'prd',
+              status: 'required',
+              artifact_path: null,
+              is_complete: false,
+              is_required: true,
+              is_optional: false,
+            },
+          },
+        });
+
+        const nodes = phaseGraphNodes$.get();
+        const uxNode = nodes.find(n => n.workflow_id === 'create-ux-design')!;
+        expect(uxNode.dependencies_met).to.be.false;
+        expect(uxNode.unmet_dependencies).to.include('prd');
+      });
+
+      it('unmet_dependencies populates with IDs of incomplete prerequisites', () => {
+        updatePhasesState(mockPhasesResponse);
+        workflowState.set({
+          ...mockWorkflowStatus,
+          workflow_statuses: {
+            'create-product-brief': {
+              workflow_id: 'create-product-brief',
+              status: 'not_started',
+              artifact_path: null,
+              is_complete: false,
+              is_required: true,
+              is_optional: false,
+            },
+          },
+        });
+
+        const nodes = phaseGraphNodes$.get();
+        const prdNode = nodes.find(n => n.workflow_id === 'prd')!;
+        expect(prdNode.unmet_dependencies).to.deep.equal(['create-product-brief']);
+      });
+    });
   });
 
   describe('phaseGraphEdges$', () => {
@@ -317,6 +479,11 @@ describe('PhasesState', () => {
       expect(getNodeVisualState('skipped', false)).to.equal('skipped');
     });
 
+    it('returns locked when dependenciesMet is false', () => {
+      expect(getNodeVisualState('required', false, false)).to.equal('locked');
+      expect(getNodeVisualState('not_started', false, false)).to.equal('locked');
+    });
+
     it('returns conditional when status is conditional', () => {
       expect(getNodeVisualState('conditional', false)).to.equal('conditional');
     });
@@ -337,11 +504,21 @@ describe('PhasesState', () => {
       expect(getNodeVisualState('not_started', false)).to.equal('not-started');
     });
 
-    it('follows precedence: current > complete > skipped > conditional > required > recommended > optional > not-started', () => {
-      // current beats complete
+    it('follows precedence: current > complete > skipped > locked > conditional > required > recommended > optional > not-started', () => {
+      // current beats everything
       expect(getNodeVisualState('complete', true)).to.equal('current');
-      // complete beats required
-      expect(getNodeVisualState('complete', false)).to.equal('complete');
+      // complete beats locked
+      expect(getNodeVisualState('complete', false, false)).to.equal('complete');
+      // skipped beats locked
+      expect(getNodeVisualState('skipped', false, false)).to.equal('skipped');
+      // locked beats required
+      expect(getNodeVisualState('required', false, false)).to.equal('locked');
+      // locked beats conditional
+      expect(getNodeVisualState('conditional', false, false)).to.equal('locked');
+    });
+
+    it('defaults dependenciesMet to true (backward compatible)', () => {
+      expect(getNodeVisualState('required', false)).to.equal('required');
     });
   });
 });

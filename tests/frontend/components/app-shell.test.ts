@@ -134,14 +134,14 @@ describe('AppShell', () => {
     setProjectSuccess(mockProject);
     const el = await fixture<AppShell>(html`<app-shell></app-shell>`);
     await el.updateComplete;
-    const folderButton = el.shadowRoot!.querySelector('sl-icon-button[name="folder-open"]');
+    const folderButton = el.shadowRoot!.querySelector('sl-icon-button[name="folder2-open"]');
     expect(folderButton).to.exist;
   });
 
   it('hides folder-open button when no project loaded', async () => {
     const el = await fixture<AppShell>(html`<app-shell></app-shell>`);
     await el.updateComplete;
-    const folderButton = el.shadowRoot!.querySelector('sl-icon-button[name="folder-open"]');
+    const folderButton = el.shadowRoot!.querySelector('sl-icon-button[name="folder2-open"]');
     expect(folderButton).to.be.null;
   });
 

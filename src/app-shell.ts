@@ -223,7 +223,7 @@ export class AppShell extends SignalWatcher(LitElement) {
       <div class="toolbar">
         ${project ? html`
           <sl-icon-button
-            name="folder-open"
+            name="folder2-open"
             label="Open Project"
             @click=${this._handleOpenProject}
           ></sl-icon-button>
