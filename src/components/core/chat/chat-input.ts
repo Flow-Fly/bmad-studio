@@ -248,6 +248,16 @@ export class ChatInput extends SignalWatcher(LitElement) {
     `;
   }
 
+  /** Send specific content (used for retry from chat-panel) */
+  async sendContent(content: string): Promise<void> {
+    if (!content.trim()) return;
+    const ta = this._textarea;
+    if (ta) {
+      ta.value = content;
+    }
+    await this._send();
+  }
+
   /** Focus the textarea input */
   focusInput(): void {
     this._textarea?.focus();

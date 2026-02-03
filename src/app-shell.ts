@@ -210,14 +210,10 @@ export class AppShell extends SignalWatcher(LitElement) {
         const contentArea = this.shadowRoot!.querySelector('.content-area');
         // Focus the chat-input textarea when switching to chat section
         if (section === 'chat') {
-          const chatPanel = contentArea?.querySelector('chat-panel') as HTMLElement;
+          const chatPanel = contentArea?.querySelector('chat-panel') as any;
           if (chatPanel && 'updateComplete' in chatPanel) {
-            await (chatPanel as any).updateComplete;
-          }
-          const chatInput = chatPanel?.shadowRoot?.querySelector('chat-input') as any;
-          if (chatInput && 'updateComplete' in chatInput) {
-            await chatInput.updateComplete;
-            chatInput.focusInput?.();
+            await chatPanel.updateComplete;
+            chatPanel.focusInput?.();
             return;
           }
         }

@@ -45,12 +45,11 @@ describe('ChatInput', () => {
     const textarea = el.shadowRoot!.querySelector('textarea')!;
     textarea.value = 'Hello';
 
-    const event = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true });
-    textarea.dispatchEvent(event);
+    const event = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
+    const notCancelled = textarea.dispatchEvent(event);
 
-    // Event should be handled (prevented default)
-    // The actual send involves async API key retrieval, so we test the input behavior
-    await el.updateComplete;
+    // Enter should preventDefault (send handler intercepted)
+    expect(notCancelled).to.be.false;
   });
 
   it('Shift+Enter inserts newline (does not send)', async () => {
@@ -66,11 +65,12 @@ describe('ChatInput', () => {
       key: 'Enter',
       shiftKey: true,
       bubbles: true,
+      cancelable: true,
     });
-    const prevented = !textarea.dispatchEvent(event);
+    const notCancelled = textarea.dispatchEvent(event);
 
-    // Shift+Enter should NOT prevent default (allows newline insertion)
-    // The textarea value should remain (not cleared by send)
+    // Shift+Enter should NOT preventDefault (allows newline insertion)
+    expect(notCancelled).to.be.true;
     expect(textarea.value).to.equal('Line 1');
   });
 
@@ -87,9 +87,12 @@ describe('ChatInput', () => {
       key: 'Enter',
       metaKey: true,
       bubbles: true,
+      cancelable: true,
     });
-    textarea.dispatchEvent(event);
-    await el.updateComplete;
+    const notCancelled = textarea.dispatchEvent(event);
+
+    // Cmd+Enter should preventDefault (send handler intercepted)
+    expect(notCancelled).to.be.false;
   });
 
   it('is disabled during streaming state', async () => {

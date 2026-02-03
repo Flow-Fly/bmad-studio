@@ -171,6 +171,8 @@ export class ConversationBlock extends LitElement {
     });
   }
 
+  // Tech debt: error detection relies on message content prefix set by chat.service.ts handleError().
+  // A dedicated error field on Message would be more robust (tracked for future story).
   private _isError(): boolean {
     return this.message.role === 'assistant' && this.message.content.startsWith('Error: ');
   }

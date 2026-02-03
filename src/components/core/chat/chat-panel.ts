@@ -1,28 +1,26 @@
-import { LitElement, html, svg, css, nothing } from 'lit';
-import { customElement, state } from 'lit/decorators.js';
+import { LitElement, html, css, nothing } from 'lit';
+import { customElement, state, query } from 'lit/decorators.js';
 import { SignalWatcher } from '@lit-labs/signals';
 
 import './conversation-block.js';
 import './chat-input.js';
+import type { ChatInput } from './chat-input.js';
 
 import {
-  chatConnectionState,
   activeConversations,
-  streamingConversationId,
   setConversation,
 } from '../../../state/chat.state.js';
 import { activeProviderState, selectedModelState } from '../../../state/provider.state.js';
 import { projectState } from '../../../state/project.state.js';
 import { connectionState } from '../../../state/connection.state.js';
-import { sendMessage } from '../../../services/chat.service.js';
 import type { Conversation, Message } from '../../../types/conversation.js';
 
-// Connection status icons
+// Connection status labels (colors handled by CSS classes)
 const STATUS_ICONS = {
-  connected: { color: 'var(--bmad-color-success)', label: 'Connected' },
-  connecting: { color: 'var(--bmad-color-warning)', label: 'Connecting' },
-  disconnected: { color: 'var(--bmad-color-warning)', label: 'Disconnected' },
-  error: { color: 'var(--bmad-color-error)', label: 'Connection error' },
+  connected: { label: 'Connected' },
+  connecting: { label: 'Connecting' },
+  disconnected: { label: 'Disconnected' },
+  error: { label: 'Connection error' },
 } as const;
 
 @customElement('chat-panel')
@@ -59,8 +57,21 @@ export class ChatPanel extends SignalWatcher(LitElement) {
       flex-shrink: 0;
     }
 
+    .connection-dot--connected {
+      background-color: var(--bmad-color-success);
+    }
+
     .connection-dot--connecting {
+      background-color: var(--bmad-color-warning);
       animation: pulse-dot 1.5s ease-in-out infinite;
+    }
+
+    .connection-dot--disconnected {
+      background-color: var(--bmad-color-warning);
+    }
+
+    .connection-dot--error {
+      background-color: var(--bmad-color-error);
     }
 
     @keyframes pulse-dot {
@@ -96,21 +107,20 @@ export class ChatPanel extends SignalWatcher(LitElement) {
     }
   `;
 
+  @query('chat-input') private _chatInput!: ChatInput;
   @state() private _conversationId = '';
   @state() private _userHasScrolled = false;
 
-  private _scrollContainer: HTMLElement | null = null;
-
-  connectedCallback(): void {
-    super.connectedCallback();
-  }
-
-  disconnectedCallback(): void {
-    super.disconnectedCallback();
+  willUpdate(): void {
+    // Ensure conversation exists before render (safe for state mutations in willUpdate)
+    const project = projectState.get();
+    const provider = activeProviderState.get();
+    if (project && provider) {
+      this._ensureConversation();
+    }
   }
 
   updated(): void {
-    // Auto-scroll on new messages if user hasn't scrolled up
     if (!this._userHasScrolled) {
       this._scrollToBottom();
     }
@@ -162,21 +172,9 @@ export class ChatPanel extends SignalWatcher(LitElement) {
 
   private _handleRetry(): void {
     const messages = this._getMessages();
-    // Find the last user message
     for (let i = messages.length - 1; i >= 0; i--) {
       if (messages[i].role === 'user') {
-        // Re-send the last user message
-        const provider = activeProviderState.get();
-        const model = selectedModelState.get();
-        if (provider && model && this._conversationId) {
-          // Note: retry will need API key - this is handled by chat-input
-          // For now, dispatch an event that chat-input can listen to
-          this.dispatchEvent(new CustomEvent('retry-request', {
-            detail: { content: messages[i].content },
-            bubbles: true,
-            composed: true,
-          }));
-        }
+        this._chatInput?.sendContent(messages[i].content);
         break;
       }
     }
@@ -185,12 +183,10 @@ export class ChatPanel extends SignalWatcher(LitElement) {
   private _renderConnectionStatus() {
     const status = connectionState.get();
     const config = STATUS_ICONS[status];
-    const isConnecting = status === 'connecting';
 
     return html`
       <span
-        class="connection-dot ${isConnecting ? 'connection-dot--connecting' : ''}"
-        style="background-color: ${config.color}"
+        class="connection-dot connection-dot--${status}"
         title=${config.label}
         aria-label=${config.label}
       ></span>
@@ -215,8 +211,6 @@ export class ChatPanel extends SignalWatcher(LitElement) {
       `;
     }
 
-    // Ensure we have a conversation
-    const conversationId = this._ensureConversation();
     const messages = this._getMessages();
 
     return html`
@@ -242,8 +236,13 @@ export class ChatPanel extends SignalWatcher(LitElement) {
           }
         </div>
       </div>
-      <chat-input .conversationId=${conversationId}></chat-input>
+      <chat-input .conversationId=${this._conversationId}></chat-input>
     `;
+  }
+
+  /** Delegates focus to the internal chat-input textarea */
+  focusInput(): void {
+    this._chatInput?.focusInput();
   }
 }
 
