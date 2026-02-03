@@ -245,6 +245,24 @@ export class AgentBadge extends SignalWatcher(LitElement) {
       background-color: transparent;
       border: 1.5px solid var(--bmad-color-text-muted);
     }
+
+    @media (prefers-reduced-motion: reduce) {
+      .dropdown {
+        animation: none;
+      }
+
+      .badge-chevron {
+        transition: none;
+      }
+
+      .badge {
+        transition: none;
+      }
+
+      .agent-item {
+        transition: none;
+      }
+    }
   `;
 
   @state() private _open = false;
@@ -349,6 +367,18 @@ export class AgentBadge extends SignalWatcher(LitElement) {
 
   private _handleFocusout(e: FocusEvent): void {
     // Close if focus moves outside the component
+    // Skip during async focus transitions (e.g., keyboard-initiated dropdown open)
+    if (this._open) {
+      requestAnimationFrame(() => {
+        if (!this._open) return;
+        const active = this.shadowRoot?.activeElement;
+        if (active) return; // Focus is still within shadow DOM
+        // Check light DOM as well
+        if (this.contains(document.activeElement)) return;
+        this._closeDropdown();
+      });
+      return;
+    }
     const related = e.relatedTarget as Node | null;
     if (related && this.shadowRoot?.contains(related)) return;
     if (related && this.contains(related as Element)) return;
@@ -404,6 +434,9 @@ export class AgentBadge extends SignalWatcher(LitElement) {
         aria-expanded=${this._open}
         aria-haspopup="listbox"
         aria-label="Select BMAD agent"
+        aria-activedescendant=${this._open && this._focusedIndex >= 0 && agents[this._focusedIndex]
+          ? `agent-option-${agents[this._focusedIndex].id}`
+          : nothing}
         @click=${this._handleBadgeClick}
         @keydown=${this._handleBadgeKeydown}
         @focusout=${this._handleFocusout}
@@ -428,6 +461,7 @@ export class AgentBadge extends SignalWatcher(LitElement) {
         >
           ${agents.map((a, index) => html`
             <button
+              id="agent-option-${a.id}"
               class="agent-item"
               role="option"
               aria-selected=${a.id === currentAgentId}

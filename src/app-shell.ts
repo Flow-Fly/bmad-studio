@@ -252,6 +252,8 @@ export class AppShell extends SignalWatcher(LitElement) {
         const defaultAgent = agents.find(a => a.id === 'analyst') ?? agents[0];
         setActiveAgent(defaultAgent.id);
       }
+    }).catch(err => {
+      console.warn('Agent initialization failed:', err instanceof Error ? err.message : err);
     });
   }
 
