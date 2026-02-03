@@ -20,22 +20,6 @@ import {
 } from '../../../src/types/conversation.ts';
 import type { WebSocketEvent } from '../../../src/services/websocket.service.ts';
 
-// Mock WebSocket
-let mockWs: { sent: string[]; readyState: number } | null = null;
-
-function installMockWs(): void {
-  mockWs = { sent: [], readyState: WebSocket.OPEN };
-  // Patch the module-level ws variable by intercepting send
-  // We rely on the fact that send() calls ws.send() internally
-  const originalSend = (globalThis as any).WebSocket;
-  (globalThis as any).__mockWsInstance = mockWs;
-}
-
-function removeMockWs(): void {
-  mockWs = null;
-  delete (globalThis as any).__mockWsInstance;
-}
-
 beforeEach(() => {
   clearChatState();
 });
@@ -52,13 +36,88 @@ describe('chat.service', () => {
       ).to.throw('WebSocket is not connected');
     });
 
-    it('constructs correct ChatSendPayload', () => {
-      // We can verify the payload structure by inspecting the event
-      // Since we can't actually connect, we test the event construction indirectly
-      // through the send function which will throw when not connected
-      expect(() =>
-        sendMessage('conv-1', 'Hello', 'claude-sonnet-4-5-20250929', 'claude', 'test-key', 'system prompt'),
-      ).to.throw('WebSocket is not connected');
+    it('creates a new conversation in state before sending', () => {
+      try {
+        sendMessage('conv-new', 'Hello', 'claude-sonnet-4-5-20250929', 'claude', 'test-key');
+      } catch {
+        // wsSend throws because WebSocket is not connected; expected in test
+      }
+
+      const conv = getConversation('conv-new');
+      expect(conv).to.not.be.undefined;
+      expect(conv!.id).to.equal('conv-new');
+      expect(conv!.model).to.equal('claude-sonnet-4-5-20250929');
+      expect(conv!.provider).to.equal('claude');
+    });
+
+    it('adds user message to conversation', () => {
+      try {
+        sendMessage('conv-1', 'Hello world', 'claude-sonnet-4-5-20250929', 'claude', 'test-key');
+      } catch {
+        // wsSend throws; expected
+      }
+
+      const conv = getConversation('conv-1');
+      expect(conv!.messages.length).to.equal(1);
+      expect(conv!.messages[0].role).to.equal('user');
+      expect(conv!.messages[0].content).to.equal('Hello world');
+    });
+
+    it('sets chatConnectionState to streaming', () => {
+      expect(chatConnectionState.get()).to.equal('idle');
+
+      try {
+        sendMessage('conv-1', 'Hello', 'claude-sonnet-4-5-20250929', 'claude', 'test-key');
+      } catch {
+        // wsSend throws; expected
+      }
+
+      expect(chatConnectionState.get()).to.equal('streaming');
+    });
+
+    it('sets streamingConversationId to the conversation id', () => {
+      expect(streamingConversationId.get()).to.be.null;
+
+      try {
+        sendMessage('conv-1', 'Hello', 'claude-sonnet-4-5-20250929', 'claude', 'test-key');
+      } catch {
+        // wsSend throws; expected
+      }
+
+      expect(streamingConversationId.get()).to.equal('conv-1');
+    });
+
+    it('appends user message to existing conversation', () => {
+      setConversation({
+        id: 'conv-existing',
+        messages: [{ id: 'msg-1', role: 'user', content: 'First', timestamp: Date.now() }],
+        createdAt: Date.now(),
+        model: 'claude-sonnet-4-5-20250929',
+        provider: 'claude',
+      });
+
+      try {
+        sendMessage('conv-existing', 'Second', 'claude-sonnet-4-5-20250929', 'claude', 'test-key');
+      } catch {
+        // wsSend throws; expected
+      }
+
+      const conv = getConversation('conv-existing');
+      expect(conv!.messages.length).to.equal(2);
+      expect(conv!.messages[0].content).to.equal('First');
+      expect(conv!.messages[1].content).to.equal('Second');
+      expect(conv!.messages[1].role).to.equal('user');
+    });
+
+    it('generates a user message id prefixed with msg-user-', () => {
+      try {
+        sendMessage('conv-1', 'Hello', 'claude-sonnet-4-5-20250929', 'claude', 'test-key');
+      } catch {
+        // wsSend throws; expected
+      }
+
+      const conv = getConversation('conv-1');
+      expect(conv!.messages[0].id).to.match(/^msg-user-/);
     });
   });
 
@@ -75,97 +134,10 @@ describe('chat.service', () => {
       cleanup();
     });
 
-    it('registers and unregisters event handlers', () => {
+    it('cleanup function can be called multiple times without error', () => {
       const cleanup = initChatService();
-
-      // The service should have registered handlers for chat events
-      // We test this by checking that calling cleanup doesn't throw
       cleanup();
-    });
-  });
-
-  describe('event handlers', () => {
-    let cleanup: () => void;
-    let handlers: Map<string, ((event: WebSocketEvent) => void)[]>;
-
-    beforeEach(() => {
-      handlers = new Map();
-      // Capture handlers registered via on()
-      const chatEvents = [
-        CHAT_STREAM_START,
-        CHAT_TEXT_DELTA,
-        CHAT_THINKING_DELTA,
-        CHAT_STREAM_END,
-        CHAT_ERROR,
-      ];
-
-      // Register a conversation first
-      setConversation({
-        id: 'conv-1',
-        messages: [],
-        createdAt: Date.now(),
-        model: 'claude-sonnet-4-5-20250929',
-        provider: 'claude',
-      });
-
-      cleanup = initChatService();
-    });
-
-    afterEach(() => {
       cleanup();
-    });
-
-    function simulateEvent(type: string, payload: unknown): void {
-      // Use the on() mechanism to dispatch events
-      // The initChatService registered handlers via on()
-      // We need to dispatch through the websocket service's handler system
-      const event: WebSocketEvent = {
-        type,
-        payload,
-        timestamp: new Date().toISOString(),
-      };
-
-      // Dispatch to all registered handlers for this event type
-      // Since we can't directly access the handlers map from websocket.service,
-      // we use a different approach: directly trigger through on()
-      // Actually, we need to simulate the websocket onmessage flow
-      // The simplest way is to call on() ourselves and trigger
-
-      // Re-approach: Get a handle to dispatch via the existing on() mechanism
-      // The initChatService already registered handlers. We need to simulate
-      // the websocket.service dispatching an event to those handlers.
-
-      // Since websocket.service dispatches to handlers registered via on(),
-      // and initChatService used on(), we can trigger by simulating onmessage
-      // We'll create a temporary test-specific approach
-
-      // Actually, the on() returns cleanup. The handlers are stored in a Map.
-      // We can register our own handler to capture, but to TRIGGER, we need
-      // to call the handlers directly. The easiest approach: manually invoke.
-      // For a true integration test, we'd need a mock WebSocket.
-
-      // For unit testing the handler logic, we'll test the state changes directly.
-    }
-
-    it('chat:stream-start creates assistant message in conversation', () => {
-      // Simulate the handler being called
-      const conv = getConversation('conv-1');
-      expect(conv).to.not.be.undefined;
-      expect(conv!.messages.length).to.equal(0);
-    });
-
-    it('activeConversations signal is initialized empty', () => {
-      // After clearChatState, conversations should be empty aside from our setup
-      const convs = activeConversations.get();
-      expect(convs.size).to.equal(1); // We set one in beforeEach
-    });
-
-    it('chatConnectionState starts as idle', () => {
-      expect(chatConnectionState.get()).to.equal('idle');
-    });
-
-    it('streamingConversationId starts as null', () => {
-      expect(streamingConversationId.get()).to.be.null;
     });
   });
 
@@ -182,6 +154,11 @@ describe('chat.service', () => {
       const conv = getConversation('test-conv');
       expect(conv).to.not.be.undefined;
       expect(conv!.id).to.equal('test-conv');
+    });
+
+    it('getConversation returns undefined for unknown id', () => {
+      const conv = getConversation('nonexistent');
+      expect(conv).to.be.undefined;
     });
 
     it('clearChatState resets all state', () => {
@@ -223,6 +200,21 @@ describe('chat.service', () => {
 
       const conv = getConversation('conv-1');
       expect(conv!.messages.length).to.equal(2);
+
+      // Verify immutability: the original messages array should be unchanged
+      expect(original.messages.length).to.equal(1);
+    });
+
+    it('chatConnectionState starts as idle', () => {
+      expect(chatConnectionState.get()).to.equal('idle');
+    });
+
+    it('streamingConversationId starts as null', () => {
+      expect(streamingConversationId.get()).to.be.null;
+    });
+
+    it('activeConversations starts as empty map', () => {
+      expect(activeConversations.get().size).to.equal(0);
     });
   });
 });
@@ -243,10 +235,12 @@ describe('websocket.service send', () => {
     unsub();
   });
 
-  it('on allows multiple handlers for same event', () => {
-    let count = 0;
-    const unsub1 = on(CHAT_TEXT_DELTA, () => count++);
-    const unsub2 = on(CHAT_TEXT_DELTA, () => count++);
+  it('on allows multiple handlers for same event type', () => {
+    const unsub1 = on(CHAT_TEXT_DELTA, () => {});
+    const unsub2 = on(CHAT_TEXT_DELTA, () => {});
+
+    expect(unsub1).to.be.a('function');
+    expect(unsub2).to.be.a('function');
 
     unsub1();
     unsub2();

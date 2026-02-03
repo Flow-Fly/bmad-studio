@@ -181,12 +181,30 @@ func (h *Hub) SetMessageHandler(handler MessageHandler) {
 	h.messageHandler = handler
 }
 
-// SendToClient sends a WebSocket event to a specific client (not broadcast).
-func (h *Hub) SendToClient(client *Client, event *types.WebSocketEvent) error {
-	data, err := json.Marshal(event)
-	if err != nil {
-		return fmt.Errorf("failed to marshal event: %w", err)
+// HandleClientMessage safely dispatches a client message to the registered handler.
+func (h *Hub) HandleClientMessage(client *Client, event *types.WebSocketEvent) {
+	h.mu.RLock()
+	handler := h.messageHandler
+	h.mu.RUnlock()
+	if handler != nil {
+		handler(client, event)
 	}
+}
+
+// SendToClient sends a WebSocket event to a specific client (not broadcast).
+func (h *Hub) SendToClient(client *Client, event *types.WebSocketEvent) (err error) {
+	data, marshalErr := json.Marshal(event)
+	if marshalErr != nil {
+		return fmt.Errorf("failed to marshal event: %w", marshalErr)
+	}
+
+	// Recover from panic if client.send was closed (client disconnected)
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("client disconnected")
+		}
+	}()
+
 	select {
 	case client.send <- data:
 		return nil

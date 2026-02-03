@@ -74,9 +74,7 @@ func (c *Client) readPump() {
 			continue
 		}
 
-		if c.hub.messageHandler != nil {
-			c.hub.messageHandler(c, &event)
-		}
+		c.hub.HandleClientMessage(c, &event)
 	}
 }
 

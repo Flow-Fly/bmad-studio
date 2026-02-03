@@ -17,6 +17,9 @@ import (
 )
 
 func main() {
+	serverCtx, serverCancel := context.WithCancel(context.Background())
+	defer serverCancel()
+
 	hub := websocket.NewHub()
 	go hub.Run()
 
@@ -62,7 +65,7 @@ func main() {
 				log.Printf("Chat: failed to parse chat:send payload: %v", err)
 				return
 			}
-			if err := chatService.HandleMessage(context.Background(), client, payload); err != nil {
+			if err := chatService.HandleMessage(serverCtx, client, payload); err != nil {
 				log.Printf("Chat: HandleMessage error: %v", err)
 				errorEvent := types.NewChatErrorEvent(payload.ConversationID, "", "invalid_request", err.Error())
 				hub.SendToClient(client, errorEvent)
@@ -94,7 +97,6 @@ func main() {
 		ConfigStore:    configStore,
 		Hub:            hub,
 		ProjectManager: projectManager,
-		ChatService:    chatService,
 	})
 
 	stop := make(chan os.Signal, 1)
@@ -111,6 +113,7 @@ func main() {
 	<-stop
 	log.Println("Shutting down...")
 
+	serverCancel()
 	projectManager.Stop()
 	hub.Stop()
 

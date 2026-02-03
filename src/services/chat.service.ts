@@ -32,6 +32,35 @@ export function sendMessage(
   apiKey: string,
   systemPrompt?: string,
 ): void {
+  // Ensure conversation exists in state
+  let conversation = getConversation(conversationId);
+  if (!conversation) {
+    conversation = {
+      id: conversationId,
+      messages: [],
+      model,
+      provider,
+      createdAt: Date.now(),
+    };
+  }
+
+  // Add user message to conversation
+  const userMessage: Message = {
+    id: `msg-user-${Date.now()}`,
+    role: 'user' as const,
+    content,
+    timestamp: Date.now(),
+  };
+
+  setConversation({
+    ...conversation,
+    messages: [...conversation.messages, userMessage],
+  });
+
+  // Set streaming state (also recovers from previous error state)
+  chatConnectionState.set('streaming');
+  streamingConversationId.set(conversationId);
+
   const event: WebSocketEvent = {
     type: CHAT_SEND,
     payload: {
@@ -61,7 +90,10 @@ export function cancelStream(conversationId: string): void {
 function handleStreamStart(event: WebSocketEvent): void {
   const payload = event.payload as ChatStreamStartPayload;
   const conversation = getConversation(payload.conversation_id);
-  if (!conversation) return;
+  if (!conversation) {
+    console.warn(`Chat: received chat:stream-start for unknown conversation ${payload.conversation_id}`);
+    return;
+  }
 
   const assistantMessage: Message = {
     id: payload.message_id,
@@ -83,7 +115,10 @@ function handleStreamStart(event: WebSocketEvent): void {
 function handleTextDelta(event: WebSocketEvent): void {
   const payload = event.payload as ChatTextDeltaPayload;
   const conversation = getConversation(payload.conversation_id);
-  if (!conversation) return;
+  if (!conversation) {
+    console.warn(`Chat: received chat:text-delta for unknown conversation ${payload.conversation_id}`);
+    return;
+  }
 
   const messages = conversation.messages.map(msg =>
     msg.id === payload.message_id
@@ -96,7 +131,10 @@ function handleTextDelta(event: WebSocketEvent): void {
 function handleThinkingDelta(event: WebSocketEvent): void {
   const payload = event.payload as ChatThinkingDeltaPayload;
   const conversation = getConversation(payload.conversation_id);
-  if (!conversation) return;
+  if (!conversation) {
+    console.warn(`Chat: received chat:thinking-delta for unknown conversation ${payload.conversation_id}`);
+    return;
+  }
 
   const messages = conversation.messages.map(msg =>
     msg.id === payload.message_id
@@ -109,7 +147,10 @@ function handleThinkingDelta(event: WebSocketEvent): void {
 function handleStreamEnd(event: WebSocketEvent): void {
   const payload = event.payload as ChatStreamEndPayload;
   const conversation = getConversation(payload.conversation_id);
-  if (!conversation) return;
+  if (!conversation) {
+    console.warn(`Chat: received chat:stream-end for unknown conversation ${payload.conversation_id}`);
+    return;
+  }
 
   const messages = conversation.messages.map(msg =>
     msg.id === payload.message_id
@@ -137,6 +178,8 @@ function handleError(event: WebSocketEvent): void {
         : msg,
     );
     setConversation({ ...conversation, messages });
+  } else {
+    console.warn(`Chat: received chat:error for unknown conversation ${payload.conversation_id}`);
   }
 
   chatConnectionState.set('error');

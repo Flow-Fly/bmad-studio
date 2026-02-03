@@ -15,6 +15,7 @@ import (
 const (
 	streamTimeout    = 5 * time.Minute
 	relayChannelSize = 64
+	defaultMaxTokens = 8192
 )
 
 // ChatService manages chat streaming sessions between clients and LLM providers.
@@ -57,13 +58,18 @@ func (cs *ChatService) HandleMessage(ctx context.Context, client *websocket.Clie
 			{Role: "user", Content: payload.Content},
 		},
 		Model:        payload.Model,
-		MaxTokens:    8192,
+		MaxTokens:    defaultMaxTokens,
 		SystemPrompt: payload.SystemPrompt,
 	}
 
 	streamCtx, cancel := context.WithTimeout(ctx, streamTimeout)
 
 	cs.mu.Lock()
+	if existingCancel, exists := cs.activeStreams[payload.ConversationID]; exists {
+		cs.mu.Unlock()
+		existingCancel()
+		cs.mu.Lock()
+	}
 	cs.activeStreams[payload.ConversationID] = cancel
 	cs.mu.Unlock()
 
@@ -95,6 +101,9 @@ func (cs *ChatService) consumeStream(ctx context.Context, cancel context.CancelF
 			select {
 			case relay <- chunk:
 			case <-ctx.Done():
+				// Drain remaining chunks to prevent provider goroutine from blocking
+				for range chunks {
+				}
 				return
 			}
 		}
@@ -112,7 +121,9 @@ func (cs *ChatService) consumeStream(ctx context.Context, cancel context.CancelF
 				// Channel closed — if no end event was sent, emit one
 				if !ended {
 					endEvent := types.NewChatStreamEndEvent(conversationID, messageID, nil, false)
-					cs.hub.SendToClient(client, endEvent)
+					if err := cs.hub.SendToClient(client, endEvent); err != nil {
+						log.Printf("Chat: CRITICAL failed to send stream-end: %v", err)
+					}
 				}
 				return
 			}
@@ -121,16 +132,22 @@ func (cs *ChatService) consumeStream(ctx context.Context, cancel context.CancelF
 			case "start":
 				messageID = chunk.MessageID
 				startEvent := types.NewChatStreamStartEvent(conversationID, messageID, model)
-				cs.hub.SendToClient(client, startEvent)
+				if err := cs.hub.SendToClient(client, startEvent); err != nil {
+					log.Printf("Chat: failed to send stream-start: %v", err)
+				}
 
 			case "chunk":
 				deltaEvent := types.NewChatTextDeltaEvent(conversationID, messageID, chunk.Content, textIndex)
-				cs.hub.SendToClient(client, deltaEvent)
+				if err := cs.hub.SendToClient(client, deltaEvent); err != nil {
+					log.Printf("Chat: failed to send text-delta: %v", err)
+				}
 				textIndex++
 
 			case "thinking":
 				thinkingEvent := types.NewChatThinkingDeltaEvent(conversationID, messageID, chunk.Content, thinkingIndex)
-				cs.hub.SendToClient(client, thinkingEvent)
+				if err := cs.hub.SendToClient(client, thinkingEvent); err != nil {
+					log.Printf("Chat: failed to send thinking-delta: %v", err)
+				}
 				thinkingIndex++
 
 			case "end":
@@ -143,19 +160,30 @@ func (cs *ChatService) consumeStream(ctx context.Context, cancel context.CancelF
 					}
 				}
 				endEvent := types.NewChatStreamEndEvent(conversationID, messageID, usage, false)
-				cs.hub.SendToClient(client, endEvent)
+				if err := cs.hub.SendToClient(client, endEvent); err != nil {
+					log.Printf("Chat: CRITICAL failed to send stream-end: %v", err)
+				}
 
 			case "error":
 				ended = true
 				errorEvent := types.NewChatErrorEvent(conversationID, messageID, "provider_error", chunk.Content)
-				cs.hub.SendToClient(client, errorEvent)
+				if err := cs.hub.SendToClient(client, errorEvent); err != nil {
+					log.Printf("Chat: CRITICAL failed to send error event: %v", err)
+				}
+				// Always send stream-end after error so frontend exits streaming state
+				endEvent := types.NewChatStreamEndEvent(conversationID, messageID, nil, true)
+				if err := cs.hub.SendToClient(client, endEvent); err != nil {
+					log.Printf("Chat: CRITICAL failed to send stream-end: %v", err)
+				}
 			}
 
 		case <-ctx.Done():
 			// Context cancelled (timeout or user cancel)
 			if !ended {
 				endEvent := types.NewChatStreamEndEvent(conversationID, messageID, nil, true)
-				cs.hub.SendToClient(client, endEvent)
+				if err := cs.hub.SendToClient(client, endEvent); err != nil {
+					log.Printf("Chat: CRITICAL failed to send stream-end: %v", err)
+				}
 			}
 			return
 		}
