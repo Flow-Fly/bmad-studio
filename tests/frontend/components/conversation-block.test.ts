@@ -169,4 +169,145 @@ describe('ConversationBlock', () => {
     const messageDiv = el.shadowRoot!.querySelector('.message');
     expect(messageDiv).to.be.null;
   });
+
+  describe('copy button', () => {
+    it('renders copy button for user message with content', async () => {
+      const msg = makeMessage({ role: 'user', content: 'Test message' });
+      const el = await fixture(
+        html`<conversation-block .message=${msg}></conversation-block>`
+      );
+      await el.updateComplete;
+
+      const copyButton = el.shadowRoot!.querySelector('.copy-button');
+      expect(copyButton).to.exist;
+    });
+
+    it('renders copy button for assistant message with content', async () => {
+      const msg = makeMessage({ role: 'assistant', content: 'Hello there' });
+      const el = await fixture(
+        html`<conversation-block .message=${msg}></conversation-block>`
+      );
+      await el.updateComplete;
+
+      const copyButton = el.shadowRoot!.querySelector('.copy-button');
+      expect(copyButton).to.exist;
+    });
+
+    it('has correct aria-label on copy button', async () => {
+      const msg = makeMessage({ role: 'user', content: 'Test' });
+      const el = await fixture(
+        html`<conversation-block .message=${msg}></conversation-block>`
+      );
+      await el.updateComplete;
+
+      const copyButton = el.shadowRoot!.querySelector('.copy-button');
+      expect(copyButton!.getAttribute('aria-label')).to.equal('Copy message');
+    });
+
+    it('does not show copy button for streaming message with no content', async () => {
+      const msg = makeMessage({ role: 'assistant', content: '', isStreaming: true });
+      const el = await fixture(
+        html`<conversation-block .message=${msg}></conversation-block>`
+      );
+      await el.updateComplete;
+
+      const copyButton = el.shadowRoot!.querySelector('.copy-button');
+      expect(copyButton).to.be.null;
+    });
+
+    it('does not show copy button for error messages', async () => {
+      const msg = makeMessage({ role: 'assistant', content: 'Error: Something went wrong' });
+      const el = await fixture(
+        html`<conversation-block .message=${msg}></conversation-block>`
+      );
+      await el.updateComplete;
+
+      const copyButton = el.shadowRoot!.querySelector('.copy-button');
+      expect(copyButton).to.be.null;
+    });
+
+    it('shows copy button for streaming message with partial content', async () => {
+      const msg = makeMessage({ role: 'assistant', content: 'Partial...', isStreaming: true });
+      const el = await fixture(
+        html`<conversation-block .message=${msg}></conversation-block>`
+      );
+      await el.updateComplete;
+
+      const copyButton = el.shadowRoot!.querySelector('.copy-button');
+      expect(copyButton).to.exist;
+    });
+
+    it('calls clipboard API when copy button is clicked', async () => {
+      const msg = makeMessage({ role: 'user', content: 'Copy me' });
+      const el = await fixture(
+        html`<conversation-block .message=${msg}></conversation-block>`
+      );
+      await el.updateComplete;
+
+      // Mock clipboard API
+      let copiedText = '';
+      const originalClipboard = navigator.clipboard;
+      Object.defineProperty(navigator, 'clipboard', {
+        value: {
+          writeText: async (text: string) => { copiedText = text; },
+        },
+        writable: true,
+        configurable: true,
+      });
+
+      const copyButton = el.shadowRoot!.querySelector<HTMLButtonElement>('.copy-button')!;
+      copyButton.click();
+
+      // Wait for async clipboard write
+      await new Promise(resolve => setTimeout(resolve, 50));
+
+      expect(copiedText).to.equal('Copy me');
+
+      // Restore clipboard
+      Object.defineProperty(navigator, 'clipboard', {
+        value: originalClipboard,
+        writable: true,
+        configurable: true,
+      });
+    });
+
+    it('shows "Copied!" feedback after clicking copy button', async () => {
+      const msg = makeMessage({ role: 'user', content: 'Copy me' });
+      const el = await fixture(
+        html`<conversation-block .message=${msg}></conversation-block>`
+      );
+      await el.updateComplete;
+
+      // Mock clipboard API
+      const originalClipboard = navigator.clipboard;
+      Object.defineProperty(navigator, 'clipboard', {
+        value: {
+          writeText: async () => {},
+        },
+        writable: true,
+        configurable: true,
+      });
+
+      const copyButton = el.shadowRoot!.querySelector<HTMLButtonElement>('.copy-button')!;
+      copyButton.click();
+
+      // Wait for async clipboard write and state update
+      await new Promise(resolve => setTimeout(resolve, 50));
+      await el.updateComplete;
+
+      const copiedText = el.shadowRoot!.querySelector('.copied-text');
+      expect(copiedText).to.exist;
+      expect(copiedText!.textContent).to.equal('Copied!');
+
+      const updatedButton = el.shadowRoot!.querySelector('.copy-button');
+      expect(updatedButton!.getAttribute('aria-label')).to.equal('Copied');
+
+      // Restore clipboard
+      Object.defineProperty(navigator, 'clipboard', {
+        value: originalClipboard,
+        writable: true,
+        configurable: true,
+      });
+    });
+  });
 });
