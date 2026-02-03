@@ -23,6 +23,7 @@ type RouterServices struct {
 	ConfigStore    *storage.ConfigStore
 	Hub            *websocket.Hub
 	ProjectManager *services.ProjectManager
+	ChatService    *services.ChatService
 }
 
 // NewRouter creates and configures the main router with all routes and middleware

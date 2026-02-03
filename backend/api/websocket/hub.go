@@ -2,11 +2,15 @@ package websocket
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"sync"
 
 	"bmad-studio/backend/types"
 )
+
+// MessageHandler is a callback invoked when a client sends a message.
+type MessageHandler func(client *Client, event *types.WebSocketEvent)
 
 // Hub maintains the set of active clients and broadcasts messages to clients
 type Hub struct {
@@ -30,6 +34,9 @@ type Hub struct {
 
 	// Running state
 	running bool
+
+	// MessageHandler is called when a client sends a parsed message
+	messageHandler MessageHandler
 }
 
 // NewHub creates a new Hub instance
@@ -165,4 +172,25 @@ func (h *Hub) IsRunning() bool {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 	return h.running
+}
+
+// SetMessageHandler sets the callback for incoming client messages.
+func (h *Hub) SetMessageHandler(handler MessageHandler) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.messageHandler = handler
+}
+
+// SendToClient sends a WebSocket event to a specific client (not broadcast).
+func (h *Hub) SendToClient(client *Client, event *types.WebSocketEvent) error {
+	data, err := json.Marshal(event)
+	if err != nil {
+		return fmt.Errorf("failed to marshal event: %w", err)
+	}
+	select {
+	case client.send <- data:
+		return nil
+	default:
+		return fmt.Errorf("client send buffer full")
+	}
 }

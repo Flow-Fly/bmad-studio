@@ -1,8 +1,11 @@
 package websocket
 
 import (
+	"encoding/json"
 	"log"
 	"time"
+
+	"bmad-studio/backend/types"
 
 	"github.com/gorilla/websocket"
 )
@@ -17,8 +20,8 @@ const (
 	// Send pings to peer with this period (must be less than pongWait)
 	pingPeriod = (pongWait * 9) / 10
 
-	// Maximum message size allowed from peer
-	maxMessageSize = 512
+	// Maximum message size allowed from peer (65536 for chat messages)
+	maxMessageSize = 65536
 )
 
 // Client represents a single WebSocket connection
@@ -57,15 +60,23 @@ func (c *Client) readPump() {
 	})
 
 	for {
-		_, _, err := c.conn.ReadMessage()
+		_, message, err := c.conn.ReadMessage()
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
 				log.Printf("WebSocket read error: %v", err)
 			}
 			break
 		}
-		// For now, we don't process incoming messages from clients
-		// This is a broadcast-only system (server → clients)
+
+		var event types.WebSocketEvent
+		if err := json.Unmarshal(message, &event); err != nil {
+			log.Printf("WebSocket: ignoring malformed message: %v", err)
+			continue
+		}
+
+		if c.hub.messageHandler != nil {
+			c.hub.messageHandler(c, &event)
+		}
 	}
 }
 
@@ -99,6 +110,11 @@ func (c *Client) writePump() {
 			}
 		}
 	}
+}
+
+// SendChan returns the client's send channel (for testing and targeted delivery).
+func (c *Client) SendChan() <-chan []byte {
+	return c.send
 }
 
 // Start begins the client's read and write pumps
