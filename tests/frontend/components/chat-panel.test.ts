@@ -313,4 +313,94 @@ describe('ChatPanel', () => {
       expect(conv.agentId).to.be.undefined;
     });
   });
+
+  describe('scroll-to-bottom button', () => {
+    it('does not show scroll-to-bottom button when at bottom', async () => {
+      const el = await fixture(html`<chat-panel></chat-panel>`);
+      await el.updateComplete;
+
+      const scrollBtn = el.shadowRoot!.querySelector('.scroll-to-bottom');
+      expect(scrollBtn).to.be.null;
+    });
+
+    it('shows scroll-to-bottom button when _userHasScrolled is true', async () => {
+      const el = await fixture(html`<chat-panel></chat-panel>`);
+      await el.updateComplete;
+
+      // Simulate user scroll state
+      (el as any)._userHasScrolled = true;
+      await el.updateComplete;
+
+      const scrollBtn = el.shadowRoot!.querySelector('.scroll-to-bottom');
+      expect(scrollBtn).to.exist;
+      expect(scrollBtn!.getAttribute('aria-label')).to.equal('Scroll to latest message');
+    });
+
+    it('resets _userHasScrolled when scroll-to-bottom is clicked', async () => {
+      const el = await fixture(html`<chat-panel></chat-panel>`);
+      await el.updateComplete;
+
+      // Set scrolled state
+      (el as any)._userHasScrolled = true;
+      await el.updateComplete;
+
+      const scrollBtn = el.shadowRoot!.querySelector<HTMLButtonElement>('.scroll-to-bottom')!;
+      scrollBtn.click();
+      await el.updateComplete;
+
+      expect((el as any)._userHasScrolled).to.be.false;
+    });
+
+    it('scroll-to-bottom button disappears after clicking it', async () => {
+      const el = await fixture(html`<chat-panel></chat-panel>`);
+      await el.updateComplete;
+
+      // Set scrolled state
+      (el as any)._userHasScrolled = true;
+      await el.updateComplete;
+
+      const scrollBtn = el.shadowRoot!.querySelector<HTMLButtonElement>('.scroll-to-bottom')!;
+      scrollBtn.click();
+      await el.updateComplete;
+
+      const scrollBtnAfter = el.shadowRoot!.querySelector('.scroll-to-bottom');
+      expect(scrollBtnAfter).to.be.null;
+    });
+  });
+
+  describe('message rendering with repeat directive', () => {
+    it('renders correct number of messages using repeat directive', async () => {
+      const convId = 'test-repeat-conv';
+      const conversation: Conversation = {
+        id: convId,
+        messages: [
+          { id: 'msg-1', role: 'user', content: 'First', timestamp: Date.now() },
+          { id: 'msg-2', role: 'assistant', content: 'Second', timestamp: Date.now() },
+          { id: 'msg-3', role: 'user', content: 'Third', timestamp: Date.now() },
+        ],
+        model: 'claude-3-opus',
+        provider: 'claude',
+        createdAt: Date.now(),
+      };
+      setConversation(conversation);
+
+      const el = await fixture(html`<chat-panel></chat-panel>`);
+      (el as any)._conversationId = convId;
+      await el.updateComplete;
+
+      const blocks = el.shadowRoot!.querySelectorAll('conversation-block');
+      expect(blocks.length).to.equal(3);
+    });
+
+    it('wraps message area in message-area-wrapper with scroll-to-bottom', async () => {
+      const el = await fixture(html`<chat-panel></chat-panel>`);
+      await el.updateComplete;
+
+      const wrapper = el.shadowRoot!.querySelector('.message-area-wrapper');
+      expect(wrapper).to.exist;
+
+      const messageArea = wrapper!.querySelector('.message-area');
+      expect(messageArea).to.exist;
+    });
+  });
 });

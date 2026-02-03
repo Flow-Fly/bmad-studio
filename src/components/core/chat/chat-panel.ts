@@ -1,5 +1,6 @@
-import { LitElement, html, css, nothing } from 'lit';
+import { LitElement, html, svg, css, nothing } from 'lit';
 import { customElement, state, query } from 'lit/decorators.js';
+import { repeat } from 'lit/directives/repeat.js';
 import { SignalWatcher } from '@lit-labs/signals';
 
 import './conversation-block.js';
@@ -21,6 +22,12 @@ import {
   setAgentConversation,
 } from '../../../state/agent.state.js';
 import type { Conversation, Message } from '../../../types/conversation.js';
+
+// Lucide arrow-down icon SVG definition
+const ARROW_DOWN_ICON = [
+  ['path', { d: 'M12 5v14' }],
+  ['path', { d: 'm19 12-7 7-7-7' }],
+] as const;
 
 // Connection status labels (colors handled by CSS classes)
 const STATUS_ICONS = {
@@ -90,6 +97,14 @@ export class ChatPanel extends SignalWatcher(LitElement) {
       }
     }
 
+    .message-area-wrapper {
+      position: relative;
+      flex: 1;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
     .message-area {
       flex: 1;
       overflow-y: auto;
@@ -112,12 +127,59 @@ export class ChatPanel extends SignalWatcher(LitElement) {
       font-size: var(--bmad-font-size-md);
       text-align: center;
     }
+
+    .scroll-to-bottom {
+      position: absolute;
+      bottom: var(--bmad-spacing-sm);
+      right: var(--bmad-spacing-lg);
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid var(--bmad-color-border-primary);
+      border-radius: var(--bmad-radius-full);
+      background: var(--bmad-color-bg-elevated);
+      color: var(--bmad-color-text-secondary);
+      cursor: pointer;
+      box-shadow: var(--bmad-shadow-sm);
+      z-index: 50;
+      opacity: 1;
+      transition: opacity 200ms ease-out, color var(--bmad-transition-fast);
+    }
+
+    .scroll-to-bottom:hover {
+      color: var(--bmad-color-text-primary);
+    }
+
+    .scroll-to-bottom:focus-visible {
+      outline: 2px solid var(--bmad-color-accent);
+      outline-offset: 2px;
+    }
+
+    .scroll-to-bottom .icon {
+      width: 16px;
+      height: 16px;
+      display: inline-flex;
+    }
+
+    .scroll-to-bottom .icon svg {
+      width: 100%;
+      height: 100%;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .scroll-to-bottom {
+        transition: none;
+      }
+    }
   `;
 
   @query('chat-input') private _chatInput!: ChatInput;
   @state() private _conversationId = '';
   @state() private _userHasScrolled = false;
   private _lastAgentId: string | null = null;
+  private _lastMessageCount = 0;
 
   willUpdate(): void {
     // Ensure conversation exists before render (safe for state mutations in willUpdate)
@@ -162,9 +224,15 @@ export class ChatPanel extends SignalWatcher(LitElement) {
   }
 
   updated(): void {
+    const messages = this._getMessages();
+    const currentCount = messages.length;
+
+    // Scroll to bottom when new messages appear or streaming content updates
     if (!this._userHasScrolled) {
       this._scrollToBottom();
     }
+
+    this._lastMessageCount = currentCount;
   }
 
   private _ensureConversation(): string {
@@ -219,6 +287,21 @@ export class ChatPanel extends SignalWatcher(LitElement) {
     });
   }
 
+  private _scrollToBottomAndReset(): void {
+    this._userHasScrolled = false;
+    this._scrollToBottom();
+  }
+
+  private _renderArrowDownIcon() {
+    return html`
+      <span class="icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          ${ARROW_DOWN_ICON.map(([, attrs]) => svg`<path d=${attrs.d} />`)}
+        </svg>
+      </span>
+    `;
+  }
+
   private _handleRetry(): void {
     const messages = this._getMessages();
     for (let i = messages.length - 1; i >= 0; i--) {
@@ -267,23 +350,34 @@ export class ChatPanel extends SignalWatcher(LitElement) {
         <agent-badge></agent-badge>
         ${this._renderConnectionStatus()}
       </div>
-      <div
-        class="message-area"
-        role="log"
-        aria-live="polite"
-        @scroll=${this._handleScroll}
-      >
-        <div class="message-list">
-          ${messages.length === 0
-            ? html`<div class="empty-state">Start a conversation</div>`
-            : messages.map(msg => html`
-                <conversation-block
-                  .message=${msg}
-                  @retry-message=${this._handleRetry}
-                ></conversation-block>
-              `)
-          }
+      <div class="message-area-wrapper">
+        <div
+          class="message-area"
+          role="log"
+          aria-live="polite"
+          @scroll=${this._handleScroll}
+        >
+          <div class="message-list">
+            ${messages.length === 0
+              ? html`<div class="empty-state">Start a conversation</div>`
+              : repeat(messages, msg => msg.id, msg => html`
+                  <conversation-block
+                    .message=${msg}
+                    @retry-message=${this._handleRetry}
+                  ></conversation-block>
+                `)
+            }
+          </div>
         </div>
+        ${this._userHasScrolled ? html`
+          <button
+            class="scroll-to-bottom"
+            @click=${this._scrollToBottomAndReset}
+            aria-label="Scroll to latest message"
+          >
+            ${this._renderArrowDownIcon()}
+          </button>
+        ` : nothing}
       </div>
       <chat-input .conversationId=${this._conversationId}></chat-input>
     `;
