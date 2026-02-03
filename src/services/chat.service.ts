@@ -46,7 +46,7 @@ export function sendMessage(
 
   // Add user message to conversation
   const userMessage: Message = {
-    id: `msg-user-${Date.now()}`,
+    id: `msg-user-${crypto.randomUUID()}`,
     role: 'user' as const,
     content,
     timestamp: Date.now(),
@@ -73,7 +73,13 @@ export function sendMessage(
     },
     timestamp: new Date().toISOString(),
   };
-  wsSend(event);
+  try {
+    wsSend(event);
+  } catch (err) {
+    chatConnectionState.set('idle');
+    streamingConversationId.set(null);
+    throw err;
+  }
 }
 
 export function cancelStream(conversationId: string): void {
@@ -163,7 +169,10 @@ function handleStreamEnd(event: WebSocketEvent): void {
       : msg,
   );
   setConversation({ ...conversation, messages });
-  chatConnectionState.set('idle');
+  // Preserve error state — backend sends stream-end after error events
+  if (chatConnectionState.get() !== 'error') {
+    chatConnectionState.set('idle');
+  }
   streamingConversationId.set(null);
 }
 

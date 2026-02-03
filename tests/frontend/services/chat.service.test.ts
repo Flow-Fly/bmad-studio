@@ -63,7 +63,7 @@ describe('chat.service', () => {
       expect(conv!.messages[0].content).to.equal('Hello world');
     });
 
-    it('sets chatConnectionState to streaming', () => {
+    it('resets chatConnectionState to idle when send fails', () => {
       expect(chatConnectionState.get()).to.equal('idle');
 
       try {
@@ -72,10 +72,10 @@ describe('chat.service', () => {
         // wsSend throws; expected
       }
 
-      expect(chatConnectionState.get()).to.equal('streaming');
+      expect(chatConnectionState.get()).to.equal('idle');
     });
 
-    it('sets streamingConversationId to the conversation id', () => {
+    it('resets streamingConversationId when send fails', () => {
       expect(streamingConversationId.get()).to.be.null;
 
       try {
@@ -84,7 +84,7 @@ describe('chat.service', () => {
         // wsSend throws; expected
       }
 
-      expect(streamingConversationId.get()).to.equal('conv-1');
+      expect(streamingConversationId.get()).to.be.null;
     });
 
     it('appends user message to existing conversation', () => {

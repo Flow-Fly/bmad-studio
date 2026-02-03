@@ -65,13 +65,13 @@ func (cs *ChatService) HandleMessage(ctx context.Context, client *websocket.Clie
 	streamCtx, cancel := context.WithTimeout(ctx, streamTimeout)
 
 	cs.mu.Lock()
-	if existingCancel, exists := cs.activeStreams[payload.ConversationID]; exists {
-		cs.mu.Unlock()
-		existingCancel()
-		cs.mu.Lock()
-	}
+	existingCancel, hadExisting := cs.activeStreams[payload.ConversationID]
 	cs.activeStreams[payload.ConversationID] = cancel
 	cs.mu.Unlock()
+
+	if hadExisting {
+		existingCancel()
+	}
 
 	chunks, err := cs.providerService.SendMessage(streamCtx, payload.Provider, payload.APIKey, req)
 	if err != nil {
