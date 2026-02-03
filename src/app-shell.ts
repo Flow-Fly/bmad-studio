@@ -20,6 +20,8 @@ import { loadPhases } from './services/phases.service.js';
 import { clearPhasesState } from './state/phases.state.js';
 import { initChatService } from './services/chat.service.js';
 import { clearChatState } from './state/chat.state.js';
+import { loadAgents } from './services/agent.service.js';
+import { agentsState, setActiveAgent, clearAgentState } from './state/agent.state.js';
 
 import './components/core/phase-graph/phase-graph-container.js';
 import './components/core/layout/activity-bar.js';
@@ -243,6 +245,16 @@ export class AppShell extends SignalWatcher(LitElement) {
     this._chatCleanup = initChatService();
     loadWorkflowStatus();
     loadPhases();
+    loadAgents().then(() => {
+      const agents = agentsState.get();
+      if (agents.length > 0) {
+        // Default to 'analyst' if available, otherwise first agent
+        const defaultAgent = agents.find(a => a.id === 'analyst') ?? agents[0];
+        setActiveAgent(defaultAgent.id);
+      }
+    }).catch(err => {
+      console.warn('Agent initialization failed:', err instanceof Error ? err.message : err);
+    });
   }
 
   private _cleanupWorkflow(): void {
@@ -261,6 +273,7 @@ export class AppShell extends SignalWatcher(LitElement) {
     clearWorkflowState();
     clearPhasesState();
     clearChatState();
+    clearAgentState();
   }
 
   private async _handleOpenProject(): Promise<void> {

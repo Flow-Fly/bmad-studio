@@ -4,6 +4,7 @@ import { SignalWatcher } from '@lit-labs/signals';
 
 import './conversation-block.js';
 import './chat-input.js';
+import '../navigation/agent-badge.js';
 import type { ChatInput } from './chat-input.js';
 
 import {
@@ -13,6 +14,12 @@ import {
 import { activeProviderState, selectedModelState } from '../../../state/provider.state.js';
 import { projectState } from '../../../state/project.state.js';
 import { connectionState } from '../../../state/connection.state.js';
+import {
+  activeAgentId,
+  agentConversations,
+  getAgentConversationId,
+  setAgentConversation,
+} from '../../../state/agent.state.js';
 import type { Conversation, Message } from '../../../types/conversation.js';
 
 // Connection status labels (colors handled by CSS classes)
@@ -110,12 +117,46 @@ export class ChatPanel extends SignalWatcher(LitElement) {
   @query('chat-input') private _chatInput!: ChatInput;
   @state() private _conversationId = '';
   @state() private _userHasScrolled = false;
+  private _lastAgentId: string | null = null;
 
   willUpdate(): void {
     // Ensure conversation exists before render (safe for state mutations in willUpdate)
     const project = projectState.get();
     const provider = activeProviderState.get();
     if (project && provider) {
+      const currentAgentId = activeAgentId.get();
+
+      // Detect agent switch
+      if (currentAgentId !== this._lastAgentId) {
+        const previousAgentId = this._lastAgentId;
+        this._lastAgentId = currentAgentId;
+
+        if (currentAgentId) {
+          // Check if agent has an existing conversation
+          const existingConvId = getAgentConversationId(currentAgentId);
+          if (existingConvId && activeConversations.get().has(existingConvId)) {
+            this._conversationId = existingConvId;
+            return;
+          }
+
+          // Migrate orphaned conversation: if switching from null (no agent) to
+          // a real agent and a conversation already exists without an agent,
+          // adopt it rather than creating a new blank one.
+          if (previousAgentId === null && this._conversationId) {
+            const orphan = activeConversations.get().get(this._conversationId);
+            if (orphan && !orphan.agentId) {
+              const migrated: Conversation = { ...orphan, agentId: currentAgentId };
+              setConversation(migrated);
+              setAgentConversation(currentAgentId, this._conversationId);
+              return;
+            }
+          }
+
+          // Agent has no conversation - create one
+          this._conversationId = '';
+        }
+      }
+
       this._ensureConversation();
     }
   }
@@ -136,15 +177,23 @@ export class ChatPanel extends SignalWatcher(LitElement) {
     const id = crypto.randomUUID();
     const provider = activeProviderState.get();
     const model = selectedModelState.get();
+    const currentAgentId = activeAgentId.get();
     const conversation: Conversation = {
       id,
       messages: [],
       model: model || '',
       provider: provider || '',
       createdAt: Date.now(),
+      agentId: currentAgentId ?? undefined,
     };
     setConversation(conversation);
     this._conversationId = id;
+
+    // Register conversation mapping for the agent
+    if (currentAgentId) {
+      setAgentConversation(currentAgentId, id);
+    }
+
     return id;
   }
 
@@ -215,7 +264,7 @@ export class ChatPanel extends SignalWatcher(LitElement) {
 
     return html`
       <div class="panel-header">
-        <span class="header-title">Chat</span>
+        <agent-badge></agent-badge>
         ${this._renderConnectionStatus()}
       </div>
       <div
