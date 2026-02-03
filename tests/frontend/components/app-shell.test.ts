@@ -224,9 +224,8 @@ describe('AppShell', () => {
     await el.updateComplete;
 
     expect(el._activeSection).to.equal('chat');
-    const placeholder = el.shadowRoot!.querySelector('.content-area .placeholder');
-    expect(placeholder).to.exist;
-    expect(placeholder!.textContent).to.include('Chat panel');
+    const chatPanel = el.shadowRoot!.querySelector('.content-area chat-panel');
+    expect(chatPanel).to.exist;
   });
 
   it('section-change event switches content to artifacts placeholder', async () => {
@@ -274,9 +273,8 @@ describe('AppShell', () => {
     await el.updateComplete;
 
     expect(el._activeSection).to.equal('chat');
-    const placeholder = el.shadowRoot!.querySelector('.content-area .placeholder');
-    expect(placeholder).to.exist;
-    expect(placeholder!.textContent).to.include('Chat panel');
+    const chatPanel = el.shadowRoot!.querySelector('.content-area chat-panel');
+    expect(chatPanel).to.exist;
   });
 
   it('Cmd+3 sets section to artifacts', async () => {

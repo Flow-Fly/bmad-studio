@@ -23,6 +23,7 @@ import { clearChatState } from './state/chat.state.js';
 
 import './components/core/phase-graph/phase-graph-container.js';
 import './components/core/layout/activity-bar.js';
+import './components/core/chat/chat-panel.js';
 
 @customElement('app-shell')
 export class AppShell extends SignalWatcher(LitElement) {
@@ -207,6 +208,15 @@ export class AppShell extends SignalWatcher(LitElement) {
       this._activeSection = section;
       this.updateComplete.then(async () => {
         const contentArea = this.shadowRoot!.querySelector('.content-area');
+        // Focus the chat-input textarea when switching to chat section
+        if (section === 'chat') {
+          const chatPanel = contentArea?.querySelector('chat-panel') as any;
+          if (chatPanel && 'updateComplete' in chatPanel) {
+            await chatPanel.updateComplete;
+            chatPanel.focusInput?.();
+            return;
+          }
+        }
         const target = contentArea?.querySelector('phase-graph-container') as HTMLElement
           ?? contentArea?.querySelector('.placeholder') as HTMLElement;
         if (target && 'updateComplete' in target) {
@@ -325,7 +335,7 @@ export class AppShell extends SignalWatcher(LitElement) {
       case 'graph':
         return html`<phase-graph-container tabindex="-1"></phase-graph-container>`;
       case 'chat':
-        return html`<div class="placeholder" tabindex="-1">Chat panel (Epic 3)</div>`;
+        return html`<chat-panel tabindex="-1"></chat-panel>`;
       case 'artifacts':
         return html`<div class="placeholder" tabindex="-1">Artifacts panel (Epic 6)</div>`;
       default:
