@@ -128,6 +128,7 @@ export class ChatPanel extends SignalWatcher(LitElement) {
 
       // Detect agent switch
       if (currentAgentId !== this._lastAgentId) {
+        const previousAgentId = this._lastAgentId;
         this._lastAgentId = currentAgentId;
 
         if (currentAgentId) {
@@ -137,6 +138,20 @@ export class ChatPanel extends SignalWatcher(LitElement) {
             this._conversationId = existingConvId;
             return;
           }
+
+          // Migrate orphaned conversation: if switching from null (no agent) to
+          // a real agent and a conversation already exists without an agent,
+          // adopt it rather than creating a new blank one.
+          if (previousAgentId === null && this._conversationId) {
+            const orphan = activeConversations.get().get(this._conversationId);
+            if (orphan && !orphan.agentId) {
+              const migrated: Conversation = { ...orphan, agentId: currentAgentId };
+              setConversation(migrated);
+              setAgentConversation(currentAgentId, this._conversationId);
+              return;
+            }
+          }
+
           // Agent has no conversation - create one
           this._conversationId = '';
         }
