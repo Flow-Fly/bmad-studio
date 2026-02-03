@@ -1,8 +1,11 @@
 package main
 
 import (
+	"context"
+	"encoding/json"
 	"log"
 	"net/http"
+	"time"
 	"os"
 	"os/signal"
 	"syscall"
@@ -11,9 +14,13 @@ import (
 	"bmad-studio/backend/api/websocket"
 	"bmad-studio/backend/services"
 	"bmad-studio/backend/storage"
+	"bmad-studio/backend/types"
 )
 
 func main() {
+	serverCtx, serverCancel := context.WithCancel(context.Background())
+	defer serverCancel()
+
 	hub := websocket.NewHub()
 	go hub.Run()
 
@@ -44,6 +51,48 @@ func main() {
 		log.Printf("Warning: Failed to initialize config store: %v", err)
 	}
 
+	chatService := services.NewChatService(providerService, hub)
+
+	hub.SetMessageHandler(func(client *websocket.Client, event *types.WebSocketEvent) {
+		switch event.Type {
+		case types.EventTypeChatSend:
+			payloadBytes, err := json.Marshal(event.Payload)
+			if err != nil {
+				log.Printf("Chat: failed to marshal chat:send payload: %v", err)
+				return
+			}
+			var payload types.ChatSendPayload
+			if err := json.Unmarshal(payloadBytes, &payload); err != nil {
+				log.Printf("Chat: failed to parse chat:send payload: %v", err)
+				return
+			}
+			if err := chatService.HandleMessage(serverCtx, client, payload); err != nil {
+				log.Printf("Chat: HandleMessage error: %v", err)
+				errorEvent := types.NewChatErrorEvent(payload.ConversationID, "", "invalid_request", err.Error())
+				hub.SendToClient(client, errorEvent)
+			}
+
+		case types.EventTypeChatCancel:
+			payloadBytes, err := json.Marshal(event.Payload)
+			if err != nil {
+				log.Printf("Chat: failed to marshal chat:cancel payload: %v", err)
+				return
+			}
+			var payload types.ChatCancelPayload
+			if err := json.Unmarshal(payloadBytes, &payload); err != nil {
+				log.Printf("Chat: failed to parse chat:cancel payload: %v", err)
+				return
+			}
+			if err := chatService.CancelStream(payload.ConversationID); err != nil {
+				log.Printf("Chat: CancelStream error: %v", err)
+			}
+
+		default:
+			// Unknown message types — log and ignore
+			log.Printf("WebSocket: unknown message type from client: %s", event.Type)
+		}
+	})
+
 	router := api.NewRouterWithServices(api.RouterServices{
 		Provider:       providerService,
 		ConfigStore:    configStore,
@@ -65,6 +114,13 @@ func main() {
 	<-stop
 	log.Println("Shutting down...")
 
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer shutdownCancel()
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		log.Printf("HTTP server shutdown error: %v", err)
+	}
+
+	serverCancel()
 	projectManager.Stop()
 	hub.Stop()
 
