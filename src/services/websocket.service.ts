@@ -94,6 +94,13 @@ export function disconnect(): void {
   connectionState.set('disconnected');
 }
 
+export function send(event: WebSocketEvent): void {
+  if (!ws || ws.readyState !== WebSocket.OPEN) {
+    throw new Error('WebSocket is not connected');
+  }
+  ws.send(JSON.stringify(event));
+}
+
 export function on(eventType: string, handler: EventHandler): () => void {
   let handlerSet = handlers.get(eventType);
   if (!handlerSet) {

@@ -127,15 +127,27 @@ func (p *ClaudeProvider) SendMessage(ctx context.Context, req ChatRequest) (<-ch
 				if !send(StreamChunk{
 					Type:      "start",
 					MessageID: messageID,
+					Model:     string(event.Message.Model),
 				}) {
 					return
 				}
 
 			case anthropic.ContentBlockDeltaEvent:
-				if delta, ok := event.Delta.AsAny().(anthropic.TextDelta); ok {
+				switch delta := event.Delta.AsAny().(type) {
+				case anthropic.TextDelta:
 					if !send(StreamChunk{
 						Type:      "chunk",
 						Content:   delta.Text,
+						MessageID: messageID,
+						Index:     chunkIndex,
+					}) {
+						return
+					}
+					chunkIndex++
+				case anthropic.ThinkingDelta:
+					if !send(StreamChunk{
+						Type:      "thinking",
+						Content:   delta.Thinking,
 						MessageID: messageID,
 						Index:     chunkIndex,
 					}) {

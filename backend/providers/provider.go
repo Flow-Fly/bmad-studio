@@ -24,11 +24,12 @@ type ChatRequest struct {
 
 // StreamChunk represents a single chunk in a streaming response.
 type StreamChunk struct {
-	Type      string      `json:"type"`       // start, chunk, end, error
-	Content   string      `json:"content"`    // text delta for chunk type
+	Type      string      `json:"type"`       // start, chunk, end, error, thinking
+	Content   string      `json:"content"`    // text delta for chunk/thinking type
 	MessageID string      `json:"message_id"` // unique message identifier
 	Index     int         `json:"index"`      // chunk sequence number
 	Usage     *UsageStats `json:"usage,omitempty"`
+	Model     string      `json:"model,omitempty"` // model identifier, populated on start
 }
 
 // UsageStats contains token usage information.

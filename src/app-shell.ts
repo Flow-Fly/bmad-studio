@@ -18,6 +18,8 @@ import { loadWorkflowStatus } from './services/workflow.service.js';
 import { clearWorkflowState } from './state/workflow.state.js';
 import { loadPhases } from './services/phases.service.js';
 import { clearPhasesState } from './state/phases.state.js';
+import { initChatService } from './services/chat.service.js';
+import { clearChatState } from './state/chat.state.js';
 
 import './components/core/phase-graph/phase-graph-container.js';
 import './components/core/layout/activity-bar.js';
@@ -175,6 +177,7 @@ export class AppShell extends SignalWatcher(LitElement) {
   @state() _activeSection = 'graph';
 
   private _wsUnsubscribe: (() => void) | null = null;
+  private _chatCleanup: (() => void) | null = null;
   private _debounceTimer: ReturnType<typeof setTimeout> | null = null;
   private _boundKeyHandler = this._handleKeydown.bind(this);
 
@@ -227,6 +230,7 @@ export class AppShell extends SignalWatcher(LitElement) {
         loadWorkflowStatus();
       }, 300);
     });
+    this._chatCleanup = initChatService();
     loadWorkflowStatus();
     loadPhases();
   }
@@ -240,8 +244,13 @@ export class AppShell extends SignalWatcher(LitElement) {
       this._wsUnsubscribe();
       this._wsUnsubscribe = null;
     }
+    if (this._chatCleanup) {
+      this._chatCleanup();
+      this._chatCleanup = null;
+    }
     clearWorkflowState();
     clearPhasesState();
+    clearChatState();
   }
 
   private async _handleOpenProject(): Promise<void> {
