@@ -10,8 +10,43 @@ import {
 import { activeProviderState, selectedModelState } from '../../../src/state/provider.state.ts';
 import { projectState } from '../../../src/state/project.state.ts';
 import { connectionState } from '../../../src/state/connection.state.ts';
+import {
+  agentsState,
+  activeAgentId,
+  agentConversations,
+  clearAgentState,
+  setActiveAgent,
+  setAgentConversation,
+  getAgentConversationId,
+} from '../../../src/state/agent.state.ts';
 import type { ProjectData } from '../../../src/types/project.ts';
 import type { Conversation, Message } from '../../../src/types/conversation.ts';
+import type { Agent } from '../../../src/types/agent.ts';
+
+const mockAgents: Agent[] = [
+  {
+    id: 'analyst',
+    name: 'Analyst',
+    title: 'Business Analyst',
+    icon: 'brain',
+    frontmatter_name: 'Analyst Agent',
+    description: 'Analyzes business requirements',
+    persona: { role: 'analyst', identity: 'Expert', communication_style: 'professional' },
+    menu_items: [],
+    workflows: [],
+  },
+  {
+    id: 'dev',
+    name: 'Dev',
+    title: 'Developer',
+    icon: 'code',
+    frontmatter_name: 'Dev Agent',
+    description: 'Writes code',
+    persona: { role: 'developer', identity: 'Senior', communication_style: 'technical' },
+    menu_items: [],
+    workflows: [],
+  },
+];
 
 const mockProject: ProjectData = {
   projectName: 'test-project',
@@ -30,6 +65,7 @@ const mockProject: ProjectData = {
 // Stub fetch globally
 beforeEach(() => {
   clearChatState();
+  clearAgentState();
   projectState.set(mockProject);
   activeProviderState.set('claude');
   selectedModelState.set('claude-3-opus');
@@ -43,6 +79,7 @@ beforeEach(() => {
 
 afterEach(() => {
   clearChatState();
+  clearAgentState();
   projectState.set(null);
   activeProviderState.set('');
   selectedModelState.set('');
@@ -79,15 +116,15 @@ describe('ChatPanel', () => {
     expect(conversations.size).to.be.greaterThan(0);
   });
 
-  it('renders panel header with connection status', async () => {
+  it('renders panel header with agent-badge and connection status', async () => {
     const el = await fixture(html`<chat-panel></chat-panel>`);
     await el.updateComplete;
 
     const header = el.shadowRoot!.querySelector('.panel-header');
     expect(header).to.exist;
 
-    const title = el.shadowRoot!.querySelector('.header-title');
-    expect(title!.textContent).to.equal('Chat');
+    const agentBadge = el.shadowRoot!.querySelector('agent-badge');
+    expect(agentBadge).to.exist;
 
     const dot = el.shadowRoot!.querySelector('.connection-dot');
     expect(dot).to.exist;
@@ -163,5 +200,117 @@ describe('ChatPanel', () => {
 
     const dot = el.shadowRoot!.querySelector('.connection-dot');
     expect(dot!.classList.contains('connection-dot--connecting')).to.be.true;
+  });
+
+  describe('agent-aware conversations', () => {
+    it('renders agent-badge in header instead of static Chat title', async () => {
+      agentsState.set(mockAgents);
+      setActiveAgent('analyst');
+
+      const el = await fixture(html`<chat-panel></chat-panel>`);
+      await el.updateComplete;
+
+      const agentBadge = el.shadowRoot!.querySelector('agent-badge');
+      expect(agentBadge).to.exist;
+
+      // No static header-title should exist
+      const title = el.shadowRoot!.querySelector('.header-title');
+      expect(title).to.not.exist;
+    });
+
+    it('creates new conversation for agent with no existing conversation', async () => {
+      agentsState.set(mockAgents);
+      setActiveAgent('analyst');
+
+      const el = await fixture(html`<chat-panel></chat-panel>`);
+      await el.updateComplete;
+
+      // A conversation should exist
+      const conversations = activeConversations.get();
+      expect(conversations.size).to.be.greaterThan(0);
+
+      // Agent should be mapped to a conversation
+      const convId = getAgentConversationId('analyst');
+      expect(convId).to.not.be.undefined;
+      expect(conversations.has(convId!)).to.be.true;
+    });
+
+    it('sets agentId on newly created conversations', async () => {
+      agentsState.set(mockAgents);
+      setActiveAgent('dev');
+
+      const el = await fixture(html`<chat-panel></chat-panel>`);
+      await el.updateComplete;
+
+      const convId = getAgentConversationId('dev');
+      expect(convId).to.not.be.undefined;
+      const conv = activeConversations.get().get(convId!);
+      expect(conv).to.exist;
+      expect(conv!.agentId).to.equal('dev');
+    });
+
+    it('switches conversation when activeAgentId changes', async () => {
+      agentsState.set(mockAgents);
+      setActiveAgent('analyst');
+
+      const el = await fixture(html`<chat-panel></chat-panel>`);
+      await el.updateComplete;
+
+      const analystConvId = getAgentConversationId('analyst');
+      expect(analystConvId).to.not.be.undefined;
+
+      // Switch to dev agent
+      setActiveAgent('dev');
+      await el.updateComplete;
+
+      const devConvId = getAgentConversationId('dev');
+      expect(devConvId).to.not.be.undefined;
+
+      // Both conversations should exist in state
+      const conversations = activeConversations.get();
+      expect(conversations.has(analystConvId!)).to.be.true;
+      expect(conversations.has(devConvId!)).to.be.true;
+
+      // They should be different conversations
+      expect(analystConvId).to.not.equal(devConvId);
+    });
+
+    it('preserves existing conversation when switching back to agent', async () => {
+      agentsState.set(mockAgents);
+      setActiveAgent('analyst');
+
+      const el = await fixture(html`<chat-panel></chat-panel>`);
+      await el.updateComplete;
+
+      const analystConvId = getAgentConversationId('analyst');
+
+      // Switch to dev
+      setActiveAgent('dev');
+      await el.updateComplete;
+
+      // Switch back to analyst
+      setActiveAgent('analyst');
+      await el.updateComplete;
+
+      // Should still use the same conversation id
+      const currentConvId = (el as any)._conversationId;
+      expect(currentConvId).to.equal(analystConvId);
+    });
+
+    it('works without agents loaded (fallback to generic conversation)', async () => {
+      agentsState.set([]);
+      activeAgentId.set(null);
+
+      const el = await fixture(html`<chat-panel></chat-panel>`);
+      await el.updateComplete;
+
+      // Should still create a conversation without agent
+      const conversations = activeConversations.get();
+      expect(conversations.size).to.be.greaterThan(0);
+
+      // The conversation should not have agentId
+      const conv = conversations.values().next().value;
+      expect(conv.agentId).to.be.undefined;
+    });
   });
 });
