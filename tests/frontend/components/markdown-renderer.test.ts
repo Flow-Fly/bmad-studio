@@ -73,6 +73,58 @@ describe('MarkdownRenderer', () => {
     expect(code!.classList.contains('hljs')).to.be.true;
   });
 
+  it('renders copy button on code blocks', async () => {
+    const el = await fixture(
+      html`<markdown-renderer .content=${'```javascript\nconst x = 1;\n```'}></markdown-renderer>`
+    );
+    await el.updateComplete;
+
+    const body = el.shadowRoot!.querySelector('.markdown-body');
+    const pre = body!.querySelector('pre.code-block');
+    expect(pre).to.exist;
+
+    const copyContainer = pre!.querySelector('.code-copy-container');
+    expect(copyContainer).to.exist;
+
+    const copyButton = copyContainer!.querySelector('.code-copy-button');
+    expect(copyButton).to.exist;
+    expect(copyButton!.getAttribute('aria-label')).to.equal('Copy code');
+  });
+
+  it('copy button copies code content to clipboard', async () => {
+    const el = await fixture(
+      html`<markdown-renderer .content=${'```javascript\nconst x = 42;\n```'}></markdown-renderer>`
+    );
+    await el.updateComplete;
+
+    // Mock clipboard API
+    let copiedText = '';
+    const originalClipboard = navigator.clipboard;
+    Object.defineProperty(navigator, 'clipboard', {
+      value: {
+        writeText: async (text: string) => { copiedText = text; },
+      },
+      writable: true,
+      configurable: true,
+    });
+
+    const body = el.shadowRoot!.querySelector('.markdown-body');
+    const copyButton = body!.querySelector<HTMLButtonElement>('.code-copy-button')!;
+    copyButton.click();
+
+    // Wait for async clipboard write
+    await new Promise(resolve => setTimeout(resolve, 50));
+
+    expect(copiedText).to.equal('const x = 42;');
+
+    // Restore clipboard
+    Object.defineProperty(navigator, 'clipboard', {
+      value: originalClipboard,
+      writable: true,
+      configurable: true,
+    });
+  });
+
   it('sanitizes HTML and strips script tags', async () => {
     const el = await fixture(
       html`<markdown-renderer .content=${'<script>alert("xss")</script>Safe content'}></markdown-renderer>`

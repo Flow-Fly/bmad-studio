@@ -1,5 +1,5 @@
 import { LitElement, html, svg, css, nothing, render as litRender } from 'lit';
-import { customElement, property, state } from 'lit/decorators.js';
+import { customElement, property } from 'lit/decorators.js';
 import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 import { Marked } from 'marked';
 import DOMPurify from 'dompurify';
@@ -388,7 +388,8 @@ export class MarkdownRenderer extends LitElement {
   `;
 
   @property({ type: String }) content = '';
-  @state() private _copiedBlockIndex: number | null = null;
+  // Not @state() -- copy button state is managed imperatively to avoid re-rendering markdown
+  private _copiedBlockIndex: number | null = null;
 
   private _parseMarkdown(content: string): string {
     if (!content) return '';
@@ -416,7 +417,11 @@ export class MarkdownRenderer extends LitElement {
     try {
       await navigator.clipboard.writeText(codeText);
       this._copiedBlockIndex = blockIndex;
-      setTimeout(() => { this._copiedBlockIndex = null; }, 1500);
+      this._updateCopyButtons();
+      setTimeout(() => {
+        this._copiedBlockIndex = null;
+        this._updateCopyButtons();
+      }, 1500);
     } catch {
       // Silent failure -- clipboard API unavailable
     }
@@ -457,17 +462,32 @@ export class MarkdownRenderer extends LitElement {
     `;
   }
 
+  /** Re-render copy buttons without triggering a full markdown re-render */
+  private _updateCopyButtons(): void {
+    const codeBlocks = this.shadowRoot?.querySelectorAll('pre.code-block');
+    if (!codeBlocks) return;
+
+    codeBlocks.forEach((pre, index) => {
+      const container = pre.querySelector('.code-copy-container');
+      if (!container) return;
+      // getAttribute() automatically decodes HTML entities, no manual unescaping needed
+      const codeText = pre.getAttribute('data-code') ?? '';
+      litRender(this._renderCopyButton(codeText, index), container);
+    });
+  }
+
   updated(): void {
     // Inject copy buttons into code blocks after render
     const codeBlocks = this.shadowRoot?.querySelectorAll('pre.code-block');
     if (!codeBlocks) return;
 
     codeBlocks.forEach((pre, index) => {
-      // Skip if copy button already exists and state hasn't changed
+      // Remove existing to re-inject with current state
       const existing = pre.querySelector('.code-copy-container');
       if (existing) existing.remove();
 
-      const codeText = pre.getAttribute('data-code')?.replace(/&quot;/g, '"').replace(/&#39;/g, "'") ?? '';
+      // getAttribute() automatically decodes HTML entities, no manual unescaping needed
+      const codeText = pre.getAttribute('data-code') ?? '';
 
       const container = document.createElement('div');
       container.className = 'code-copy-container';
