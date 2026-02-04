@@ -39,6 +39,16 @@ export function removeHighlight(conversationId: string, highlightId: string): vo
   activeConversations.set(map);
 }
 
+export function removeConversation(conversationId: string): void {
+  const map = new Map(activeConversations.get());
+  map.delete(conversationId);
+  activeConversations.set(map);
+}
+
+export function getActiveConversationCount(): number {
+  return activeConversations.get().size;
+}
+
 export function clearChatState(): void {
   chatConnectionState.set('idle');
   activeConversations.set(new Map());

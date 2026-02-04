@@ -23,6 +23,7 @@ type RouterServices struct {
 	ConfigStore    *storage.ConfigStore
 	Hub            *websocket.Hub
 	ProjectManager *services.ProjectManager
+	Insight        *services.InsightService
 }
 
 // NewRouter creates and configures the main router with all routes and middleware
@@ -58,6 +59,12 @@ func NewRouterWithServices(svc RouterServices) *chi.Mux {
 			r.Route("/{id}", func(r chi.Router) {
 				r.Get("/", handlers.GetProject)
 				r.Put("/", handlers.UpdateProject)
+
+				// Insights resource (nested under project)
+				if svc.Insight != nil {
+					insightHandler := handlers.NewInsightHandler(svc.Insight)
+					r.Post("/insights", insightHandler.CreateInsight)
+				}
 			})
 		})
 
