@@ -63,7 +63,15 @@ func NewRouterWithServices(svc RouterServices) *chi.Mux {
 				// Insights resource (nested under project)
 				if svc.Insight != nil {
 					insightHandler := handlers.NewInsightHandler(svc.Insight)
-					r.Post("/insights", insightHandler.CreateInsight)
+					r.Route("/insights", func(r chi.Router) {
+						r.Get("/", insightHandler.ListInsights)
+						r.Post("/", insightHandler.CreateInsight)
+						r.Route("/{insightId}", func(r chi.Router) {
+							r.Get("/", insightHandler.GetInsight)
+							r.Put("/", insightHandler.UpdateInsight)
+							r.Delete("/", insightHandler.DeleteInsight)
+						})
+					})
 				}
 			})
 		})
