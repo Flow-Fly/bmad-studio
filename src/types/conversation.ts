@@ -89,6 +89,8 @@ export interface Message {
   isStreaming?: boolean;
   isPartial?: boolean;
   usage?: UsageStats;
+  isContext?: boolean;
+  contextLabel?: string;
 }
 
 export interface Conversation {

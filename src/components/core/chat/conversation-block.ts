@@ -581,6 +581,9 @@ export class ConversationBlock extends LitElement {
   render() {
     if (!this.message) return nothing;
 
+    // Skip rendering injected context messages (invisible in chat UI)
+    if (this.message.isContext) return nothing;
+
     const isUser = this.message.role === 'user';
     const isError = this._isError();
     const senderLabel = isUser ? 'You' : 'Assistant';

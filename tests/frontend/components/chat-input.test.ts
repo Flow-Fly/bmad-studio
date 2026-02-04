@@ -177,6 +177,32 @@ describe('ChatInput', () => {
     expect(textarea.getAttribute('rows')).to.equal('1');
   });
 
+  it('renders paperclip attach button', async () => {
+    const el = await fixture(
+      html`<chat-input .conversationId=${'conv-1'}></chat-input>`
+    );
+    await el.updateComplete;
+
+    const attachButton = el.shadowRoot!.querySelector('.attach-button');
+    expect(attachButton).to.exist;
+    expect(attachButton!.getAttribute('aria-label')).to.equal('Attach context');
+  });
+
+  it('dispatches attach-context-request on paperclip click', async () => {
+    const el = await fixture(
+      html`<chat-input .conversationId=${'conv-1'}></chat-input>`
+    );
+    await el.updateComplete;
+
+    let dispatched = false;
+    el.addEventListener('attach-context-request', () => { dispatched = true; });
+
+    const attachButton = el.shadowRoot!.querySelector<HTMLButtonElement>('.attach-button');
+    attachButton!.click();
+
+    expect(dispatched).to.be.true;
+  });
+
   it('is not disabled when input wrapper in idle state', async () => {
     chatConnectionState.set('idle');
 

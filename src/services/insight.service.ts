@@ -46,6 +46,15 @@ export async function updateInsight(projectId: string, insight: Insight): Promis
   updateInsightInState(insight);
 }
 
+export async function markInsightUsed(projectId: string, insight: Insight): Promise<void> {
+  const updated: Insight = {
+    ...insight,
+    status: insight.status === 'fresh' ? 'used' : insight.status,
+    used_in_count: insight.used_in_count + 1,
+  };
+  await updateInsight(projectId, updated);
+}
+
 export async function deleteInsight(projectId: string, insightId: string): Promise<void> {
   const response = await fetch(`${API_BASE}/projects/${projectId}/insights/${insightId}`, {
     method: 'DELETE',
