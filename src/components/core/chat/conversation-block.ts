@@ -1,6 +1,7 @@
 import { LitElement, html, svg, css, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import type { Message } from '../../../types/conversation.js';
+import '../../shared/markdown-renderer.js';
 
 // Lucide icon SVG definitions
 const ICONS = {
@@ -72,8 +73,6 @@ export class ConversationBlock extends LitElement {
       font-size: var(--bmad-font-size-md);
       color: var(--bmad-color-text-primary);
       line-height: var(--bmad-line-height-normal);
-      white-space: pre-wrap;
-      word-break: break-word;
     }
 
     .typing-indicator {
@@ -256,6 +255,10 @@ export class ConversationBlock extends LitElement {
     return this.message.role === 'assistant' && this.message.content.startsWith('Error: ');
   }
 
+  private _handleLinkClick(e: CustomEvent<{ url: string }>): void {
+    window.open(e.detail.url, '_blank');
+  }
+
   private _handleRetry(): void {
     this.dispatchEvent(new CustomEvent('retry-message', {
       bubbles: true,
@@ -318,9 +321,14 @@ export class ConversationBlock extends LitElement {
       `;
     }
 
-    // Regular content (possibly still streaming)
+    // Regular content (possibly still streaming) — render through markdown
     return html`
-      <div class="content">${message.content}</div>
+      <div class="content">
+        <markdown-renderer
+          .content=${message.content}
+          @link-click=${this._handleLinkClick}
+        ></markdown-renderer>
+      </div>
       ${message.isPartial ? html`<span class="partial-indicator">Response was interrupted</span>` : nothing}
     `;
   }
