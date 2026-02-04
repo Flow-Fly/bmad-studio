@@ -38,6 +38,7 @@ export function sendMessage(
     conversation = {
       id: conversationId,
       messages: [],
+      highlights: [],
       model,
       provider,
       createdAt: Date.now(),
