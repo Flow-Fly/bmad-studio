@@ -196,6 +196,30 @@ function handleError(event: WebSocketEvent): void {
   streamingConversationId.set(null);
 }
 
+/**
+ * Inject context into a conversation as an invisible message.
+ * The message uses role 'user' with isContext=true so it is included in LLM
+ * history but not rendered in the chat UI.
+ */
+export function injectContext(conversationId: string, content: string, label: string): void {
+  const conversation = getConversation(conversationId);
+  if (!conversation) return;
+
+  const contextMessage: Message = {
+    id: `ctx-${crypto.randomUUID()}`,
+    role: 'user',
+    content: `[Attached Context: ${label}]\n\n${content}`,
+    timestamp: Date.now(),
+    isContext: true,
+    contextLabel: label,
+  };
+
+  setConversation({
+    ...conversation,
+    messages: [...conversation.messages, contextMessage],
+  });
+}
+
 export function initChatService(): () => void {
   const cleanups = [
     wsOn(CHAT_STREAM_START, handleStreamStart),

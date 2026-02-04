@@ -13,6 +13,11 @@ const SEND_ICON = [
   ['path', { d: 'M21.854 2.147 10.94 13.06' }],
 ] as const;
 
+// Lucide paperclip icon
+const PAPERCLIP_ICON = [
+  ['path', { d: 'm21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48' }],
+] as const;
+
 @customElement('chat-input')
 export class ChatInput extends SignalWatcher(LitElement) {
   static styles = css`
@@ -108,6 +113,46 @@ export class ChatInput extends SignalWatcher(LitElement) {
     }
 
     .send-button .icon svg {
+      width: 100%;
+      height: 100%;
+    }
+
+    .attach-button {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px;
+      height: 32px;
+      border: none;
+      border-radius: var(--bmad-radius-sm);
+      background: none;
+      color: var(--bmad-color-text-tertiary);
+      cursor: pointer;
+      padding: 0;
+      flex-shrink: 0;
+      transition: all var(--bmad-transition-fast);
+    }
+
+    .attach-button:hover:not(:disabled) {
+      color: var(--bmad-color-text-primary);
+    }
+
+    .attach-button:focus-visible {
+      outline: 2px solid var(--bmad-color-accent);
+      outline-offset: 2px;
+    }
+
+    .attach-button:disabled {
+      color: var(--bmad-color-text-muted);
+      cursor: not-allowed;
+    }
+
+    .attach-button .icon {
+      width: 18px;
+      height: 18px;
+    }
+
+    .attach-button .icon svg {
       width: 100%;
       height: 100%;
     }
@@ -211,6 +256,23 @@ export class ChatInput extends SignalWatcher(LitElement) {
     `;
   }
 
+  private _renderPaperclipIcon() {
+    return html`
+      <span class="icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          ${PAPERCLIP_ICON.map(([, attrs]) => svg`<path d=${attrs.d} />`)}
+        </svg>
+      </span>
+    `;
+  }
+
+  private _handleAttachClick(): void {
+    this.dispatchEvent(new CustomEvent('attach-context-request', {
+      bubbles: true,
+      composed: true,
+    }));
+  }
+
   render() {
     const provider = activeProviderState.get();
     const isStreaming = chatConnectionState.get() === 'streaming';
@@ -225,6 +287,14 @@ export class ChatInput extends SignalWatcher(LitElement) {
 
     return html`
       <div class="input-wrapper ${isDisabled ? 'input-wrapper--disabled' : ''}">
+        <button
+          class="attach-button"
+          ?disabled=${isDisabled}
+          @click=${this._handleAttachClick}
+          aria-label="Attach context"
+        >
+          ${this._renderPaperclipIcon()}
+        </button>
         <textarea
           rows="1"
           placeholder="Type a message..."

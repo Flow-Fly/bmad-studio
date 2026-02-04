@@ -235,6 +235,25 @@ export class AppShell extends SignalWatcher(LitElement) {
     this._activeSection = e.detail.section;
   }
 
+  /** Handle insight-inject from insight-panel: switch to chat and forward to chat-panel */
+  @state() private _pendingInsightInjectId = '';
+
+  private _handleInsightInject(e: CustomEvent): void {
+    this._pendingInsightInjectId = e.detail?.insightId ?? '';
+    this._activeSection = 'chat';
+    // After render, forward the event to chat-panel
+    this.updateComplete.then(() => {
+      const chatPanel = this.shadowRoot?.querySelector('chat-panel');
+      if (chatPanel) {
+        chatPanel.dispatchEvent(new CustomEvent('insight-inject', {
+          detail: { insightId: this._pendingInsightInjectId },
+          bubbles: false,
+        }));
+        this._pendingInsightInjectId = '';
+      }
+    });
+  }
+
   private _setupWorkflowSubscription(): void {
     this._cleanupWorkflow();
     this._wsUnsubscribe = wsOn('workflow:status-changed', () => {
@@ -351,9 +370,9 @@ export class AppShell extends SignalWatcher(LitElement) {
       case 'graph':
         return html`<phase-graph-container tabindex="-1"></phase-graph-container>`;
       case 'chat':
-        return html`<chat-panel tabindex="-1"></chat-panel>`;
+        return html`<chat-panel tabindex="-1" @insight-inject=${this._handleInsightInject}></chat-panel>`;
       case 'insights':
-        return html`<insight-panel tabindex="-1"></insight-panel>`;
+        return html`<insight-panel tabindex="-1" @insight-inject=${this._handleInsightInject}></insight-panel>`;
       case 'artifacts':
         return html`<div class="placeholder" tabindex="-1">Artifacts panel (Epic 6)</div>`;
       default:
