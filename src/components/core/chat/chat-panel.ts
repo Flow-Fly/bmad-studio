@@ -10,6 +10,7 @@ import './conversation-lifecycle-menu.js';
 import './discard-confirm-dialog.js';
 import './context-full-modal.js';
 import '../navigation/agent-badge.js';
+import '../insights/attach-context-picker.js';
 import type { ChatInput } from './chat-input.js';
 
 import {
@@ -261,10 +262,14 @@ export class ChatPanel extends SignalWatcher(LitElement) {
   @state() private _showLifecycleMenu = false;
   @state() private _showDiscardConfirm = false;
   @state() private _showContextFullModal = false;
+  @state() private _showAttachPicker = false;
+  @state() private _preSelectedInsightId = '';
   private _lastAgentId: string | null = null;
   private _lastMessageCount = 0;
   private _contextFullShown = false;
   private _beforeUnloadHandler: ((e: BeforeUnloadEvent) => void) | null = null;
+
+  private _boundInsightInjectHandler = this._handleInsightInject.bind(this);
 
   connectedCallback(): void {
     super.connectedCallback();
@@ -274,6 +279,7 @@ export class ChatPanel extends SignalWatcher(LitElement) {
       }
     };
     window.addEventListener('beforeunload', this._beforeUnloadHandler);
+    this.addEventListener('insight-inject', this._boundInsightInjectHandler as EventListener);
   }
 
   disconnectedCallback(): void {
@@ -282,6 +288,7 @@ export class ChatPanel extends SignalWatcher(LitElement) {
       window.removeEventListener('beforeunload', this._beforeUnloadHandler);
       this._beforeUnloadHandler = null;
     }
+    this.removeEventListener('insight-inject', this._boundInsightInjectHandler as EventListener);
   }
 
   willUpdate(): void {
@@ -450,6 +457,27 @@ export class ChatPanel extends SignalWatcher(LitElement) {
 
   private _handleContextIndicatorClick(): void {
     this._showLifecycleMenu = !this._showLifecycleMenu;
+  }
+
+  private _handleAttachContextRequest(): void {
+    this._showAttachPicker = true;
+    this._preSelectedInsightId = '';
+  }
+
+  private _handleInsightInject(e: CustomEvent): void {
+    // Open picker with the insight pre-selected (from insight-panel)
+    this._showAttachPicker = true;
+    this._preSelectedInsightId = e.detail?.insightId ?? '';
+  }
+
+  private _handlePickerClose(): void {
+    this._showAttachPicker = false;
+    this._preSelectedInsightId = '';
+  }
+
+  private _handleContextAttached(): void {
+    this._showAttachPicker = false;
+    this._preSelectedInsightId = '';
   }
 
   private _handleLifecycleKeep(): void {
@@ -636,7 +664,10 @@ export class ChatPanel extends SignalWatcher(LitElement) {
           @context-indicator-click=${this._handleContextIndicatorClick}
         ></context-indicator>
       ` : nothing}
-      <chat-input .conversationId=${this._conversationId}></chat-input>
+      <chat-input
+        .conversationId=${this._conversationId}
+        @attach-context-request=${this._handleAttachContextRequest}
+      ></chat-input>
       <discard-confirm-dialog
         ?open=${this._showDiscardConfirm}
         @discard-confirmed=${this._handleDiscardConfirmed}
@@ -647,6 +678,16 @@ export class ChatPanel extends SignalWatcher(LitElement) {
         @lifecycle-compact=${this._handleLifecycleCompact}
         @lifecycle-discard=${this._handleLifecycleDiscard}
       ></context-full-modal>
+      <attach-context-picker
+        ?open=${this._showAttachPicker}
+        .conversationId=${this._conversationId}
+        .projectId=${projectName$.get() || ''}
+        .currentContextPercent=${this._getContextPercentage()}
+        .contextWindowSize=${MODEL_CONTEXT_WINDOWS[selectedModelState.get() || ''] ?? DEFAULT_CONTEXT_WINDOW}
+        .preSelectedInsightId=${this._preSelectedInsightId}
+        @picker-close=${this._handlePickerClose}
+        @context-attached=${this._handleContextAttached}
+      ></attach-context-picker>
     `;
   }
 
