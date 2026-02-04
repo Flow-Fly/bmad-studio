@@ -327,4 +327,168 @@ describe('ConversationBlock', () => {
       });
     });
   });
+
+  describe('thinking section', () => {
+    it('shows thinking section when assistant message has thinkingContent', async () => {
+      const msg = makeMessage({
+        role: 'assistant',
+        content: 'Here is the answer.',
+        thinkingContent: 'Let me reason about this...',
+      });
+      const el = await fixture(
+        html`<conversation-block .message=${msg}></conversation-block>`
+      );
+      await el.updateComplete;
+
+      const thinkingSection = el.shadowRoot!.querySelector('.thinking-section');
+      expect(thinkingSection).to.exist;
+
+      const toggle = el.shadowRoot!.querySelector('.thinking-toggle');
+      expect(toggle).to.exist;
+    });
+
+    it('does not show thinking section when thinkingContent is absent', async () => {
+      const msg = makeMessage({ role: 'assistant', content: 'No thinking here.' });
+      const el = await fixture(
+        html`<conversation-block .message=${msg}></conversation-block>`
+      );
+      await el.updateComplete;
+
+      const thinkingSection = el.shadowRoot!.querySelector('.thinking-section');
+      expect(thinkingSection).to.be.null;
+    });
+
+    it('does not show thinking section for user messages', async () => {
+      const msg = makeMessage({
+        role: 'user',
+        content: 'Hello',
+        thinkingContent: 'This should not appear',
+      });
+      const el = await fixture(
+        html`<conversation-block .message=${msg}></conversation-block>`
+      );
+      await el.updateComplete;
+
+      const thinkingSection = el.shadowRoot!.querySelector('.thinking-section');
+      expect(thinkingSection).to.be.null;
+    });
+
+    it('thinking section is collapsed by default', async () => {
+      const msg = makeMessage({
+        role: 'assistant',
+        content: 'Answer',
+        thinkingContent: 'Reasoning...',
+      });
+      const el = await fixture(
+        html`<conversation-block .message=${msg}></conversation-block>`
+      );
+      await el.updateComplete;
+
+      const thinkingBody = el.shadowRoot!.querySelector('.thinking-body');
+      expect(thinkingBody).to.exist;
+      expect(thinkingBody!.classList.contains('thinking-body--expanded')).to.be.false;
+
+      const toggle = el.shadowRoot!.querySelector('.thinking-toggle');
+      expect(toggle!.getAttribute('aria-expanded')).to.equal('false');
+    });
+
+    it('clicking toggle expands thinking section', async () => {
+      const msg = makeMessage({
+        role: 'assistant',
+        content: 'Answer',
+        thinkingContent: 'Reasoning...',
+      });
+      const el = await fixture(
+        html`<conversation-block .message=${msg}></conversation-block>`
+      );
+      await el.updateComplete;
+
+      const toggle = el.shadowRoot!.querySelector<HTMLButtonElement>('.thinking-toggle')!;
+      toggle.click();
+      await el.updateComplete;
+
+      const thinkingBody = el.shadowRoot!.querySelector('.thinking-body');
+      expect(thinkingBody!.classList.contains('thinking-body--expanded')).to.be.true;
+
+      const updatedToggle = el.shadowRoot!.querySelector('.thinking-toggle');
+      expect(updatedToggle!.getAttribute('aria-expanded')).to.equal('true');
+      expect(updatedToggle!.classList.contains('thinking-toggle--expanded')).to.be.true;
+    });
+
+    it('toggle text shows "Show thinking" when collapsed and "Hide thinking" when expanded', async () => {
+      const msg = makeMessage({
+        role: 'assistant',
+        content: 'Answer',
+        thinkingContent: 'Reasoning...',
+      });
+      const el = await fixture(
+        html`<conversation-block .message=${msg}></conversation-block>`
+      );
+      await el.updateComplete;
+
+      const toggle = el.shadowRoot!.querySelector<HTMLButtonElement>('.thinking-toggle')!;
+      const toggleText = toggle.querySelector('span');
+      expect(toggleText!.textContent).to.equal('Show thinking');
+
+      toggle.click();
+      await el.updateComplete;
+
+      const expandedToggle = el.shadowRoot!.querySelector<HTMLButtonElement>('.thinking-toggle')!;
+      const expandedText = expandedToggle.querySelector('span');
+      expect(expandedText!.textContent).to.equal('Hide thinking');
+    });
+
+    it('thinking content renders through markdown-renderer', async () => {
+      const msg = makeMessage({
+        role: 'assistant',
+        content: 'Answer',
+        thinkingContent: '**bold thinking**',
+      });
+      const el = await fixture(
+        html`<conversation-block .message=${msg}></conversation-block>`
+      );
+      await el.updateComplete;
+
+      const thinkingBody = el.shadowRoot!.querySelector('.thinking-body');
+      expect(thinkingBody).to.exist;
+
+      const mdRenderer = thinkingBody!.querySelector('markdown-renderer');
+      expect(mdRenderer).to.exist;
+    });
+
+    it('shows thinking section during streaming with thinkingContent', async () => {
+      const msg = makeMessage({
+        role: 'assistant',
+        content: 'Partial answer...',
+        thinkingContent: 'Still thinking...',
+        isStreaming: true,
+      });
+      const el = await fixture(
+        html`<conversation-block .message=${msg}></conversation-block>`
+      );
+      await el.updateComplete;
+
+      const thinkingSection = el.shadowRoot!.querySelector('.thinking-section');
+      expect(thinkingSection).to.exist;
+
+      // Main content should also be present
+      const content = el.shadowRoot!.querySelector('.content');
+      expect(content).to.exist;
+    });
+
+    it('does not show thinking section when thinkingContent is empty string', async () => {
+      const msg = makeMessage({
+        role: 'assistant',
+        content: 'Answer',
+        thinkingContent: '',
+      });
+      const el = await fixture(
+        html`<conversation-block .message=${msg}></conversation-block>`
+      );
+      await el.updateComplete;
+
+      const thinkingSection = el.shadowRoot!.querySelector('.thinking-section');
+      expect(thinkingSection).to.be.null;
+    });
+  });
 });
