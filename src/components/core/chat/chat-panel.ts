@@ -6,28 +6,44 @@ import { SignalWatcher } from '@lit-labs/signals';
 import './conversation-block.js';
 import './chat-input.js';
 import './context-indicator.js';
+import './conversation-lifecycle-menu.js';
+import './discard-confirm-dialog.js';
+import './context-full-modal.js';
 import '../navigation/agent-badge.js';
 import type { ChatInput } from './chat-input.js';
 
 import {
   activeConversations,
   setConversation,
+  removeConversation,
+  getActiveConversationCount,
 } from '../../../state/chat.state.js';
 import { activeProviderState, selectedModelState } from '../../../state/provider.state.js';
-import { projectState } from '../../../state/project.state.js';
+import { projectState, projectName$ } from '../../../state/project.state.js';
 import { connectionState } from '../../../state/connection.state.js';
 import {
   activeAgentId,
+  activeAgent$,
   agentConversations,
   getAgentConversationId,
   setAgentConversation,
+  clearAgentConversation,
 } from '../../../state/agent.state.js';
 import type { Conversation, Message } from '../../../types/conversation.js';
+import type { Insight } from '../../../types/insight.js';
+import { createInsight } from '../../../services/insight.service.js';
 
 // Lucide arrow-down icon SVG definition
 const ARROW_DOWN_ICON = [
   ['path', { d: 'M12 5v14' }],
   ['path', { d: 'm19 12-7 7-7-7' }],
+] as const;
+
+// Lucide more-vertical icon SVG definition
+const MORE_VERTICAL_ICON = [
+  ['circle', { cx: '12', cy: '12', r: '1' }],
+  ['circle', { cx: '12', cy: '5', r: '1' }],
+  ['circle', { cx: '12', cy: '19', r: '1' }],
 ] as const;
 
 // Connection status labels (colors handled by CSS classes)
@@ -181,8 +197,59 @@ export class ChatPanel extends SignalWatcher(LitElement) {
       height: 100%;
     }
 
+    .header-actions {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: var(--bmad-spacing-xs);
+      position: relative;
+    }
+
+    .menu-trigger {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      border: none;
+      border-radius: var(--bmad-radius-sm);
+      background: none;
+      color: var(--bmad-color-text-tertiary);
+      cursor: pointer;
+      padding: 0;
+      transition: all var(--bmad-transition-fast);
+    }
+
+    .menu-trigger:hover {
+      background-color: var(--bmad-color-bg-tertiary);
+      color: var(--bmad-color-text-primary);
+    }
+
+    .menu-trigger:focus-visible {
+      outline: 2px solid var(--bmad-color-accent);
+      outline-offset: 2px;
+    }
+
+    .menu-trigger .icon {
+      width: 16px;
+      height: 16px;
+      display: inline-flex;
+    }
+
+    .menu-trigger .icon svg {
+      width: 100%;
+      height: 100%;
+    }
+
+    conversation-lifecycle-menu {
+      top: 100%;
+      right: 0;
+      margin-top: var(--bmad-spacing-xs);
+    }
+
     @media (prefers-reduced-motion: reduce) {
-      .scroll-to-bottom {
+      .scroll-to-bottom,
+      .menu-trigger {
         transition: none;
       }
     }
@@ -191,8 +258,31 @@ export class ChatPanel extends SignalWatcher(LitElement) {
   @query('chat-input') private _chatInput!: ChatInput;
   @state() private _conversationId = '';
   @state() private _userHasScrolled = false;
+  @state() private _showLifecycleMenu = false;
+  @state() private _showDiscardConfirm = false;
+  @state() private _showContextFullModal = false;
   private _lastAgentId: string | null = null;
   private _lastMessageCount = 0;
+  private _contextFullShown = false;
+  private _beforeUnloadHandler: ((e: BeforeUnloadEvent) => void) | null = null;
+
+  connectedCallback(): void {
+    super.connectedCallback();
+    this._beforeUnloadHandler = (e: BeforeUnloadEvent) => {
+      if (getActiveConversationCount() > 1) {
+        e.preventDefault();
+      }
+    };
+    window.addEventListener('beforeunload', this._beforeUnloadHandler);
+  }
+
+  disconnectedCallback(): void {
+    super.disconnectedCallback();
+    if (this._beforeUnloadHandler) {
+      window.removeEventListener('beforeunload', this._beforeUnloadHandler);
+      this._beforeUnloadHandler = null;
+    }
+  }
 
   willUpdate(): void {
     // Ensure conversation exists before render (safe for state mutations in willUpdate)
@@ -246,6 +336,13 @@ export class ChatPanel extends SignalWatcher(LitElement) {
     }
 
     this._lastMessageCount = currentCount;
+
+    // Check if context is full and show modal (only once per conversation)
+    const pct = this._getContextPercentage();
+    if (pct >= 100 && !this._contextFullShown) {
+      this._contextFullShown = true;
+      this._showContextFullModal = true;
+    }
   }
 
   private _ensureConversation(): string {
@@ -347,6 +444,97 @@ export class ChatPanel extends SignalWatcher(LitElement) {
     }
   }
 
+  private _handleLifecycleMenuToggle(): void {
+    this._showLifecycleMenu = !this._showLifecycleMenu;
+  }
+
+  private _handleContextIndicatorClick(): void {
+    this._showLifecycleMenu = !this._showLifecycleMenu;
+  }
+
+  private _handleLifecycleKeep(): void {
+    this._showLifecycleMenu = false;
+  }
+
+  private async _handleLifecycleCompact(): Promise<void> {
+    this._showLifecycleMenu = false;
+    this._showContextFullModal = false;
+
+    const conversation = activeConversations.get().get(this._conversationId);
+    if (!conversation) return;
+
+    const firstUserMsg = conversation.messages.find(m => m.role === 'user');
+    const agent = activeAgent$.get();
+
+    const insight: Insight = {
+      id: crypto.randomUUID(),
+      title: firstUserMsg?.content.slice(0, 100) || 'Untitled conversation',
+      origin_context: '',
+      extracted_idea: '',
+      tags: [],
+      highlight_colors_used: [...new Set(conversation.highlights.map(h => h.color))],
+      created_at: new Date().toISOString(),
+      source_agent: agent?.name || 'Unknown',
+      status: 'fresh',
+      used_in_count: 0,
+    };
+
+    const projectId = projectName$.get();
+    if (projectId) {
+      try {
+        await createInsight(projectId, insight);
+      } catch (err) {
+        console.error('Failed to create insight:', err);
+      }
+    }
+
+    this._clearCurrentConversation();
+  }
+
+  private _handleLifecycleDiscard(): void {
+    this._showLifecycleMenu = false;
+    this._showContextFullModal = false;
+    this._showDiscardConfirm = true;
+  }
+
+  private _handleLifecycleDismiss(): void {
+    this._showLifecycleMenu = false;
+  }
+
+  private _handleDiscardConfirmed(): void {
+    this._showDiscardConfirm = false;
+    this._clearCurrentConversation();
+  }
+
+  private _handleDiscardCancelled(): void {
+    this._showDiscardConfirm = false;
+  }
+
+  private _clearCurrentConversation(): void {
+    const conversation = activeConversations.get().get(this._conversationId);
+    const agentId = conversation?.agentId;
+
+    removeConversation(this._conversationId);
+    if (agentId) {
+      clearAgentConversation(agentId);
+    }
+
+    this._conversationId = '';
+    this._contextFullShown = false;
+  }
+
+  private _renderMoreVerticalIcon() {
+    return html`
+      <span class="icon">
+        <svg viewBox="0 0 24 24" fill="currentColor" stroke="none">
+          ${MORE_VERTICAL_ICON.map(([, attrs]) =>
+            svg`<circle cx=${attrs.cx} cy=${attrs.cy} r=${attrs.r} />`
+          )}
+        </svg>
+      </span>
+    `;
+  }
+
   private _renderConnectionStatus() {
     const status = connectionState.get();
     const config = STATUS_ICONS[status];
@@ -388,6 +576,27 @@ export class ChatPanel extends SignalWatcher(LitElement) {
       <div class="panel-header">
         <agent-badge></agent-badge>
         ${this._renderConnectionStatus()}
+        ${messages.length > 0 ? html`
+          <div class="header-actions">
+            <button
+              class="menu-trigger"
+              @click=${this._handleLifecycleMenuToggle}
+              aria-label="Conversation actions"
+              aria-haspopup="menu"
+              aria-expanded=${this._showLifecycleMenu}
+            >
+              ${this._renderMoreVerticalIcon()}
+            </button>
+            <conversation-lifecycle-menu
+              ?open=${this._showLifecycleMenu}
+              .forceAction=${this._getContextPercentage() >= 100}
+              @lifecycle-keep=${this._handleLifecycleKeep}
+              @lifecycle-compact=${this._handleLifecycleCompact}
+              @lifecycle-discard=${this._handleLifecycleDiscard}
+              @lifecycle-dismiss=${this._handleLifecycleDismiss}
+            ></conversation-lifecycle-menu>
+          </div>
+        ` : nothing}
       </div>
       <div class="message-area-wrapper">
         <div
@@ -424,9 +633,20 @@ export class ChatPanel extends SignalWatcher(LitElement) {
         <context-indicator
           .percentage=${this._getContextPercentage()}
           .modelName=${selectedModelState.get() || ''}
+          @context-indicator-click=${this._handleContextIndicatorClick}
         ></context-indicator>
       ` : nothing}
       <chat-input .conversationId=${this._conversationId}></chat-input>
+      <discard-confirm-dialog
+        ?open=${this._showDiscardConfirm}
+        @discard-confirmed=${this._handleDiscardConfirmed}
+        @discard-cancelled=${this._handleDiscardCancelled}
+      ></discard-confirm-dialog>
+      <context-full-modal
+        ?open=${this._showContextFullModal}
+        @lifecycle-compact=${this._handleLifecycleCompact}
+        @lifecycle-discard=${this._handleLifecycleDiscard}
+      ></context-full-modal>
     `;
   }
 
