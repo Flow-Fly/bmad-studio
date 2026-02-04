@@ -262,6 +262,7 @@ export class ChatPanel extends SignalWatcher(LitElement) {
     const conversation: Conversation = {
       id,
       messages: [],
+      highlights: [],
       model: model || '',
       provider: provider || '',
       createdAt: Date.now(),
@@ -378,6 +379,10 @@ export class ChatPanel extends SignalWatcher(LitElement) {
     }
 
     const messages = this._getMessages();
+    const conversation = this._conversationId
+      ? activeConversations.get().get(this._conversationId)
+      : undefined;
+    const highlights = conversation?.highlights ?? [];
 
     return html`
       <div class="panel-header">
@@ -397,6 +402,8 @@ export class ChatPanel extends SignalWatcher(LitElement) {
               : repeat(messages, msg => msg.id, msg => html`
                   <conversation-block
                     .message=${msg}
+                    .conversationId=${this._conversationId}
+                    .highlights=${highlights}
                     @retry-message=${this._handleRetry}
                   ></conversation-block>
                 `)

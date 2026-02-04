@@ -62,6 +62,24 @@ export interface UsageStats {
   output_tokens: number;
 }
 
+// Highlight types
+export type HighlightColor = 'yellow' | 'green' | 'red' | 'blue';
+
+export const HIGHLIGHT_COLORS: Record<HighlightColor, string> = {
+  yellow: 'important',
+  green: 'keep',
+  red: 'disagree',
+  blue: 'question',
+};
+
+export interface Highlight {
+  id: string;
+  messageId: string;
+  startOffset: number;
+  endOffset: number;
+  color: HighlightColor;
+}
+
 export interface Message {
   id: string;
   role: 'user' | 'assistant';
@@ -77,6 +95,7 @@ export interface Conversation {
   id: string;
   agentId?: string;
   messages: Message[];
+  highlights: Highlight[];
   createdAt: number;
   model: string;
   provider: string;

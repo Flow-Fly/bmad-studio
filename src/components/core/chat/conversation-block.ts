@@ -1,7 +1,18 @@
 import { LitElement, html, svg, css, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
-import type { Message } from '../../../types/conversation.js';
+import type { Message, Highlight, HighlightColor } from '../../../types/conversation.js';
+import { HIGHLIGHT_COLORS } from '../../../types/conversation.js';
+import { addHighlight } from '../../../state/chat.state.js';
 import '../../shared/markdown-renderer.js';
+import './highlight-popover.js';
+
+// Semi-transparent tint colors for highlight overlays
+const HIGHLIGHT_TINTS: Record<HighlightColor, string> = {
+  yellow: 'rgba(240, 192, 64, 0.3)',
+  green: 'rgba(64, 192, 87, 0.3)',
+  red: 'rgba(224, 82, 82, 0.3)',
+  blue: 'rgba(74, 158, 255, 0.3)',
+};
 
 // Lucide icon SVG definitions
 const ICONS = {
@@ -270,6 +281,16 @@ export class ConversationBlock extends LitElement {
       margin-top: var(--bmad-spacing-xs);
     }
 
+    /* Highlight marks */
+    .content {
+      position: relative;
+    }
+
+    mark.text-highlight {
+      border-radius: 2px;
+      padding: 0;
+    }
+
     @media (prefers-reduced-motion: reduce) {
       .copy-button {
         transition: none;
@@ -291,8 +312,13 @@ export class ConversationBlock extends LitElement {
   `;
 
   @property({ type: Object }) message!: Message;
+  @property({ type: String }) conversationId = '';
+  @property({ type: Array }) highlights: Highlight[] = [];
   @state() private _copied = false;
   @state() private _thinkingExpanded = false;
+  @state() private _showPopover = false;
+  @state() private _popoverX = 0;
+  @state() private _popoverY = 0;
 
   private _hasCopyableContent(): boolean {
     if (!this.message) return false;
@@ -337,6 +363,111 @@ export class ConversationBlock extends LitElement {
 
   private _handleThinkingToggle(): void {
     this._thinkingExpanded = !this._thinkingExpanded;
+  }
+
+  private _handleContentMouseUp(): void {
+    // Do not show popover during streaming
+    if (this.message.isStreaming) return;
+
+    const selection = window.getSelection();
+    if (!selection || selection.isCollapsed || !selection.rangeCount) {
+      return;
+    }
+
+    const range = selection.getRangeAt(0);
+    const content = this.shadowRoot?.querySelector('.content');
+    if (!content || !content.contains(range.commonAncestorContainer)) {
+      return;
+    }
+
+    const rect = range.getBoundingClientRect();
+    this._popoverX = rect.right;
+    this._popoverY = rect.bottom + 4;
+    this._showPopover = true;
+  }
+
+  private _handleHighlightSelect(e: CustomEvent<{ color: HighlightColor }>): void {
+    const { color } = e.detail;
+    const selection = window.getSelection();
+    if (!selection || selection.isCollapsed || !selection.rangeCount) {
+      this._showPopover = false;
+      return;
+    }
+
+    // Compute offsets relative to the message content text
+    const range = selection.getRangeAt(0);
+    const content = this.shadowRoot?.querySelector('.content');
+    if (!content) {
+      this._showPopover = false;
+      return;
+    }
+
+    // Use a pre-range to measure start offset from beginning of content
+    const preRange = document.createRange();
+    preRange.selectNodeContents(content);
+    preRange.setEnd(range.startContainer, range.startOffset);
+    const startOffset = preRange.toString().length;
+    const endOffset = startOffset + range.toString().length;
+
+    const highlight: Highlight = {
+      id: crypto.randomUUID(),
+      messageId: this.message.id,
+      startOffset,
+      endOffset,
+      color,
+    };
+
+    addHighlight(this.conversationId, highlight);
+    selection.removeAllRanges();
+    this._showPopover = false;
+  }
+
+  private _handleHighlightDismiss(): void {
+    this._showPopover = false;
+  }
+
+  private _getMessageHighlights(): Highlight[] {
+    if (!this.message || !this.highlights.length) return [];
+    return this.highlights.filter(h => h.messageId === this.message.id);
+  }
+
+  private _renderHighlightedText(text: string, messageHighlights: Highlight[]) {
+    if (!messageHighlights.length) {
+      return html`${text}`;
+    }
+
+    // Sort highlights by startOffset
+    const sorted = [...messageHighlights].sort((a, b) => a.startOffset - b.startOffset);
+
+    const parts: unknown[] = [];
+    let lastEnd = 0;
+
+    for (const h of sorted) {
+      const start = Math.max(h.startOffset, lastEnd);
+      const end = Math.min(h.endOffset, text.length);
+      if (start >= end) continue;
+
+      // Add unhighlighted text before this highlight
+      if (start > lastEnd) {
+        parts.push(html`${text.slice(lastEnd, start)}`);
+      }
+
+      // Add highlighted text
+      parts.push(html`<mark
+        class="text-highlight"
+        style="background-color: ${HIGHLIGHT_TINTS[h.color]}"
+        aria-label="${HIGHLIGHT_COLORS[h.color]}"
+      >${text.slice(start, end)}</mark>`);
+
+      lastEnd = end;
+    }
+
+    // Add remaining text
+    if (lastEnd < text.length) {
+      parts.push(html`${text.slice(lastEnd)}`);
+    }
+
+    return parts;
   }
 
   private _renderThinkingSection() {
@@ -426,13 +557,22 @@ export class ConversationBlock extends LitElement {
     }
 
     // Regular content (possibly still streaming) — render through markdown
+    const isUser = message.role === 'user';
+    const messageHighlights = this._getMessageHighlights();
+
     return html`
       ${this._renderThinkingSection()}
-      <div class="content">
-        <markdown-renderer
-          .content=${message.content}
-          @link-click=${this._handleLinkClick}
-        ></markdown-renderer>
+      <div class="content" @mouseup=${this._handleContentMouseUp}>
+        ${isUser
+          ? html`<div class="user-text">${this._renderHighlightedText(message.content, messageHighlights)}</div>`
+          : html`
+              <markdown-renderer
+                .content=${message.content}
+                @link-click=${this._handleLinkClick}
+              ></markdown-renderer>
+              <!-- Prepared for Story 3-9-conversation-lifecycle: assistant message highlight overlays -->
+            `
+        }
       </div>
       ${message.isPartial ? html`<span class="partial-indicator">Response was interrupted</span>` : nothing}
     `;
@@ -470,6 +610,13 @@ export class ConversationBlock extends LitElement {
           <span class="timestamp">${this._formatTime(this.message.timestamp)}</span>
         </div>
         ${this._renderContent()}
+        <highlight-popover
+          .x=${this._popoverX}
+          .y=${this._popoverY}
+          ?open=${this._showPopover}
+          @highlight-select=${this._handleHighlightSelect}
+          @highlight-dismiss=${this._handleHighlightDismiss}
+        ></highlight-popover>
       </div>
     `;
   }
