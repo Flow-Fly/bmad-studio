@@ -23,6 +23,9 @@ const ICONS = {
   'check': [
     ['path', { d: 'M20 6 9 17l-5-5' }],
   ],
+  'chevron-right': [
+    ['path', { d: 'm9 18 6-6-6-6' }],
+  ],
 } as const;
 
 @customElement('conversation-block')
@@ -210,6 +213,63 @@ export class ConversationBlock extends LitElement {
       color: var(--bmad-color-success);
     }
 
+    /* Thinking section */
+    .thinking-section {
+      margin: var(--bmad-spacing-xs) 0;
+    }
+
+    .thinking-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--bmad-spacing-xs);
+      padding: 0;
+      border: none;
+      background: none;
+      color: var(--bmad-color-text-tertiary);
+      font-size: var(--bmad-font-size-xs);
+      cursor: pointer;
+      transition: color var(--bmad-transition-fast);
+    }
+
+    .thinking-toggle:hover {
+      color: var(--bmad-color-text-secondary);
+    }
+
+    .thinking-toggle:focus-visible {
+      outline: 2px solid var(--bmad-color-accent);
+      outline-offset: 2px;
+      border-radius: var(--bmad-radius-sm);
+    }
+
+    .thinking-toggle .icon {
+      transition: transform 200ms ease;
+    }
+
+    .thinking-toggle--expanded .icon {
+      transform: rotate(90deg);
+    }
+
+    .thinking-body {
+      max-height: 0;
+      overflow: hidden;
+      opacity: 0;
+      padding: 0 var(--bmad-spacing-md);
+      margin-top: 0;
+      background: var(--bmad-color-bg-tertiary);
+      border-radius: var(--bmad-radius-md);
+      font-size: var(--bmad-font-size-sm);
+      color: var(--bmad-color-text-secondary);
+      transition: max-height 200ms ease, opacity 200ms ease, padding 200ms ease, margin-top 200ms ease;
+    }
+
+    .thinking-body--expanded {
+      max-height: 2000px;
+      overflow: visible;
+      opacity: 1;
+      padding: var(--bmad-spacing-sm) var(--bmad-spacing-md);
+      margin-top: var(--bmad-spacing-xs);
+    }
+
     @media (prefers-reduced-motion: reduce) {
       .copy-button {
         transition: none;
@@ -219,11 +279,20 @@ export class ConversationBlock extends LitElement {
         animation: none;
         opacity: 0.6;
       }
+
+      .thinking-toggle .icon {
+        transition: none;
+      }
+
+      .thinking-body {
+        transition: none;
+      }
     }
   `;
 
   @property({ type: Object }) message!: Message;
   @state() private _copied = false;
+  @state() private _thinkingExpanded = false;
 
   private _hasCopyableContent(): boolean {
     if (!this.message) return false;
@@ -264,6 +333,41 @@ export class ConversationBlock extends LitElement {
       bubbles: true,
       composed: true,
     }));
+  }
+
+  private _handleThinkingToggle(): void {
+    this._thinkingExpanded = !this._thinkingExpanded;
+  }
+
+  private _renderThinkingSection() {
+    const { message } = this;
+    if (!message.thinkingContent || message.role !== 'assistant') return nothing;
+
+    const expanded = this._thinkingExpanded;
+    return html`
+      <div class="thinking-section">
+        <button
+          class="thinking-toggle ${expanded ? 'thinking-toggle--expanded' : ''}"
+          @click=${this._handleThinkingToggle}
+          aria-expanded=${expanded}
+          aria-controls="thinking-body"
+        >
+          ${this._renderIcon('chevron-right')}
+          <span>${expanded ? 'Hide thinking' : 'Show thinking'}</span>
+        </button>
+        <div
+          class="thinking-body ${expanded ? 'thinking-body--expanded' : ''}"
+          id="thinking-body"
+          role="region"
+          aria-label="Agent thinking process"
+        >
+          <markdown-renderer
+            .content=${message.thinkingContent}
+            @link-click=${this._handleLinkClick}
+          ></markdown-renderer>
+        </div>
+      </div>
+    `;
   }
 
   private _renderIcon(name: keyof typeof ICONS) {
@@ -323,6 +427,7 @@ export class ConversationBlock extends LitElement {
 
     // Regular content (possibly still streaming) — render through markdown
     return html`
+      ${this._renderThinkingSection()}
       <div class="content">
         <markdown-renderer
           .content=${message.content}
