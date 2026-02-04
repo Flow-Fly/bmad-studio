@@ -29,6 +29,12 @@ export function setAgentConversation(agentId: string, conversationId: string): v
   agentConversations.set(map);
 }
 
+export function clearAgentConversation(agentId: string): void {
+  const map = new Map(agentConversations.get());
+  map.delete(agentId);
+  agentConversations.set(map);
+}
+
 export function clearAgentState(): void {
   agentsState.set([]);
   activeAgentId.set(null);
