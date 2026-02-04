@@ -5,6 +5,7 @@ import { SignalWatcher } from '@lit-labs/signals';
 
 import './conversation-block.js';
 import './chat-input.js';
+import './context-indicator.js';
 import '../navigation/agent-badge.js';
 import type { ChatInput } from './chat-input.js';
 
@@ -36,6 +37,18 @@ const STATUS_ICONS = {
   disconnected: { label: 'Disconnected' },
   error: { label: 'Connection error' },
 } as const;
+
+// Known model context window sizes (tokens). Model.max_tokens in the backend
+// represents max output tokens, not the context window capacity.
+const MODEL_CONTEXT_WINDOWS: Record<string, number> = {
+  'claude-opus-4-5-20251101': 200000,
+  'claude-sonnet-4-5-20250929': 200000,
+  'claude-haiku-4-5-20251001': 200000,
+  'gpt-4o': 128000,
+  'gpt-4o-mini': 128000,
+  'gpt-4-turbo': 128000,
+};
+const DEFAULT_CONTEXT_WINDOW = 200000;
 
 @customElement('chat-panel')
 export class ChatPanel extends SignalWatcher(LitElement) {
@@ -302,6 +315,27 @@ export class ChatPanel extends SignalWatcher(LitElement) {
     `;
   }
 
+  private _getContextPercentage(): number {
+    if (!this._conversationId) return 0;
+    const conversation = activeConversations.get().get(this._conversationId);
+    if (!conversation || conversation.messages.length === 0) return 0;
+
+    const totalTokens = conversation.messages.reduce((sum, msg) => {
+      if (msg.usage) {
+        return sum + msg.usage.input_tokens + msg.usage.output_tokens;
+      }
+      return sum;
+    }, 0);
+
+    if (totalTokens === 0) return 0;
+
+    const model = selectedModelState.get();
+    if (!model) return 0;
+
+    const contextWindow = MODEL_CONTEXT_WINDOWS[model] ?? DEFAULT_CONTEXT_WINDOW;
+    return Math.min(100, Math.round((totalTokens / contextWindow) * 100));
+  }
+
   private _handleRetry(): void {
     const messages = this._getMessages();
     for (let i = messages.length - 1; i >= 0; i--) {
@@ -379,6 +413,12 @@ export class ChatPanel extends SignalWatcher(LitElement) {
           </button>
         ` : nothing}
       </div>
+      ${messages.length > 0 ? html`
+        <context-indicator
+          .percentage=${this._getContextPercentage()}
+          .modelName=${selectedModelState.get() || ''}
+        ></context-indicator>
+      ` : nothing}
       <chat-input .conversationId=${this._conversationId}></chat-input>
     `;
   }

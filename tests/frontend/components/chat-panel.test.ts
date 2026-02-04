@@ -403,4 +403,42 @@ describe('ChatPanel', () => {
       expect(messageArea).to.exist;
     });
   });
+
+  describe('context-indicator integration', () => {
+    it('renders context-indicator when conversation has messages', async () => {
+      const convId = 'test-ctx-conv';
+      const conversation: Conversation = {
+        id: convId,
+        messages: [
+          { id: 'msg-1', role: 'user', content: 'Hello', timestamp: Date.now() },
+          {
+            id: 'msg-2',
+            role: 'assistant',
+            content: 'Hi there!',
+            timestamp: Date.now(),
+            usage: { input_tokens: 10, output_tokens: 20 },
+          },
+        ],
+        model: 'claude-sonnet-4-5-20250929',
+        provider: 'claude',
+        createdAt: Date.now(),
+      };
+      setConversation(conversation);
+
+      const el = await fixture(html`<chat-panel></chat-panel>`);
+      (el as any)._conversationId = convId;
+      await el.updateComplete;
+
+      const indicator = el.shadowRoot!.querySelector('context-indicator');
+      expect(indicator).to.exist;
+    });
+
+    it('does not render context-indicator when no messages exist', async () => {
+      const el = await fixture(html`<chat-panel></chat-panel>`);
+      await el.updateComplete;
+
+      const indicator = el.shadowRoot!.querySelector('context-indicator');
+      expect(indicator).to.be.null;
+    });
+  });
 });
