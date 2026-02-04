@@ -469,14 +469,14 @@ export class ChatPanel extends SignalWatcher(LitElement) {
     const insight: Insight = {
       id: crypto.randomUUID(),
       title: firstUserMsg?.content.slice(0, 100) || 'Untitled conversation',
-      originContext: '',
-      extractedIdea: '',
+      origin_context: '',
+      extracted_idea: '',
       tags: [],
-      highlightColorsUsed: [...new Set(conversation.highlights.map(h => h.color))],
-      createdAt: new Date().toISOString(),
-      sourceAgent: agent?.name || 'Unknown',
+      highlight_colors_used: [...new Set(conversation.highlights.map(h => h.color))],
+      created_at: new Date().toISOString(),
+      source_agent: agent?.name || 'Unknown',
       status: 'fresh',
-      usedInCount: 0,
+      used_in_count: 0,
     };
 
     const projectId = projectName$.get();
