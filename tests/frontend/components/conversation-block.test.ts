@@ -67,7 +67,7 @@ describe('ConversationBlock', () => {
     expect(dots.length).to.equal(3);
   });
 
-  it('shows streaming content progressively', async () => {
+  it('shows streaming content progressively through markdown-renderer', async () => {
     const msg = makeMessage({ role: 'assistant', content: 'Partial response...', isStreaming: true });
     const el = await fixture(
       html`<conversation-block .message=${msg}></conversation-block>`
@@ -79,7 +79,24 @@ describe('ConversationBlock', () => {
     expect(typing).to.be.null;
     const content = el.shadowRoot!.querySelector('.content');
     expect(content).to.exist;
-    expect(content!.textContent).to.equal('Partial response...');
+
+    // Content is now rendered through markdown-renderer
+    const mdRenderer = content!.querySelector('markdown-renderer');
+    expect(mdRenderer).to.exist;
+  });
+
+  it('renders message content through markdown-renderer', async () => {
+    const msg = makeMessage({ role: 'assistant', content: '**bold** text' });
+    const el = await fixture(
+      html`<conversation-block .message=${msg}></conversation-block>`
+    );
+    await el.updateComplete;
+
+    const content = el.shadowRoot!.querySelector('.content');
+    expect(content).to.exist;
+
+    const mdRenderer = content!.querySelector('markdown-renderer');
+    expect(mdRenderer).to.exist;
   });
 
   it('shows partial indicator for cancelled messages', async () => {
