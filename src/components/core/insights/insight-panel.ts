@@ -158,7 +158,6 @@ export class InsightPanel extends SignalWatcher(LitElement) {
     const filters = insightFilters.get();
     const filtered = getFilteredInsights();
 
-    const freshCount = allInsights.filter(i => i.status === 'fresh').length;
     const usedCount = allInsights.filter(i => i.status === 'used').length;
     const archivedCount = allInsights.filter(i => i.status === 'archived').length;
 
