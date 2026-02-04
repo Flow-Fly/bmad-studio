@@ -20,12 +20,14 @@ import { loadPhases } from './services/phases.service.js';
 import { clearPhasesState } from './state/phases.state.js';
 import { initChatService } from './services/chat.service.js';
 import { clearChatState } from './state/chat.state.js';
+import { clearInsightState } from './state/insight.state.js';
 import { loadAgents } from './services/agent.service.js';
 import { agentsState, setActiveAgent, clearAgentState } from './state/agent.state.js';
 
 import './components/core/phase-graph/phase-graph-container.js';
 import './components/core/layout/activity-bar.js';
 import './components/core/chat/chat-panel.js';
+import './components/core/insights/insight-panel.js';
 
 @customElement('app-shell')
 export class AppShell extends SignalWatcher(LitElement) {
@@ -203,7 +205,7 @@ export class AppShell extends SignalWatcher(LitElement) {
   private _handleKeydown(e: KeyboardEvent): void {
     if (!e.metaKey) return;
     if (projectLoadingState.get().status !== 'success') return;
-    const sectionMap: Record<string, string> = { '1': 'graph', '2': 'chat', '3': 'artifacts' };
+    const sectionMap: Record<string, string> = { '1': 'graph', '2': 'chat', '3': 'insights', '4': 'artifacts' };
     const section = sectionMap[e.key];
     if (section) {
       e.preventDefault();
@@ -273,6 +275,7 @@ export class AppShell extends SignalWatcher(LitElement) {
     clearWorkflowState();
     clearPhasesState();
     clearChatState();
+    clearInsightState();
     clearAgentState();
   }
 
@@ -349,6 +352,8 @@ export class AppShell extends SignalWatcher(LitElement) {
         return html`<phase-graph-container tabindex="-1"></phase-graph-container>`;
       case 'chat':
         return html`<chat-panel tabindex="-1"></chat-panel>`;
+      case 'insights':
+        return html`<insight-panel tabindex="-1"></insight-panel>`;
       case 'artifacts':
         return html`<div class="placeholder" tabindex="-1">Artifacts panel (Epic 6)</div>`;
       default:

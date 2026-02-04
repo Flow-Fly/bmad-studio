@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"sync"
 
 	"bmad-studio/backend/types"
@@ -51,6 +52,77 @@ func (s *InsightStore) SaveInsight(projectName string, insight types.Insight) er
 	filePath := filepath.Join(dir, insight.ID+".json")
 	if err := os.WriteFile(filePath, data, 0644); err != nil {
 		return fmt.Errorf("write insight file: %w", err)
+	}
+
+	return nil
+}
+
+// ListInsights reads all Insight JSON files from the project's insights directory.
+// Returns insights sorted by CreatedAt descending (most recent first).
+// Returns an empty slice if the directory does not exist.
+func (s *InsightStore) ListInsights(projectName string) ([]types.Insight, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	dir := filepath.Join(s.baseDir, projectName, "insights")
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return []types.Insight{}, nil
+		}
+		return nil, fmt.Errorf("read insights directory: %w", err)
+	}
+
+	var insights []types.Insight
+	for _, entry := range entries {
+		if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(dir, entry.Name()))
+		if err != nil {
+			continue // skip unreadable files
+		}
+		var insight types.Insight
+		if err := json.Unmarshal(data, &insight); err != nil {
+			continue // skip corrupt files
+		}
+		insights = append(insights, insight)
+	}
+
+	sort.Slice(insights, func(i, j int) bool {
+		return insights[i].CreatedAt > insights[j].CreatedAt
+	})
+
+	return insights, nil
+}
+
+// GetInsight reads a single Insight JSON file by ID.
+func (s *InsightStore) GetInsight(projectName, insightID string) (types.Insight, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	filePath := filepath.Join(s.baseDir, projectName, "insights", insightID+".json")
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return types.Insight{}, fmt.Errorf("read insight: %w", err)
+	}
+
+	var insight types.Insight
+	if err := json.Unmarshal(data, &insight); err != nil {
+		return types.Insight{}, fmt.Errorf("parse insight: %w", err)
+	}
+
+	return insight, nil
+}
+
+// DeleteInsight removes an Insight JSON file by ID.
+func (s *InsightStore) DeleteInsight(projectName, insightID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	filePath := filepath.Join(s.baseDir, projectName, "insights", insightID+".json")
+	if err := os.Remove(filePath); err != nil {
+		return fmt.Errorf("delete insight: %w", err)
 	}
 
 	return nil
