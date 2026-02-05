@@ -22,6 +22,7 @@ export function friendlyValidationError(type: ProviderType, err: unknown): strin
   if (raw.includes('401') || raw.toLowerCase().includes('invalid') || raw.toLowerCase().includes('auth')) {
     if (type === 'claude') return 'Invalid Claude API key. Check your key at console.anthropic.com.';
     if (type === 'openai') return 'Invalid OpenAI API key. Check your key at platform.openai.com.';
+    if (type === 'gemini') return 'Invalid Gemini API key. Check your key at aistudio.google.com.';
   }
 
   if (raw.includes('429') || raw.toLowerCase().includes('rate')) {

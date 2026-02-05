@@ -24,11 +24,13 @@ func (s *ProviderService) GetProvider(providerType string, apiKey string) (provi
 		return providers.NewOpenAIProvider(apiKey), nil
 	case "ollama":
 		return providers.NewOllamaProvider(apiKey), nil // endpoint URL passed via apiKey parameter
+	case "gemini":
+		return providers.NewGeminiProvider(apiKey), nil
 	default:
 		return nil, &providers.ProviderError{
 			Code:        "unsupported_provider",
 			Message:     fmt.Sprintf("provider type not supported: %s", providerType),
-			UserMessage: fmt.Sprintf("Provider type '%s' is not supported. Available providers: claude, openai, ollama.", providerType),
+			UserMessage: fmt.Sprintf("Provider type '%s' is not supported. Available providers: claude, openai, ollama, gemini.", providerType),
 		}
 	}
 }

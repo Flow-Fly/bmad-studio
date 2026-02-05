@@ -1,6 +1,6 @@
 import type { TrustLevel } from './tool.js';
 
-export type ProviderType = 'claude' | 'openai' | 'ollama';
+export type ProviderType = 'claude' | 'openai' | 'ollama' | 'gemini';
 
 export interface ProviderConfig {
   type: ProviderType;

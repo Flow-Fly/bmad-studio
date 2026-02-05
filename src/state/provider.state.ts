@@ -9,6 +9,7 @@ export const providersState = new Signal.State<ProviderConfig[]>([
   { type: 'claude', enabled: false, hasValidCredentials: false },
   { type: 'openai', enabled: false, hasValidCredentials: false },
   { type: 'ollama', enabled: false, hasValidCredentials: false, endpoint: 'http://localhost:11434' },
+  { type: 'gemini', enabled: false, hasValidCredentials: false },
 ]);
 
 export const activeProviderState = new Signal.State<ProviderType | ''>('');

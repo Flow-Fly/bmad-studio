@@ -187,7 +187,7 @@ export class ProviderSettings extends SignalWatcher(LitElement) {
       }
 
       // Check keychain for existing keys (don't load key values into UI)
-      const keyChecks = (['claude', 'openai'] as ProviderType[]).map(async (type) => {
+      const keyChecks = (['claude', 'openai', 'gemini'] as ProviderType[]).map(async (type) => {
         const exists = await hasApiKey(type);
         if (exists) {
           this._keySaved = { ...this._keySaved, [type]: true };
@@ -415,13 +415,26 @@ export class ProviderSettings extends SignalWatcher(LitElement) {
     `;
   }
 
-  private _renderApiKeyTab(type: 'claude' | 'openai') {
-    const label = type === 'claude' ? 'Claude API Key' : 'OpenAI API Key';
-    const placeholder = type === 'claude' ? 'sk-ant-...' : 'sk-...';
+  private _renderApiKeyTab(type: 'claude' | 'openai' | 'gemini') {
+    const labels: Record<typeof type, string> = {
+      claude: 'Claude API Key',
+      openai: 'OpenAI API Key',
+      gemini: 'Gemini API Key',
+    };
+    const placeholders: Record<typeof type, string> = {
+      claude: 'sk-ant-...',
+      openai: 'sk-...',
+      gemini: 'AIza...',
+    };
+    const helpTexts: Record<typeof type, string> = {
+      claude: 'Your Anthropic API key',
+      openai: 'Your OpenAI API key',
+      gemini: 'Your Google AI Studio API key',
+    };
+    const label = labels[type];
+    const placeholder = placeholders[type];
     const saved = this._keySaved[type];
-    const helpText = saved
-      ? 'Key saved. Enter a new key to replace it.'
-      : type === 'claude' ? 'Your Anthropic API key' : 'Your OpenAI API key';
+    const helpText = saved ? 'Key saved. Enter a new key to replace it.' : helpTexts[type];
     const error = this._errors[type] || '';
     const status = validationState.get()[type];
 
@@ -549,11 +562,13 @@ export class ProviderSettings extends SignalWatcher(LitElement) {
         >
           <sl-tab slot="nav" panel="claude">Claude</sl-tab>
           <sl-tab slot="nav" panel="openai">OpenAI</sl-tab>
+          <sl-tab slot="nav" panel="gemini">Gemini</sl-tab>
           <sl-tab slot="nav" panel="ollama">Ollama</sl-tab>
           <sl-tab slot="nav" panel="execution">Execution</sl-tab>
 
           <sl-tab-panel name="claude">${this._renderApiKeyTab('claude')}</sl-tab-panel>
           <sl-tab-panel name="openai">${this._renderApiKeyTab('openai')}</sl-tab-panel>
+          <sl-tab-panel name="gemini">${this._renderApiKeyTab('gemini')}</sl-tab-panel>
           <sl-tab-panel name="ollama">${this._renderOllamaTab()}</sl-tab-panel>
           <sl-tab-panel name="execution">${this._renderExecutionTab()}</sl-tab-panel>
         </sl-tab-group>
