@@ -159,6 +159,10 @@ func (m *mockProvider) ListModels() ([]Model, error) {
 	return []Model{}, nil
 }
 
+func (m *mockProvider) RequiresAPIKey() bool {
+	return true
+}
+
 func TestStreamChunkToolFields(t *testing.T) {
 	chunk := StreamChunk{
 		Type:      ChunkTypeToolCallStart,

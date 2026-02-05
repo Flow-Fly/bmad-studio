@@ -64,7 +64,7 @@ func (cs *ChatService) HandleMessage(ctx context.Context, client *websocket.Clie
 	if payload.Model == "" {
 		return fmt.Errorf("model is required")
 	}
-	if payload.APIKey == "" {
+	if payload.APIKey == "" && cs.providerService.RequiresAPIKey(payload.Provider) {
 		return fmt.Errorf("api_key is required")
 	}
 
