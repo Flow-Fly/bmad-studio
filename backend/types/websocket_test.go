@@ -24,6 +24,11 @@ func TestWebSocketEventTypes(t *testing.T) {
 		{"chat thinking delta", EventTypeChatThinkingDelta, "chat:thinking-delta"},
 		{"chat stream end", EventTypeChatStreamEnd, "chat:stream-end"},
 		{"chat error", EventTypeChatError, "chat:error"},
+		{"chat tool start", EventTypeChatToolStart, "chat:tool-start"},
+		{"chat tool delta", EventTypeChatToolDelta, "chat:tool-delta"},
+		{"chat tool result", EventTypeChatToolResult, "chat:tool-result"},
+		{"chat tool confirm", EventTypeChatToolConfirm, "chat:tool-confirm"},
+		{"chat tool approve", EventTypeChatToolApprove, "chat:tool-approve"},
 	}
 
 	for _, tt := range tests {
@@ -425,6 +430,167 @@ func TestNewChatErrorEvent(t *testing.T) {
 	}
 	if payload.Message != "Request timed out" {
 		t.Errorf("expected Message %q, got %q", "Request timed out", payload.Message)
+	}
+}
+
+func TestNewChatToolStartEvent(t *testing.T) {
+	input := map[string]interface{}{"path": "test.txt"}
+	event := NewChatToolStartEvent("conv-1", "msg-1", "toolu_1", "file_read", input)
+
+	if event.Type != EventTypeChatToolStart {
+		t.Errorf("expected type %q, got %q", EventTypeChatToolStart, event.Type)
+	}
+
+	payload, ok := event.Payload.(*ChatToolStartPayload)
+	if !ok {
+		t.Fatalf("expected *ChatToolStartPayload, got %T", event.Payload)
+	}
+	if payload.ToolID != "toolu_1" {
+		t.Errorf("expected ToolID %q, got %q", "toolu_1", payload.ToolID)
+	}
+	if payload.ToolName != "file_read" {
+		t.Errorf("expected ToolName %q, got %q", "file_read", payload.ToolName)
+	}
+	if payload.Input["path"] != "test.txt" {
+		t.Errorf("expected input path %q, got %v", "test.txt", payload.Input["path"])
+	}
+}
+
+func TestNewChatToolDeltaEvent(t *testing.T) {
+	event := NewChatToolDeltaEvent("conv-1", "msg-1", "toolu_1", `{"partial":"json"}`)
+
+	if event.Type != EventTypeChatToolDelta {
+		t.Errorf("expected type %q, got %q", EventTypeChatToolDelta, event.Type)
+	}
+
+	payload, ok := event.Payload.(*ChatToolDeltaPayload)
+	if !ok {
+		t.Fatalf("expected *ChatToolDeltaPayload, got %T", event.Payload)
+	}
+	if payload.Chunk != `{"partial":"json"}` {
+		t.Errorf("expected chunk %q, got %q", `{"partial":"json"}`, payload.Chunk)
+	}
+}
+
+func TestNewChatToolResultEvent(t *testing.T) {
+	metadata := map[string]interface{}{"exitCode": float64(0)}
+	event := NewChatToolResultEvent("conv-1", "msg-1", "toolu_1", "success", "file contents", metadata)
+
+	if event.Type != EventTypeChatToolResult {
+		t.Errorf("expected type %q, got %q", EventTypeChatToolResult, event.Type)
+	}
+
+	payload, ok := event.Payload.(*ChatToolResultPayload)
+	if !ok {
+		t.Fatalf("expected *ChatToolResultPayload, got %T", event.Payload)
+	}
+	if payload.Status != "success" {
+		t.Errorf("expected status %q, got %q", "success", payload.Status)
+	}
+	if payload.Result != "file contents" {
+		t.Errorf("expected result %q, got %q", "file contents", payload.Result)
+	}
+	if payload.Metadata["exitCode"] != float64(0) {
+		t.Errorf("expected exitCode 0, got %v", payload.Metadata["exitCode"])
+	}
+}
+
+func TestNewChatToolConfirmEvent(t *testing.T) {
+	input := map[string]interface{}{"command": "rm -rf /tmp/test"}
+	event := NewChatToolConfirmEvent("conv-1", "msg-1", "toolu_1", "bash", input)
+
+	if event.Type != EventTypeChatToolConfirm {
+		t.Errorf("expected type %q, got %q", EventTypeChatToolConfirm, event.Type)
+	}
+
+	payload, ok := event.Payload.(*ChatToolConfirmPayload)
+	if !ok {
+		t.Fatalf("expected *ChatToolConfirmPayload, got %T", event.Payload)
+	}
+	if payload.ToolName != "bash" {
+		t.Errorf("expected ToolName %q, got %q", "bash", payload.ToolName)
+	}
+}
+
+func TestToolEventPayloadJSONSerialization(t *testing.T) {
+	input := map[string]interface{}{"path": "test.txt"}
+	event := NewChatToolStartEvent("conv-1", "msg-1", "toolu_1", "file_read", input)
+
+	data, err := json.Marshal(event)
+	if err != nil {
+		t.Fatalf("failed to marshal: %v", err)
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(data, &result); err != nil {
+		t.Fatalf("failed to unmarshal: %v", err)
+	}
+
+	payload := result["payload"].(map[string]interface{})
+	if payload["conversationId"] != "conv-1" {
+		t.Errorf("expected conversationId %q, got %v", "conv-1", payload["conversationId"])
+	}
+	if payload["toolId"] != "toolu_1" {
+		t.Errorf("expected toolId %q, got %v", "toolu_1", payload["toolId"])
+	}
+	if payload["toolName"] != "file_read" {
+		t.Errorf("expected toolName %q, got %v", "file_read", payload["toolName"])
+	}
+}
+
+func TestChatSendPayloadWithHistory(t *testing.T) {
+	payload := ChatSendPayload{
+		ConversationID: "conv-1",
+		Content:        "hello",
+		Model:          "claude-sonnet",
+		Provider:       "claude",
+		APIKey:         "key",
+		History: []ChatMessage{
+			{Role: "user", Content: "previous message"},
+			{Role: "assistant", Content: "previous response"},
+		},
+	}
+
+	data, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("failed to marshal: %v", err)
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(data, &result); err != nil {
+		t.Fatalf("failed to unmarshal: %v", err)
+	}
+
+	history, ok := result["history"].([]interface{})
+	if !ok {
+		t.Fatalf("expected history to be array, got %T", result["history"])
+	}
+	if len(history) != 2 {
+		t.Errorf("expected 2 history messages, got %d", len(history))
+	}
+}
+
+func TestChatSendPayloadHistoryOmitted(t *testing.T) {
+	payload := ChatSendPayload{
+		ConversationID: "conv-1",
+		Content:        "hello",
+		Model:          "claude-sonnet",
+		Provider:       "claude",
+		APIKey:         "key",
+	}
+
+	data, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("failed to marshal: %v", err)
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(data, &result); err != nil {
+		t.Fatalf("failed to unmarshal: %v", err)
+	}
+
+	if _, ok := result["history"]; ok {
+		t.Error("expected history to be omitted when empty")
 	}
 }
 

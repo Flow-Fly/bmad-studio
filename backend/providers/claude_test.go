@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"bmad-studio/backend/types"
+
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/option"
 )
@@ -362,6 +364,148 @@ data: {"type":"message_start","message":{"id":"msg_err","type":"message","role":
 
 	if !hasStart {
 		t.Error("Expected at least a 'start' chunk before stream ended")
+	}
+}
+
+// --- Tool streaming tests ---
+
+func TestClaudeProvider_SendMessage_ToolUseStream(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+
+		events := []string{
+			`event: message_start
+data: {"type":"message_start","message":{"id":"msg_tool1","type":"message","role":"assistant","content":[],"model":"claude-sonnet-4-5-20250929","stop_reason":null,"usage":{"input_tokens":20,"output_tokens":0}}}`,
+			`event: content_block_start
+data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}`,
+			`event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Let me read that file."}}`,
+			`event: content_block_stop
+data: {"type":"content_block_stop","index":0}`,
+			`event: content_block_start
+data: {"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"toolu_abc123","name":"file_read","input":{}}}`,
+			`event: content_block_delta
+data: {"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"{\"path\":"}}`,
+			`event: content_block_delta
+data: {"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"\"test.txt\"}"}}`,
+			`event: content_block_stop
+data: {"type":"content_block_stop","index":1}`,
+			`event: message_delta
+data: {"type":"message_delta","delta":{"stop_reason":"tool_use","stop_sequence":null},"usage":{"output_tokens":30}}`,
+			`event: message_stop
+data: {"type":"message_stop"}`,
+		}
+
+		flusher, _ := w.(http.Flusher)
+		for _, event := range events {
+			fmt.Fprintf(w, "%s\n\n", event)
+			flusher.Flush()
+		}
+	}))
+	defer server.Close()
+
+	p := newTestClaudeProvider(server.URL)
+	ch, err := p.SendMessage(context.Background(), ChatRequest{
+		Messages:  []Message{{Role: "user", Content: "Read test.txt"}},
+		Model:     "claude-sonnet-4-5-20250929",
+		MaxTokens: 4096,
+	})
+	if err != nil {
+		t.Fatalf("Expected no error, got %v", err)
+	}
+
+	var chunks []StreamChunk
+	for chunk := range ch {
+		chunks = append(chunks, chunk)
+	}
+
+	// Expected sequence: start, chunk(text), tool_call_start, tool_call_delta x2, tool_call_end, end
+	typeSequence := make([]string, 0, len(chunks))
+	for _, c := range chunks {
+		typeSequence = append(typeSequence, c.Type)
+	}
+
+	// Verify tool_call_start
+	var hasToolStart, hasToolDelta, hasToolEnd bool
+	var toolID, toolName string
+	var partialJSON string
+	for _, c := range chunks {
+		switch c.Type {
+		case ChunkTypeToolCallStart:
+			hasToolStart = true
+			toolID = c.ToolID
+			toolName = c.ToolName
+		case ChunkTypeToolCallDelta:
+			hasToolDelta = true
+			partialJSON += c.Content
+			if c.ToolID != toolID {
+				t.Errorf("tool_call_delta ToolID mismatch: expected %q, got %q", toolID, c.ToolID)
+			}
+		case ChunkTypeToolCallEnd:
+			hasToolEnd = true
+			if c.ToolID != toolID {
+				t.Errorf("tool_call_end ToolID mismatch: expected %q, got %q", toolID, c.ToolID)
+			}
+		}
+	}
+
+	if !hasToolStart {
+		t.Error("expected tool_call_start chunk")
+	}
+	if !hasToolDelta {
+		t.Error("expected tool_call_delta chunk")
+	}
+	if !hasToolEnd {
+		t.Error("expected tool_call_end chunk")
+	}
+	if toolID != "toolu_abc123" {
+		t.Errorf("expected ToolID 'toolu_abc123', got %q", toolID)
+	}
+	if toolName != "file_read" {
+		t.Errorf("expected ToolName 'file_read', got %q", toolName)
+	}
+	if partialJSON != `{"path":"test.txt"}` {
+		t.Errorf("expected accumulated JSON '{\"path\":\"test.txt\"}', got %q", partialJSON)
+	}
+}
+
+func TestClaudeProvider_BuildClaudeMessages_ToolRole(t *testing.T) {
+	msgs := []Message{
+		{Role: "user", Content: "Read test.txt"},
+		{Role: "assistant", Content: "", ToolCalls: []types.ToolCall{
+			{ID: "toolu_1", Name: "file_read", Input: []byte(`{"path":"test.txt"}`)},
+		}},
+		{Role: "tool", ToolCallID: "toolu_1", Content: "file contents here"},
+	}
+
+	result, err := buildClaudeMessages(msgs)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(result) != 3 {
+		t.Fatalf("expected 3 messages, got %d", len(result))
+	}
+}
+
+func TestClaudeProvider_BuildClaudeTools(t *testing.T) {
+	defs := []types.ToolDefinition{
+		{
+			Name:        "file_read",
+			Description: "Read a file",
+			InputSchema: []byte(`{"type":"object","properties":{"path":{"type":"string"}},"required":["path"]}`),
+		},
+	}
+
+	tools := buildClaudeTools(defs)
+	if len(tools) != 1 {
+		t.Fatalf("expected 1 tool, got %d", len(tools))
+	}
+	if tools[0].OfTool == nil {
+		t.Fatal("expected OfTool to be set")
+	}
+	if tools[0].OfTool.Name != "file_read" {
+		t.Errorf("expected name 'file_read', got %q", tools[0].OfTool.Name)
 	}
 }
 

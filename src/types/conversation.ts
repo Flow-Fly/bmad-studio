@@ -1,3 +1,5 @@
+import type { ToolCallBlock } from './tool.js';
+
 // Chat event type constants
 export const CHAT_STREAM_START = 'chat:stream-start';
 export const CHAT_TEXT_DELTA = 'chat:text-delta';
@@ -6,6 +8,13 @@ export const CHAT_STREAM_END = 'chat:stream-end';
 export const CHAT_ERROR = 'chat:error';
 export const CHAT_SEND = 'chat:send';
 export const CHAT_CANCEL = 'chat:cancel';
+
+// Tool event type constants
+export const CHAT_TOOL_START = 'chat:tool-start';
+export const CHAT_TOOL_DELTA = 'chat:tool-delta';
+export const CHAT_TOOL_RESULT = 'chat:tool-result';
+export const CHAT_TOOL_CONFIRM = 'chat:tool-confirm';
+export const CHAT_TOOL_APPROVE = 'chat:tool-approve';
 
 // Server → Client payloads
 export interface ChatStreamStartPayload {
@@ -56,6 +65,45 @@ export interface ChatCancelPayload {
   conversation_id: string;
 }
 
+// Tool event payloads (Server → Client)
+export interface ChatToolStartPayload {
+  conversation_id: string;
+  message_id: string;
+  tool_id: string;
+  tool_name: string;
+  input: Record<string, unknown>;
+}
+
+export interface ChatToolDeltaPayload {
+  conversation_id: string;
+  message_id: string;
+  tool_id: string;
+  chunk: string;
+}
+
+export interface ChatToolResultPayload {
+  conversation_id: string;
+  message_id: string;
+  tool_id: string;
+  status: 'success' | 'error';
+  result: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface ChatToolConfirmPayload {
+  conversation_id: string;
+  message_id: string;
+  tool_id: string;
+  tool_name: string;
+  input: Record<string, unknown>;
+}
+
+// Tool event payloads (Client → Server)
+export interface ChatToolApprovePayload {
+  tool_id: string;
+  approved: boolean;
+}
+
 // Domain types
 export interface UsageStats {
   input_tokens: number;
@@ -80,6 +128,21 @@ export interface Highlight {
   color: HighlightColor;
 }
 
+// Message block types for flexible content rendering
+export interface TextBlock {
+  type: 'text';
+  id: string;
+  content: string;
+}
+
+export interface ThinkingBlock {
+  type: 'thinking';
+  id: string;
+  content: string;
+}
+
+export type MessageBlock = TextBlock | ThinkingBlock | ToolCallBlock;
+
 export interface Message {
   id: string;
   role: 'user' | 'assistant';
@@ -91,6 +154,7 @@ export interface Message {
   usage?: UsageStats;
   isContext?: boolean;
   contextLabel?: string;
+  blocks?: MessageBlock[]; // Block-based content for tool calls, text, thinking
 }
 
 export interface Conversation {

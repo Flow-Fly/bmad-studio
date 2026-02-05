@@ -15,11 +15,20 @@ const (
 	EventTypeChatCancel = "chat:cancel"
 
 	// Chat event types (server → client)
-	EventTypeChatStreamStart  = "chat:stream-start"
-	EventTypeChatTextDelta    = "chat:text-delta"
+	EventTypeChatStreamStart   = "chat:stream-start"
+	EventTypeChatTextDelta     = "chat:text-delta"
 	EventTypeChatThinkingDelta = "chat:thinking-delta"
-	EventTypeChatStreamEnd    = "chat:stream-end"
-	EventTypeChatError        = "chat:error"
+	EventTypeChatStreamEnd     = "chat:stream-end"
+	EventTypeChatError         = "chat:error"
+
+	// Tool event types (server → client)
+	EventTypeChatToolStart   = "chat:tool-start"
+	EventTypeChatToolDelta   = "chat:tool-delta"
+	EventTypeChatToolResult  = "chat:tool-result"
+	EventTypeChatToolConfirm = "chat:tool-confirm"
+
+	// Tool event types (client → server)
+	EventTypeChatToolApprove = "chat:tool-approve"
 )
 
 // WebSocketEvent represents a WebSocket message sent to clients
@@ -105,12 +114,65 @@ type ChatErrorPayload struct {
 
 // ChatSendPayload is the payload for chat:send events (client → server)
 type ChatSendPayload struct {
-	ConversationID string `json:"conversation_id"`
-	Content        string `json:"content"`
-	Model          string `json:"model"`
-	Provider       string `json:"provider"`
-	SystemPrompt   string `json:"system_prompt,omitempty"`
-	APIKey         string `json:"api_key"`
+	ConversationID string        `json:"conversation_id"`
+	Content        string        `json:"content"`
+	Model          string        `json:"model"`
+	Provider       string        `json:"provider"`
+	SystemPrompt   string        `json:"system_prompt,omitempty"`
+	APIKey         string        `json:"api_key"`
+	History        []ChatMessage `json:"history,omitempty"`
+}
+
+// ChatMessage represents a message in conversation history sent via WebSocket.
+// Maps to providers.Message for ChatService use.
+type ChatMessage struct {
+	Role       string     `json:"role"`
+	Content    string     `json:"content"`
+	ToolCallID string     `json:"toolCallId,omitempty"`
+	ToolCalls  []ToolCall `json:"toolCalls,omitempty"`
+	ToolName   string     `json:"toolName,omitempty"`
+}
+
+// ChatToolStartPayload is the payload for chat:tool-start events
+type ChatToolStartPayload struct {
+	ConversationID string                 `json:"conversationId"`
+	MessageID      string                 `json:"messageId"`
+	ToolID         string                 `json:"toolId"`
+	ToolName       string                 `json:"toolName"`
+	Input          map[string]interface{} `json:"input"`
+}
+
+// ChatToolDeltaPayload is the payload for chat:tool-delta events
+type ChatToolDeltaPayload struct {
+	ConversationID string `json:"conversationId"`
+	MessageID      string `json:"messageId"`
+	ToolID         string `json:"toolId"`
+	Chunk          string `json:"chunk"`
+}
+
+// ChatToolResultPayload is the payload for chat:tool-result events
+type ChatToolResultPayload struct {
+	ConversationID string                 `json:"conversationId"`
+	MessageID      string                 `json:"messageId"`
+	ToolID         string                 `json:"toolId"`
+	Status         string                 `json:"status"` // "success" or "error"
+	Result         string                 `json:"result"`
+	Metadata       map[string]interface{} `json:"metadata,omitempty"`
+}
+
+// ChatToolConfirmPayload is the payload for chat:tool-confirm events
+type ChatToolConfirmPayload struct {
+	ConversationID string                 `json:"conversationId"`
+	MessageID      string                 `json:"messageId"`
+	ToolID         string                 `json:"toolId"`
+	ToolName       string                 `json:"toolName"`
+	Input          map[string]interface{} `json:"input"`
+}
+
+// ChatToolApprovePayload is the payload for chat:tool-approve events (client → server)
+type ChatToolApprovePayload struct {
+	ToolID   string `json:"toolId"`
+	Approved bool   `json:"approved"`
 }
 
 // ChatCancelPayload is the payload for chat:cancel events (client → server)
@@ -215,5 +277,49 @@ func NewChatErrorEvent(conversationID, messageID, code, message string) *WebSock
 		MessageID:      messageID,
 		Code:           code,
 		Message:        message,
+	})
+}
+
+// NewChatToolStartEvent creates a chat:tool-start event
+func NewChatToolStartEvent(conversationID, messageID, toolID, toolName string, input map[string]interface{}) *WebSocketEvent {
+	return NewWebSocketEvent(EventTypeChatToolStart, &ChatToolStartPayload{
+		ConversationID: conversationID,
+		MessageID:      messageID,
+		ToolID:         toolID,
+		ToolName:       toolName,
+		Input:          input,
+	})
+}
+
+// NewChatToolDeltaEvent creates a chat:tool-delta event
+func NewChatToolDeltaEvent(conversationID, messageID, toolID, chunk string) *WebSocketEvent {
+	return NewWebSocketEvent(EventTypeChatToolDelta, &ChatToolDeltaPayload{
+		ConversationID: conversationID,
+		MessageID:      messageID,
+		ToolID:         toolID,
+		Chunk:          chunk,
+	})
+}
+
+// NewChatToolResultEvent creates a chat:tool-result event
+func NewChatToolResultEvent(conversationID, messageID, toolID, status, result string, metadata map[string]interface{}) *WebSocketEvent {
+	return NewWebSocketEvent(EventTypeChatToolResult, &ChatToolResultPayload{
+		ConversationID: conversationID,
+		MessageID:      messageID,
+		ToolID:         toolID,
+		Status:         status,
+		Result:         result,
+		Metadata:       metadata,
+	})
+}
+
+// NewChatToolConfirmEvent creates a chat:tool-confirm event
+func NewChatToolConfirmEvent(conversationID, messageID, toolID, toolName string, input map[string]interface{}) *WebSocketEvent {
+	return NewWebSocketEvent(EventTypeChatToolConfirm, &ChatToolConfirmPayload{
+		ConversationID: conversationID,
+		MessageID:      messageID,
+		ToolID:         toolID,
+		ToolName:       toolName,
+		Input:          input,
 	})
 }

@@ -5,15 +5,17 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
-	"time"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
+	"time"
 
 	"bmad-studio/backend/api"
 	"bmad-studio/backend/api/websocket"
 	"bmad-studio/backend/services"
 	"bmad-studio/backend/storage"
+	"bmad-studio/backend/tools"
 	"bmad-studio/backend/types"
 )
 
@@ -51,7 +53,59 @@ func main() {
 		log.Printf("Warning: Failed to initialize config store: %v", err)
 	}
 
-	chatService := services.NewChatService(providerService, hub)
+	// Tool execution layer
+	var orchestrator *services.ToolOrchestrator
+	var registry *tools.ToolRegistry
+
+	if pmRoot := projectManager.ProjectRoot(); pmRoot != "" {
+		pmName := projectManager.ProjectName()
+		homeDir, _ := os.UserHomeDir()
+		centralRoot := filepath.Join(homeDir, "bmad-studio", "projects", pmName)
+
+		sandbox := tools.NewSandbox(pmRoot, centralRoot)
+		registry = tools.NewRegistry()
+
+		// Register core tools
+		if err := registry.RegisterCore(tools.NewFileReadTool(sandbox)); err != nil {
+			log.Printf("Warning: Failed to register file_read tool: %v", err)
+		}
+		if err := registry.RegisterCore(tools.NewFileWriteTool(sandbox)); err != nil {
+			log.Printf("Warning: Failed to register file_write tool: %v", err)
+		}
+		if err := registry.RegisterCore(tools.NewBashTool(sandbox)); err != nil {
+			log.Printf("Warning: Failed to register bash tool: %v", err)
+		}
+
+		// Web search providers
+		var searchProviders []tools.SearchProvider
+		searxngURL := os.Getenv("SEARXNG_URL")
+		if searxngURL == "" {
+			searxngURL = "http://localhost:8080"
+		}
+		searchProviders = append(searchProviders, tools.NewSearXNGProvider(searxngURL))
+
+		// Brave Search fallback (BYOK via env var or config store)
+		braveKey := os.Getenv("BRAVE_SEARCH_API_KEY")
+		if braveKey == "" && configStore != nil {
+			if settings, err := configStore.Load(); err == nil && settings.BraveSearchAPIKey != "" {
+				braveKey = settings.BraveSearchAPIKey
+			}
+		}
+		if braveKey != "" {
+			searchProviders = append(searchProviders, tools.NewBraveSearchProvider(braveKey))
+		}
+
+		if err := registry.RegisterCore(tools.NewWebSearchTool(searchProviders)); err != nil {
+			log.Printf("Warning: Failed to register web_search tool: %v", err)
+		}
+
+		orchestrator = services.NewToolOrchestrator(registry, sandbox, hub)
+		log.Printf("Tool execution layer initialized: %d tools registered", len(registry.ListForScope(nil)))
+	} else {
+		log.Printf("No project loaded — tool execution disabled")
+	}
+
+	chatService := services.NewChatService(providerService, hub, orchestrator, registry)
 
 	hub.SetMessageHandler(func(client *websocket.Client, event *types.WebSocketEvent) {
 		switch event.Type {
@@ -86,6 +140,23 @@ func main() {
 			if err := chatService.CancelStream(payload.ConversationID); err != nil {
 				log.Printf("Chat: CancelStream error: %v", err)
 			}
+
+		case types.EventTypeChatToolApprove:
+			if orchestrator == nil {
+				log.Printf("Chat: tool-approve received but orchestrator not initialized")
+				return
+			}
+			payloadBytes, err := json.Marshal(event.Payload)
+			if err != nil {
+				log.Printf("Chat: failed to marshal chat:tool-approve payload: %v", err)
+				return
+			}
+			var payload types.ChatToolApprovePayload
+			if err := json.Unmarshal(payloadBytes, &payload); err != nil {
+				log.Printf("Chat: failed to parse chat:tool-approve payload: %v", err)
+				return
+			}
+			orchestrator.HandleApproval(payload.ToolID, payload.Approved)
 
 		default:
 			// Unknown message types — log and ignore

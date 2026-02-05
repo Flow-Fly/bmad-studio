@@ -1,3 +1,5 @@
+import type { TrustLevel } from './tool.js';
+
 export type ProviderType = 'claude' | 'openai' | 'ollama';
 
 export interface ProviderConfig {
@@ -12,6 +14,7 @@ export interface Model {
   name: string;
   provider: string;
   max_tokens: number;
+  supports_tools: boolean;
 }
 
 export interface ValidationStatus {
@@ -26,6 +29,7 @@ export interface AppSettings {
   default_model: string;
   ollama_endpoint: string;
   providers: Record<string, ProviderSettingsEntry>;
+  trust_level: TrustLevel;
 }
 
 export interface ProviderSettingsEntry {
