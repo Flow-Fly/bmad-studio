@@ -61,3 +61,14 @@ func (s *ProviderService) SendMessage(ctx context.Context, providerType string, 
 	}
 	return provider.SendMessage(ctx, req)
 }
+
+// RequiresAPIKey returns true if the given provider type requires an API key.
+func (s *ProviderService) RequiresAPIKey(providerType string) bool {
+	// Create provider with empty key just to check the requirement
+	provider, err := s.GetProvider(providerType, "")
+	if err != nil {
+		// Unknown provider — assume it needs a key to be safe
+		return true
+	}
+	return provider.RequiresAPIKey()
+}

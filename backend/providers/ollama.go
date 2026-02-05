@@ -102,6 +102,11 @@ func (p *OllamaProvider) ListModels() ([]Model, error) {
 	return models, nil
 }
 
+// RequiresAPIKey returns false as Ollama runs locally and doesn't need an API key.
+func (p *OllamaProvider) RequiresAPIKey() bool {
+	return false
+}
+
 // ollamaSupportsTools checks if an Ollama model supports native tool calling.
 // Based on Ollama docs for models with native function calling support.
 func ollamaSupportsTools(modelName string) bool {

@@ -17,6 +17,10 @@ type Provider interface {
 
 	// ListModels returns the models available from this provider.
 	ListModels() ([]Model, error)
+
+	// RequiresAPIKey returns true if this provider requires an API key.
+	// Local providers like Ollama return false.
+	RequiresAPIKey() bool
 }
 
 // ChatRequest contains the parameters for a chat message.

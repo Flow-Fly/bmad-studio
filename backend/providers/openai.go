@@ -81,6 +81,11 @@ func (p *OpenAIProvider) ListModels() ([]Model, error) {
 	return models, nil
 }
 
+// RequiresAPIKey returns true as OpenAI requires an API key.
+func (p *OpenAIProvider) RequiresAPIKey() bool {
+	return true
+}
+
 // SendMessage sends a chat request and returns a channel streaming response chunks.
 func (p *OpenAIProvider) SendMessage(ctx context.Context, req ChatRequest) (<-chan StreamChunk, error) {
 	messages, err := buildOpenAIMessages(req)
