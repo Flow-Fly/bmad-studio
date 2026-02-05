@@ -12,6 +12,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"bmad-studio/backend/types"
 )
 
 // OllamaProvider implements the Provider interface for local Ollama instances.
@@ -91,12 +93,26 @@ func (p *OllamaProvider) ListModels() ([]Model, error) {
 	models := make([]Model, 0, len(tagsResp.Models))
 	for _, m := range tagsResp.Models {
 		models = append(models, Model{
-			ID:       m.Name,
-			Name:     m.Name,
-			Provider: "ollama",
+			ID:            m.Name,
+			Name:          m.Name,
+			Provider:      "ollama",
+			SupportsTools: ollamaSupportsTools(m.Name),
 		})
 	}
 	return models, nil
+}
+
+// ollamaSupportsTools checks if an Ollama model supports native tool calling.
+// Based on Ollama docs for models with native function calling support.
+func ollamaSupportsTools(modelName string) bool {
+	name := strings.ToLower(modelName)
+	toolCapable := []string{"llama3.1", "llama3.2", "llama3.3", "mistral", "qwen2.5", "qwen3", "granite3"}
+	for _, prefix := range toolCapable {
+		if strings.Contains(name, prefix) {
+			return true
+		}
+	}
+	return false
 }
 
 // ollamaChatRequest is the request body for POST /api/chat.
@@ -104,6 +120,20 @@ type ollamaChatRequest struct {
 	Model    string          `json:"model"`
 	Messages []ollamaMessage `json:"messages"`
 	Stream   bool            `json:"stream"`
+	Tools    []ollamaTool    `json:"tools,omitempty"`
+}
+
+// ollamaTool represents a tool definition in the Ollama API.
+type ollamaTool struct {
+	Type     string             `json:"type"`
+	Function ollamaToolFunction `json:"function"`
+}
+
+// ollamaToolFunction describes a function tool for Ollama.
+type ollamaToolFunction struct {
+	Name        string          `json:"name"`
+	Description string          `json:"description"`
+	Parameters  json.RawMessage `json:"parameters"`
 }
 
 // ollamaChatResponse is a single NDJSON line from the streaming chat response.
@@ -123,8 +153,20 @@ type ollamaChatResponse struct {
 
 // ollamaMessage represents a message in the Ollama chat API.
 type ollamaMessage struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
+	Role      string           `json:"role"`
+	Content   string           `json:"content"`
+	ToolCalls []ollamaToolCall `json:"tool_calls,omitempty"`
+}
+
+// ollamaToolCall represents a tool call in an Ollama response.
+type ollamaToolCall struct {
+	Function ollamaToolCallFunction `json:"function"`
+}
+
+// ollamaToolCallFunction describes the function invocation in a tool call.
+type ollamaToolCallFunction struct {
+	Name      string          `json:"name"`
+	Arguments json.RawMessage `json:"arguments"`
 }
 
 // SendMessage sends a chat request to Ollama and returns a channel streaming response chunks.
@@ -140,16 +182,39 @@ func (p *OllamaProvider) SendMessage(ctx context.Context, req ChatRequest) (<-ch
 
 	for _, msg := range req.Messages {
 		switch msg.Role {
-		case "user", "assistant":
+		case "user":
 			messages = append(messages, ollamaMessage{
 				Role:    msg.Role,
+				Content: msg.Content,
+			})
+		case "assistant":
+			ollamaMsg := ollamaMessage{
+				Role:    msg.Role,
+				Content: msg.Content,
+			}
+			// Include tool calls if present (for multi-turn tool use)
+			if len(msg.ToolCalls) > 0 {
+				ollamaMsg.ToolCalls = make([]ollamaToolCall, 0, len(msg.ToolCalls))
+				for _, tc := range msg.ToolCalls {
+					ollamaMsg.ToolCalls = append(ollamaMsg.ToolCalls, ollamaToolCall{
+						Function: ollamaToolCallFunction{
+							Name:      tc.Name,
+							Arguments: tc.Input,
+						},
+					})
+				}
+			}
+			messages = append(messages, ollamaMsg)
+		case "tool":
+			messages = append(messages, ollamaMessage{
+				Role:    "tool",
 				Content: msg.Content,
 			})
 		default:
 			return nil, &ProviderError{
 				Code:        "invalid_role",
 				Message:     fmt.Sprintf("unsupported message role: %s", msg.Role),
-				UserMessage: fmt.Sprintf("Unsupported message role: %s. Use 'user' or 'assistant'.", msg.Role),
+				UserMessage: fmt.Sprintf("Unsupported message role: %s. Use 'user', 'assistant', or 'tool'.", msg.Role),
 			}
 		}
 	}
@@ -158,6 +223,11 @@ func (p *OllamaProvider) SendMessage(ctx context.Context, req ChatRequest) (<-ch
 		Model:    req.Model,
 		Messages: messages,
 		Stream:   true,
+	}
+
+	// Convert tool definitions to Ollama format
+	if len(req.Tools) > 0 {
+		chatReq.Tools = buildOllamaTools(req.Tools)
 	}
 
 	body, err := json.Marshal(chatReq)
@@ -194,6 +264,7 @@ func (p *OllamaProvider) SendMessage(ctx context.Context, req ChatRequest) (<-ch
 
 		chunkIndex := 0
 		ended := false
+		toolCallCounter := 0
 
 		send := func(chunk StreamChunk) bool {
 			select {
@@ -205,7 +276,7 @@ func (p *OllamaProvider) SendMessage(ctx context.Context, req ChatRequest) (<-ch
 		}
 
 		if !send(StreamChunk{
-			Type:      "start",
+			Type:      ChunkTypeStart,
 			MessageID: messageID,
 		}) {
 			return
@@ -223,10 +294,48 @@ func (p *OllamaProvider) SendMessage(ctx context.Context, req ChatRequest) (<-ch
 				continue
 			}
 
+			// Check for tool calls (Ollama sends them in a single response, not streamed incrementally)
+			if len(chatResp.Message.ToolCalls) > 0 {
+				for _, tc := range chatResp.Message.ToolCalls {
+					toolCallCounter++
+					toolID := fmt.Sprintf("ollama_tool_%d_%s", toolCallCounter, messageID[:8])
+
+					// Emit tool_call_start
+					if !send(StreamChunk{
+						Type:      ChunkTypeToolCallStart,
+						ToolID:    toolID,
+						ToolName:  tc.Function.Name,
+						MessageID: messageID,
+					}) {
+						return
+					}
+
+					// Emit single tool_call_delta with full input JSON
+					if !send(StreamChunk{
+						Type:      ChunkTypeToolCallDelta,
+						ToolID:    toolID,
+						Content:   string(tc.Function.Arguments),
+						MessageID: messageID,
+					}) {
+						return
+					}
+
+					// Emit tool_call_end
+					if !send(StreamChunk{
+						Type:      ChunkTypeToolCallEnd,
+						ToolID:    toolID,
+						MessageID: messageID,
+					}) {
+						return
+					}
+				}
+				continue
+			}
+
 			if chatResp.Done {
 				ended = true
 				send(StreamChunk{
-					Type:      "end",
+					Type:      ChunkTypeEnd,
 					MessageID: messageID,
 					Usage: &UsageStats{
 						InputTokens:  chatResp.PromptEvalCount,
@@ -238,7 +347,7 @@ func (p *OllamaProvider) SendMessage(ctx context.Context, req ChatRequest) (<-ch
 
 			if chatResp.Message.Content != "" {
 				if !send(StreamChunk{
-					Type:      "chunk",
+					Type:      ChunkTypeChunk,
 					Content:   chatResp.Message.Content,
 					MessageID: messageID,
 					Index:     chunkIndex,
@@ -252,19 +361,35 @@ func (p *OllamaProvider) SendMessage(ctx context.Context, req ChatRequest) (<-ch
 		if err := scanner.Err(); err != nil && !ended {
 			providerErr := mapOllamaProviderError(err, 0)
 			send(StreamChunk{
-				Type:      "error",
+				Type:      ChunkTypeError,
 				Content:   providerErr.UserMessage,
 				MessageID: messageID,
 			})
 		} else if !ended {
 			send(StreamChunk{
-				Type:      "end",
+				Type:      ChunkTypeEnd,
 				MessageID: messageID,
 			})
 		}
 	}()
 
 	return ch, nil
+}
+
+// buildOllamaTools converts ToolDefinitions to Ollama tool format.
+func buildOllamaTools(defs []types.ToolDefinition) []ollamaTool {
+	tools := make([]ollamaTool, 0, len(defs))
+	for _, td := range defs {
+		tools = append(tools, ollamaTool{
+			Type: "function",
+			Function: ollamaToolFunction{
+				Name:        td.Name,
+				Description: td.Description,
+				Parameters:  td.InputSchema,
+			},
+		})
+	}
+	return tools
 }
 
 // generateOllamaMessageID generates a unique message ID for Ollama responses.

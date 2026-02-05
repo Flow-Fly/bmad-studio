@@ -1,6 +1,7 @@
 import type { ProviderType, Model, AppSettings } from '../types/provider.js';
 import { getApiKey, setApiKey, hasApiKey } from './keychain.service.js';
 import { apiFetch, API_BASE } from './api.service.js';
+import { trustLevelState } from '../state/provider.state.js';
 
 interface ValidateResponse {
   valid: boolean;
@@ -56,6 +57,21 @@ export function saveSettings(settings: AppSettings): Promise<AppSettings> {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(settings),
   });
+}
+
+/**
+ * Initialize provider state from persisted settings.
+ * Call this at app startup to ensure trust level is loaded before any tool confirmations.
+ */
+export async function initProviderState(): Promise<void> {
+  try {
+    const settings = await loadSettings();
+    if (settings.trust_level) {
+      trustLevelState.set(settings.trust_level);
+    }
+  } catch {
+    // Settings not available — use defaults
+  }
 }
 
 export { getApiKey, setApiKey, hasApiKey };

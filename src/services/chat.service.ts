@@ -7,6 +7,11 @@ import {
   CHAT_THINKING_DELTA,
   CHAT_STREAM_END,
   CHAT_ERROR,
+  CHAT_TOOL_START,
+  CHAT_TOOL_DELTA,
+  CHAT_TOOL_RESULT,
+  CHAT_TOOL_CONFIRM,
+  CHAT_TOOL_APPROVE,
 } from '../types/conversation.js';
 import type {
   ChatStreamStartPayload,
@@ -14,14 +19,26 @@ import type {
   ChatThinkingDeltaPayload,
   ChatStreamEndPayload,
   ChatErrorPayload,
+  ChatToolStartPayload,
+  ChatToolDeltaPayload,
+  ChatToolResultPayload,
+  ChatToolConfirmPayload,
   Message,
+  TextBlock,
+  ThinkingBlock,
 } from '../types/conversation.js';
+import type { ToolCallBlock } from '../types/tool.js';
+import { isDangerousTool } from '../types/tool.js';
 import {
   chatConnectionState,
   streamingConversationId,
   getConversation,
   setConversation,
+  pendingToolConfirm,
+  isToolDismissedForSession,
+  clearPendingConfirm,
 } from '../state/chat.state.js';
+import { trustLevelState } from '../state/provider.state.js';
 import type { WebSocketEvent } from './websocket.service.js';
 
 export function sendMessage(
@@ -108,6 +125,7 @@ function handleStreamStart(event: WebSocketEvent): void {
     content: '',
     timestamp: Date.now(),
     isStreaming: true,
+    blocks: [], // Initialize empty blocks array
   };
 
   const updated = {
@@ -127,11 +145,37 @@ function handleTextDelta(event: WebSocketEvent): void {
     return;
   }
 
-  const messages = conversation.messages.map(msg =>
-    msg.id === payload.message_id
-      ? { ...msg, content: msg.content + payload.content }
-      : msg,
-  );
+  const messages = conversation.messages.map(msg => {
+    if (msg.id !== payload.message_id) return msg;
+
+    // Update blocks array
+    const blocks = msg.blocks ?? [];
+    const lastBlock = blocks[blocks.length - 1];
+
+    let updatedBlocks;
+    if (lastBlock?.type === 'text') {
+      // Append to existing text block
+      updatedBlocks = blocks.map((b, i) =>
+        i === blocks.length - 1 && b.type === 'text'
+          ? { ...b, content: b.content + payload.content }
+          : b,
+      );
+    } else {
+      // Create new text block
+      const newBlock: TextBlock = {
+        type: 'text',
+        id: `text-${payload.index}`,
+        content: payload.content,
+      };
+      updatedBlocks = [...blocks, newBlock];
+    }
+
+    return {
+      ...msg,
+      content: msg.content + payload.content, // Also update legacy content for backward compat
+      blocks: updatedBlocks,
+    };
+  });
   setConversation({ ...conversation, messages });
 }
 
@@ -143,11 +187,37 @@ function handleThinkingDelta(event: WebSocketEvent): void {
     return;
   }
 
-  const messages = conversation.messages.map(msg =>
-    msg.id === payload.message_id
-      ? { ...msg, thinkingContent: (msg.thinkingContent ?? '') + payload.content }
-      : msg,
-  );
+  const messages = conversation.messages.map(msg => {
+    if (msg.id !== payload.message_id) return msg;
+
+    // Update blocks array
+    const blocks = msg.blocks ?? [];
+    const lastBlock = blocks[blocks.length - 1];
+
+    let updatedBlocks;
+    if (lastBlock?.type === 'thinking') {
+      // Append to existing thinking block
+      updatedBlocks = blocks.map((b, i) =>
+        i === blocks.length - 1 && b.type === 'thinking'
+          ? { ...b, content: b.content + payload.content }
+          : b,
+      );
+    } else {
+      // Create new thinking block
+      const newBlock: ThinkingBlock = {
+        type: 'thinking',
+        id: `thinking-${payload.index}`,
+        content: payload.content,
+      };
+      updatedBlocks = [...blocks, newBlock];
+    }
+
+    return {
+      ...msg,
+      thinkingContent: (msg.thinkingContent ?? '') + payload.content, // Also update legacy field
+      blocks: updatedBlocks,
+    };
+  });
   setConversation({ ...conversation, messages });
 }
 
@@ -196,6 +266,121 @@ function handleError(event: WebSocketEvent): void {
   streamingConversationId.set(null);
 }
 
+// Tool event handlers
+function handleToolStart(event: WebSocketEvent): void {
+  const payload = event.payload as ChatToolStartPayload;
+  const conversation = getConversation(payload.conversation_id);
+  if (!conversation) {
+    console.warn(`Chat: received chat:tool-start for unknown conversation ${payload.conversation_id}`);
+    return;
+  }
+
+  const toolBlock: ToolCallBlock = {
+    type: 'tool',
+    id: `block-${payload.tool_id}`,
+    toolId: payload.tool_id,
+    toolName: payload.tool_name,
+    input: payload.input,
+    inputRaw: JSON.stringify(payload.input),
+    status: 'running',
+    startedAt: Date.now(),
+  };
+
+  const messages = conversation.messages.map(msg => {
+    if (msg.id !== payload.message_id) return msg;
+    return {
+      ...msg,
+      blocks: [...(msg.blocks ?? []), toolBlock],
+    };
+  });
+  setConversation({ ...conversation, messages });
+}
+
+function handleToolDelta(event: WebSocketEvent): void {
+  const payload = event.payload as ChatToolDeltaPayload;
+  const conversation = getConversation(payload.conversation_id);
+  if (!conversation) return;
+
+  const messages = conversation.messages.map(msg => {
+    if (msg.id !== payload.message_id || !msg.blocks) return msg;
+
+    const blocks = msg.blocks.map(block => {
+      if (block.type !== 'tool' || block.toolId !== payload.tool_id) return block;
+      return { ...block, inputRaw: block.inputRaw + payload.chunk };
+    });
+
+    return { ...msg, blocks };
+  });
+  setConversation({ ...conversation, messages });
+}
+
+function handleToolResult(event: WebSocketEvent): void {
+  const payload = event.payload as ChatToolResultPayload;
+  const conversation = getConversation(payload.conversation_id);
+  if (!conversation) return;
+
+  const messages = conversation.messages.map(msg => {
+    if (msg.id !== payload.message_id || !msg.blocks) return msg;
+
+    const blocks = msg.blocks.map(block => {
+      if (block.type !== 'tool' || block.toolId !== payload.tool_id) return block;
+      return {
+        ...block,
+        status: payload.status === 'success' ? 'success' : 'error',
+        output: payload.status === 'success' ? payload.result : undefined,
+        error: payload.status === 'error' ? payload.result : undefined,
+        completedAt: Date.now(),
+      } as ToolCallBlock;
+    });
+
+    return { ...msg, blocks };
+  });
+  setConversation({ ...conversation, messages });
+}
+
+function handleToolConfirm(event: WebSocketEvent): void {
+  const payload = event.payload as ChatToolConfirmPayload;
+
+  const trustLevel = trustLevelState.get();
+
+  // Autonomous mode: auto-approve everything
+  if (trustLevel === 'autonomous') {
+    sendToolApprove(payload.tool_id, true);
+    return;
+  }
+
+  // Check if this tool is dismissed for session
+  if (isToolDismissedForSession(payload.tool_name)) {
+    sendToolApprove(payload.tool_id, true);
+    return;
+  }
+
+  // Guided mode: only prompt for dangerous tools
+  if (trustLevel === 'guided' && !isDangerousTool(payload.tool_name)) {
+    sendToolApprove(payload.tool_id, true);
+    return;
+  }
+
+  // Set pending confirmation for UI (supervised mode, or dangerous tool in guided mode)
+  pendingToolConfirm.set({
+    conversationId: payload.conversation_id,
+    messageId: payload.message_id,
+    toolId: payload.tool_id,
+    toolName: payload.tool_name,
+    input: payload.input,
+  });
+}
+
+export function sendToolApprove(toolId: string, approved: boolean): void {
+  const event: WebSocketEvent = {
+    type: CHAT_TOOL_APPROVE,
+    payload: { tool_id: toolId, approved },
+    timestamp: new Date().toISOString(),
+  };
+  wsSend(event);
+  clearPendingConfirm();
+}
+
 /**
  * Inject context into a conversation as an invisible message.
  * The message uses role 'user' with isContext=true so it is included in LLM
@@ -227,6 +412,11 @@ export function initChatService(): () => void {
     wsOn(CHAT_THINKING_DELTA, handleThinkingDelta),
     wsOn(CHAT_STREAM_END, handleStreamEnd),
     wsOn(CHAT_ERROR, handleError),
+    // Tool event handlers
+    wsOn(CHAT_TOOL_START, handleToolStart),
+    wsOn(CHAT_TOOL_DELTA, handleToolDelta),
+    wsOn(CHAT_TOOL_RESULT, handleToolResult),
+    wsOn(CHAT_TOOL_CONFIRM, handleToolConfirm),
   ];
 
   return () => {

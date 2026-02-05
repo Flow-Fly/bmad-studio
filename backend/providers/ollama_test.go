@@ -165,7 +165,7 @@ func TestOllamaProvider_ListModels(t *testing.T) {
 		t.Fatalf("Expected 2 models, got %d", len(models))
 	}
 
-	// First model
+	// First model (llama3.2 supports tools)
 	if models[0].ID != "llama3.2:latest" {
 		t.Errorf("Model 0: expected ID 'llama3.2:latest', got %q", models[0].ID)
 	}
@@ -178,10 +178,48 @@ func TestOllamaProvider_ListModels(t *testing.T) {
 	if models[0].MaxTokens != 0 {
 		t.Errorf("Model 0: expected MaxTokens 0, got %d", models[0].MaxTokens)
 	}
+	if !models[0].SupportsTools {
+		t.Error("Model 0 (llama3.2): expected SupportsTools true")
+	}
 
-	// Second model
+	// Second model (codellama does not support tools)
 	if models[1].ID != "codellama:7b" {
 		t.Errorf("Model 1: expected ID 'codellama:7b', got %q", models[1].ID)
+	}
+	if models[1].SupportsTools {
+		t.Error("Model 1 (codellama): expected SupportsTools false")
+	}
+}
+
+func TestOllamaSupportsTools(t *testing.T) {
+	tests := []struct {
+		modelName string
+		expected  bool
+	}{
+		{"llama3.1:latest", true},
+		{"llama3.1:70b", true},
+		{"llama3.2:latest", true},
+		{"llama3.3:70b", true},
+		{"mistral:latest", true},
+		{"mistral:7b-instruct", true},
+		{"qwen2.5:latest", true},
+		{"qwen2.5:32b", true},
+		{"qwen3:latest", true},
+		{"granite3:8b", true},
+		{"codellama:7b", false},
+		{"llama2:latest", false},
+		{"phi:latest", false},
+		{"gemma:7b", false},
+		{"deepseek-coder:6.7b", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.modelName, func(t *testing.T) {
+			got := ollamaSupportsTools(tt.modelName)
+			if got != tt.expected {
+				t.Errorf("ollamaSupportsTools(%q) = %v, want %v", tt.modelName, got, tt.expected)
+			}
+		})
 	}
 }
 
