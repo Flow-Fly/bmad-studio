@@ -2,7 +2,10 @@ package providers
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
+
+	"bmad-studio/backend/types"
 )
 
 // TestProviderInterfaceCompliance verifies that the Provider interface
@@ -122,4 +125,220 @@ func (m *mockProvider) ValidateCredentials(ctx context.Context) error {
 
 func (m *mockProvider) ListModels() ([]Model, error) {
 	return []Model{}, nil
+}
+
+func TestStreamChunkToolFields(t *testing.T) {
+	chunk := StreamChunk{
+		Type:      ChunkTypeToolCallStart,
+		MessageID: "msg-1",
+		ToolID:    "toolu_123",
+		ToolName:  "file_read",
+	}
+
+	data, err := json.Marshal(chunk)
+	if err != nil {
+		t.Fatalf("failed to marshal: %v", err)
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(data, &result); err != nil {
+		t.Fatalf("failed to unmarshal: %v", err)
+	}
+
+	if result["toolId"] != "toolu_123" {
+		t.Errorf("expected toolId %q, got %v", "toolu_123", result["toolId"])
+	}
+	if result["toolName"] != "file_read" {
+		t.Errorf("expected toolName %q, got %v", "file_read", result["toolName"])
+	}
+}
+
+func TestStreamChunkToolFieldsOmitted(t *testing.T) {
+	// Tool fields should be omitted when empty (backwards compat)
+	chunk := StreamChunk{
+		Type:      ChunkTypeChunk,
+		Content:   "Hello",
+		MessageID: "msg-1",
+		Index:     0,
+	}
+
+	data, err := json.Marshal(chunk)
+	if err != nil {
+		t.Fatalf("failed to marshal: %v", err)
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(data, &result); err != nil {
+		t.Fatalf("failed to unmarshal: %v", err)
+	}
+
+	if _, ok := result["toolId"]; ok {
+		t.Error("expected toolId to be omitted when empty")
+	}
+	if _, ok := result["toolName"]; ok {
+		t.Error("expected toolName to be omitted when empty")
+	}
+}
+
+func TestChunkTypeConstants(t *testing.T) {
+	tests := []struct {
+		name     string
+		constant string
+		expected string
+	}{
+		{"start", ChunkTypeStart, "start"},
+		{"chunk", ChunkTypeChunk, "chunk"},
+		{"thinking", ChunkTypeThinking, "thinking"},
+		{"end", ChunkTypeEnd, "end"},
+		{"error", ChunkTypeError, "error"},
+		{"tool_call_start", ChunkTypeToolCallStart, "tool_call_start"},
+		{"tool_call_delta", ChunkTypeToolCallDelta, "tool_call_delta"},
+		{"tool_call_end", ChunkTypeToolCallEnd, "tool_call_end"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.constant != tt.expected {
+				t.Errorf("expected %q, got %q", tt.expected, tt.constant)
+			}
+		})
+	}
+}
+
+func TestMessageToolFields(t *testing.T) {
+	// Tool result message
+	msg := Message{
+		Role:       "tool",
+		Content:    "file contents here",
+		ToolCallID: "toolu_123",
+		ToolName:   "file_read",
+	}
+
+	data, err := json.Marshal(msg)
+	if err != nil {
+		t.Fatalf("failed to marshal: %v", err)
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(data, &result); err != nil {
+		t.Fatalf("failed to unmarshal: %v", err)
+	}
+
+	if result["toolCallId"] != "toolu_123" {
+		t.Errorf("expected toolCallId %q, got %v", "toolu_123", result["toolCallId"])
+	}
+	if result["toolName"] != "file_read" {
+		t.Errorf("expected toolName %q, got %v", "file_read", result["toolName"])
+	}
+}
+
+func TestMessageToolCallsField(t *testing.T) {
+	msg := Message{
+		Role:    "assistant",
+		Content: "",
+		ToolCalls: []types.ToolCall{
+			{ID: "toolu_1", Name: "file_read", Input: json.RawMessage(`{"path":"test.txt"}`)},
+			{ID: "toolu_2", Name: "bash", Input: json.RawMessage(`{"command":"ls"}`)},
+		},
+	}
+
+	data, err := json.Marshal(msg)
+	if err != nil {
+		t.Fatalf("failed to marshal: %v", err)
+	}
+
+	var roundTrip Message
+	if err := json.Unmarshal(data, &roundTrip); err != nil {
+		t.Fatalf("failed to unmarshal: %v", err)
+	}
+
+	if len(roundTrip.ToolCalls) != 2 {
+		t.Fatalf("expected 2 tool calls, got %d", len(roundTrip.ToolCalls))
+	}
+	if roundTrip.ToolCalls[0].Name != "file_read" {
+		t.Errorf("expected first tool call name %q, got %q", "file_read", roundTrip.ToolCalls[0].Name)
+	}
+}
+
+func TestMessageToolFieldsOmitted(t *testing.T) {
+	// Plain user message — tool fields should be omitted
+	msg := Message{
+		Role:    "user",
+		Content: "Hello",
+	}
+
+	data, err := json.Marshal(msg)
+	if err != nil {
+		t.Fatalf("failed to marshal: %v", err)
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(data, &result); err != nil {
+		t.Fatalf("failed to unmarshal: %v", err)
+	}
+
+	if _, ok := result["toolCallId"]; ok {
+		t.Error("expected toolCallId to be omitted")
+	}
+	if _, ok := result["toolCalls"]; ok {
+		t.Error("expected toolCalls to be omitted")
+	}
+	if _, ok := result["toolName"]; ok {
+		t.Error("expected toolName to be omitted")
+	}
+}
+
+func TestChatRequestToolsField(t *testing.T) {
+	req := ChatRequest{
+		Messages:  []Message{{Role: "user", Content: "hello"}},
+		Model:     "claude-sonnet",
+		MaxTokens: 1024,
+		Tools: []types.ToolDefinition{
+			{
+				Name:        "file_read",
+				Description: "Read file",
+				InputSchema: json.RawMessage(`{"type":"object"}`),
+			},
+		},
+	}
+
+	data, err := json.Marshal(req)
+	if err != nil {
+		t.Fatalf("failed to marshal: %v", err)
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(data, &result); err != nil {
+		t.Fatalf("failed to unmarshal: %v", err)
+	}
+
+	tools, ok := result["tools"].([]interface{})
+	if !ok {
+		t.Fatalf("expected tools to be array, got %T", result["tools"])
+	}
+	if len(tools) != 1 {
+		t.Errorf("expected 1 tool, got %d", len(tools))
+	}
+}
+
+func TestChatRequestToolsOmitted(t *testing.T) {
+	req := ChatRequest{
+		Messages:  []Message{{Role: "user", Content: "hello"}},
+		Model:     "claude-sonnet",
+		MaxTokens: 1024,
+	}
+
+	data, err := json.Marshal(req)
+	if err != nil {
+		t.Fatalf("failed to marshal: %v", err)
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(data, &result); err != nil {
+		t.Fatalf("failed to unmarshal: %v", err)
+	}
+
+	if _, ok := result["tools"]; ok {
+		t.Error("expected tools to be omitted when empty")
+	}
 }

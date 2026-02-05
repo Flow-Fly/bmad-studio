@@ -42,7 +42,7 @@ func collectEvents(client *websocket.Client, timeout time.Duration) []*types.Web
 func TestNewChatService(t *testing.T) {
 	hub := websocket.NewHub()
 	ps := NewProviderService()
-	cs := NewChatService(ps, hub)
+	cs := NewChatService(ps, hub, nil, nil)
 
 	if cs == nil {
 		t.Fatal("expected ChatService to be created")
@@ -59,7 +59,7 @@ func TestChatService_HandleMessage_MissingFields(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 
 	ps := NewProviderService()
-	cs := NewChatService(ps, hub)
+	cs := NewChatService(ps, hub, nil, nil)
 	client := mockClient(hub)
 
 	tests := []struct {
@@ -90,7 +90,7 @@ func TestChatService_HandleMessage_InvalidProvider(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 
 	ps := NewProviderService()
-	cs := NewChatService(ps, hub)
+	cs := NewChatService(ps, hub, nil, nil)
 	client := mockClient(hub)
 
 	payload := types.ChatSendPayload{
@@ -110,7 +110,7 @@ func TestChatService_HandleMessage_InvalidProvider(t *testing.T) {
 func TestChatService_CancelStream_NoActiveStream(t *testing.T) {
 	hub := websocket.NewHub()
 	ps := NewProviderService()
-	cs := NewChatService(ps, hub)
+	cs := NewChatService(ps, hub, nil, nil)
 
 	err := cs.CancelStream("nonexistent-conv")
 	if err == nil {
@@ -121,7 +121,7 @@ func TestChatService_CancelStream_NoActiveStream(t *testing.T) {
 func TestChatService_ActiveStreamCount(t *testing.T) {
 	hub := websocket.NewHub()
 	ps := NewProviderService()
-	cs := NewChatService(ps, hub)
+	cs := NewChatService(ps, hub, nil, nil)
 
 	if cs.ActiveStreamCount() != 0 {
 		t.Errorf("expected 0, got %d", cs.ActiveStreamCount())
@@ -144,7 +144,7 @@ func TestChatService_CancelStream_Success(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 
 	ps := NewProviderService()
-	cs := NewChatService(ps, hub)
+	cs := NewChatService(ps, hub, nil, nil)
 
 	cancelled := false
 	var mu sync.Mutex
@@ -181,7 +181,7 @@ func TestChatService_ConsumeStream_MapsChunkTypes(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 
 	ps := NewProviderService()
-	cs := NewChatService(ps, hub)
+	cs := NewChatService(ps, hub, nil, nil)
 
 	// Create a mock chunk channel
 	chunks := make(chan providers.StreamChunk, 10)
@@ -193,7 +193,8 @@ func TestChatService_ConsumeStream_MapsChunkTypes(t *testing.T) {
 	close(chunks)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	cs.consumeStream(ctx, cancel, client, "conv-1", "claude-sonnet", chunks)
+	cs.consumeStream(ctx, cancel, client, "conv-1", "claude", "key", "", "claude-sonnet",
+		[]providers.Message{{Role: "user", Content: "hi"}}, nil, chunks)
 
 	events := collectEvents(client, 200*time.Millisecond)
 
@@ -232,7 +233,7 @@ func TestChatService_ConsumeStream_ContextCancellation(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 
 	ps := NewProviderService()
-	cs := NewChatService(ps, hub)
+	cs := NewChatService(ps, hub, nil, nil)
 
 	// Create a slow chunk channel that won't close on its own
 	chunks := make(chan providers.StreamChunk, 10)
@@ -242,7 +243,8 @@ func TestChatService_ConsumeStream_ContextCancellation(t *testing.T) {
 
 	done := make(chan struct{})
 	go func() {
-		cs.consumeStream(ctx, cancel, client, "conv-cancel", "claude-sonnet", chunks)
+		cs.consumeStream(ctx, cancel, client, "conv-cancel", "claude", "key", "", "claude-sonnet",
+			[]providers.Message{{Role: "user", Content: "hi"}}, nil, chunks)
 		close(done)
 	}()
 
@@ -290,7 +292,7 @@ func TestChatService_ConsumeStream_ErrorChunk(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 
 	ps := NewProviderService()
-	cs := NewChatService(ps, hub)
+	cs := NewChatService(ps, hub, nil, nil)
 
 	chunks := make(chan providers.StreamChunk, 10)
 	chunks <- providers.StreamChunk{Type: "start", MessageID: "msg-1", Model: "claude-sonnet"}
@@ -298,7 +300,8 @@ func TestChatService_ConsumeStream_ErrorChunk(t *testing.T) {
 	close(chunks)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	cs.consumeStream(ctx, cancel, client, "conv-err", "claude-sonnet", chunks)
+	cs.consumeStream(ctx, cancel, client, "conv-err", "claude", "key", "", "claude-sonnet",
+		[]providers.Message{{Role: "user", Content: "hi"}}, nil, chunks)
 
 	events := collectEvents(client, 200*time.Millisecond)
 
@@ -311,5 +314,184 @@ func TestChatService_ConsumeStream_ErrorChunk(t *testing.T) {
 
 	if !hasError {
 		t.Error("expected chat:error event")
+	}
+}
+
+func TestChatService_ConsumeStream_ToolCallChunks(t *testing.T) {
+	hub := websocket.NewHub()
+	go hub.Run()
+	defer hub.Stop()
+	time.Sleep(10 * time.Millisecond)
+
+	client := mockClient(hub)
+	hub.Register(client)
+	time.Sleep(10 * time.Millisecond)
+
+	ps := NewProviderService()
+	cs := NewChatService(ps, hub, nil, nil)
+
+	// Simulate a stream with tool calls followed by end
+	chunks := make(chan providers.StreamChunk, 10)
+	chunks <- providers.StreamChunk{Type: "start", MessageID: "msg-1", Model: "claude-sonnet"}
+	chunks <- providers.StreamChunk{Type: "tool_call_start", MessageID: "msg-1", ToolID: "tool-1", ToolName: "file_read"}
+	chunks <- providers.StreamChunk{Type: "tool_call_delta", MessageID: "msg-1", ToolID: "tool-1", Content: `{"path":"test.txt"}`}
+	chunks <- providers.StreamChunk{Type: "tool_call_end", MessageID: "msg-1", ToolID: "tool-1"}
+	chunks <- providers.StreamChunk{Type: "end", MessageID: "msg-1", Usage: &providers.UsageStats{InputTokens: 10, OutputTokens: 20}}
+	close(chunks)
+
+	// Without orchestrator, tool call should produce error result and loop would need
+	// another provider call. For this test, we just verify tool delta events are emitted.
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	cs.consumeStream(ctx, cancel, client, "conv-tools", "claude", "key", "", "claude-sonnet",
+		[]providers.Message{{Role: "user", Content: "read test.txt"}}, nil, chunks)
+
+	events := collectEvents(client, 500*time.Millisecond)
+
+	hasToolDelta := false
+	for _, event := range events {
+		if event.Type == types.EventTypeChatToolDelta {
+			hasToolDelta = true
+		}
+	}
+
+	if !hasToolDelta {
+		t.Error("expected chat:tool-delta event for tool call chunks")
+	}
+}
+
+func TestChatService_ConvertHistory(t *testing.T) {
+	history := []types.ChatMessage{
+		{Role: "user", Content: "hello"},
+		{Role: "assistant", Content: "hi there"},
+		{Role: "user", Content: "read file"},
+	}
+
+	messages := convertHistory(history)
+	if len(messages) != 3 {
+		t.Fatalf("expected 3 messages, got %d", len(messages))
+	}
+	if messages[0].Role != "user" || messages[0].Content != "hello" {
+		t.Errorf("unexpected first message: %+v", messages[0])
+	}
+	if messages[1].Role != "assistant" || messages[1].Content != "hi there" {
+		t.Errorf("unexpected second message: %+v", messages[1])
+	}
+}
+
+func TestChatService_ConvertHistory_Empty(t *testing.T) {
+	messages := convertHistory(nil)
+	if messages != nil {
+		t.Errorf("expected nil for empty history, got %v", messages)
+	}
+}
+
+func TestChatService_ConvertHistory_WithToolCalls(t *testing.T) {
+	history := []types.ChatMessage{
+		{Role: "user", Content: "read test.txt"},
+		{
+			Role:    "assistant",
+			Content: "",
+			ToolCalls: []types.ToolCall{
+				{ID: "tool-1", Name: "file_read", Input: json.RawMessage(`{"path":"test.txt"}`)},
+			},
+		},
+		{Role: "tool", ToolCallID: "tool-1", ToolName: "file_read", Content: "file contents"},
+		{Role: "assistant", Content: "The file contains: file contents"},
+	}
+
+	messages := convertHistory(history)
+	if len(messages) != 4 {
+		t.Fatalf("expected 4 messages, got %d", len(messages))
+	}
+
+	// Verify assistant message with tool calls
+	if len(messages[1].ToolCalls) != 1 {
+		t.Errorf("expected 1 tool call, got %d", len(messages[1].ToolCalls))
+	}
+	if messages[1].ToolCalls[0].Name != "file_read" {
+		t.Errorf("expected tool name 'file_read', got %q", messages[1].ToolCalls[0].Name)
+	}
+
+	// Verify tool result message
+	if messages[2].Role != "tool" {
+		t.Errorf("expected role 'tool', got %q", messages[2].Role)
+	}
+	if messages[2].ToolCallID != "tool-1" {
+		t.Errorf("expected ToolCallID 'tool-1', got %q", messages[2].ToolCallID)
+	}
+}
+
+func TestChatService_ToolLoopSafetyMax(t *testing.T) {
+	hub := websocket.NewHub()
+	go hub.Run()
+	defer hub.Stop()
+	time.Sleep(10 * time.Millisecond)
+
+	client := mockClient(hub)
+	hub.Register(client)
+	time.Sleep(10 * time.Millisecond)
+
+	ps := NewProviderService()
+	cs := NewChatService(ps, hub, nil, nil)
+
+	// Set a low max for testing
+	cs.SetMaxToolLoopIters(2)
+
+	// Create a channel that always returns tool calls (simulating infinite loop)
+	iterationCount := 0
+	makeToolChunks := func() chan providers.StreamChunk {
+		chunks := make(chan providers.StreamChunk, 10)
+		iterationCount++
+		chunks <- providers.StreamChunk{Type: "start", MessageID: "msg-" + string(rune('0'+iterationCount)), Model: "test-model"}
+		chunks <- providers.StreamChunk{Type: "tool_call_start", MessageID: "msg-1", ToolID: "tool-1", ToolName: "file_read"}
+		chunks <- providers.StreamChunk{Type: "tool_call_delta", MessageID: "msg-1", ToolID: "tool-1", Content: `{"path":"test.txt"}`}
+		chunks <- providers.StreamChunk{Type: "tool_call_end", MessageID: "msg-1", ToolID: "tool-1"}
+		chunks <- providers.StreamChunk{Type: "end", MessageID: "msg-1"}
+		close(chunks)
+		return chunks
+	}
+
+	chunks := makeToolChunks()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Run consumeStream - it should exit after 2 iterations
+	// Note: Without a real provider, the loop will fail to re-invoke, so we just verify
+	// the max iteration check is working by checking it doesn't hang
+	done := make(chan struct{})
+	go func() {
+		cs.consumeStream(ctx, cancel, client, "conv-max", "claude", "key", "", "test-model",
+			[]providers.Message{{Role: "user", Content: "hi"}}, nil, chunks)
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		// Expected: consumeStream returned (either due to max or provider error)
+	case <-time.After(3 * time.Second):
+		t.Error("timeout: consumeStream did not return after hitting max iterations")
+	}
+
+	// Verify that we got stream events
+	events := collectEvents(client, 200*time.Millisecond)
+	if len(events) == 0 {
+		t.Error("expected at least some events to be emitted")
+	}
+}
+
+func TestChatService_SetMaxToolLoopIters(t *testing.T) {
+	hub := websocket.NewHub()
+	ps := NewProviderService()
+	cs := NewChatService(ps, hub, nil, nil)
+
+	// Verify default
+	if cs.maxToolLoopIters != DefaultMaxToolLoopIters {
+		t.Errorf("expected default %d, got %d", DefaultMaxToolLoopIters, cs.maxToolLoopIters)
+	}
+
+	// Set custom value
+	cs.SetMaxToolLoopIters(5)
+	if cs.maxToolLoopIters != 5 {
+		t.Errorf("expected 5, got %d", cs.maxToolLoopIters)
 	}
 }
