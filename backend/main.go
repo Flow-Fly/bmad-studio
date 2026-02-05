@@ -84,9 +84,14 @@ func main() {
 		}
 		searchProviders = append(searchProviders, tools.NewSearXNGProvider(searxngURL))
 
-		// Brave Search fallback (BYOK via env var)
-		// TODO: Add brave_search_api_key to Settings struct for config store support
-		if braveKey := os.Getenv("BRAVE_SEARCH_API_KEY"); braveKey != "" {
+		// Brave Search fallback (BYOK via env var or config store)
+		braveKey := os.Getenv("BRAVE_SEARCH_API_KEY")
+		if braveKey == "" && configStore != nil {
+			if settings, err := configStore.Load(); err == nil && settings.BraveSearchAPIKey != "" {
+				braveKey = settings.BraveSearchAPIKey
+			}
+		}
+		if braveKey != "" {
 			searchProviders = append(searchProviders, tools.NewBraveSearchProvider(braveKey))
 		}
 

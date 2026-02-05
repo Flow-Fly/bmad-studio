@@ -38,10 +38,11 @@ type ProviderSettings struct {
 
 // Settings represents global application settings
 type Settings struct {
-	DefaultProvider string                      `json:"default_provider"`
-	DefaultModel    string                      `json:"default_model"`
-	OllamaEndpoint  string                      `json:"ollama_endpoint"`
-	Providers       map[string]ProviderSettings `json:"providers"`
+	DefaultProvider    string                      `json:"default_provider"`
+	DefaultModel       string                      `json:"default_model"`
+	OllamaEndpoint     string                      `json:"ollama_endpoint"`
+	Providers          map[string]ProviderSettings `json:"providers"`
+	BraveSearchAPIKey  string                      `json:"braveSearchApiKey,omitempty"`
 }
 
 // Provider represents a configured LLM provider
