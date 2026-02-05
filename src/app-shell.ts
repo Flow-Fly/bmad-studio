@@ -28,6 +28,8 @@ import './components/core/phase-graph/phase-graph-container.js';
 import './components/core/layout/activity-bar.js';
 import './components/core/chat/chat-panel.js';
 import './components/core/insights/insight-panel.js';
+import './components/core/chat/tool-confirm-modal.js';
+import { initProviderState } from './services/provider.service.js';
 
 @customElement('app-shell')
 export class AppShell extends SignalWatcher(LitElement) {
@@ -193,6 +195,8 @@ export class AppShell extends SignalWatcher(LitElement) {
   connectedCallback(): void {
     super.connectedCallback();
     window.addEventListener('keydown', this._boundKeyHandler);
+    // Initialize provider state (trust level) from persisted settings
+    initProviderState();
   }
 
   disconnectedCallback(): void {
@@ -323,6 +327,7 @@ export class AppShell extends SignalWatcher(LitElement) {
       ${loadState.status === 'success' && project ? this._renderLoaded(project.projectName, bmadAvailable) : nothing}
 
       <provider-settings></provider-settings>
+      <tool-confirm-modal></tool-confirm-modal>
     `;
   }
 

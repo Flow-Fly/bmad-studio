@@ -17,7 +17,20 @@ import {
   CHAT_THINKING_DELTA,
   CHAT_STREAM_END,
   CHAT_ERROR,
+  CHAT_TOOL_START,
+  CHAT_TOOL_DELTA,
+  CHAT_TOOL_RESULT,
+  CHAT_TOOL_CONFIRM,
+  CHAT_TOOL_APPROVE,
 } from '../../../src/types/conversation.ts';
+import {
+  pendingToolConfirm,
+  sessionDismissedTools,
+  dismissToolForSession,
+  isToolDismissedForSession,
+  clearPendingConfirm,
+} from '../../../src/state/chat.state.ts';
+import { trustLevelState } from '../../../src/state/provider.state.ts';
 import type { WebSocketEvent } from '../../../src/services/websocket.service.ts';
 
 beforeEach(() => {
@@ -256,5 +269,72 @@ describe('conversation types', () => {
     expect(CHAT_ERROR).to.equal('chat:error');
     expect(CHAT_SEND).to.equal('chat:send');
     expect(CHAT_CANCEL).to.equal('chat:cancel');
+  });
+
+  it('tool event type constants have correct values', () => {
+    expect(CHAT_TOOL_START).to.equal('chat:tool-start');
+    expect(CHAT_TOOL_DELTA).to.equal('chat:tool-delta');
+    expect(CHAT_TOOL_RESULT).to.equal('chat:tool-result');
+    expect(CHAT_TOOL_CONFIRM).to.equal('chat:tool-confirm');
+    expect(CHAT_TOOL_APPROVE).to.equal('chat:tool-approve');
+  });
+});
+
+describe('tool confirmation state', () => {
+  beforeEach(() => {
+    clearPendingConfirm();
+    sessionDismissedTools.set(new Set());
+    trustLevelState.set('guided');
+  });
+
+  afterEach(() => {
+    clearPendingConfirm();
+    sessionDismissedTools.set(new Set());
+    trustLevelState.set('guided');
+  });
+
+  it('pendingToolConfirm starts as null', () => {
+    expect(pendingToolConfirm.get()).to.be.null;
+  });
+
+  it('sessionDismissedTools starts as empty set', () => {
+    expect(sessionDismissedTools.get().size).to.equal(0);
+  });
+
+  it('dismissToolForSession adds tool to dismissed set', () => {
+    dismissToolForSession('bash');
+    expect(sessionDismissedTools.get().has('bash')).to.be.true;
+  });
+
+  it('isToolDismissedForSession returns true for dismissed tools', () => {
+    dismissToolForSession('file_write');
+    expect(isToolDismissedForSession('file_write')).to.be.true;
+    expect(isToolDismissedForSession('file_read')).to.be.false;
+  });
+
+  it('clearPendingConfirm resets pendingToolConfirm to null', () => {
+    pendingToolConfirm.set({
+      conversationId: 'conv-1',
+      messageId: 'msg-1',
+      toolId: 'tool-1',
+      toolName: 'bash',
+      input: { command: 'ls' },
+    });
+    clearPendingConfirm();
+    expect(pendingToolConfirm.get()).to.be.null;
+  });
+
+  it('trustLevelState defaults to guided', () => {
+    expect(trustLevelState.get()).to.equal('guided');
+  });
+
+  it('trustLevelState can be set to supervised', () => {
+    trustLevelState.set('supervised');
+    expect(trustLevelState.get()).to.equal('supervised');
+  });
+
+  it('trustLevelState can be set to autonomous', () => {
+    trustLevelState.set('autonomous');
+    expect(trustLevelState.get()).to.equal('autonomous');
   });
 });

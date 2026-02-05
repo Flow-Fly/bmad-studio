@@ -1,10 +1,11 @@
 import { LitElement, html, svg, css, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
-import type { Message, Highlight, HighlightColor } from '../../../types/conversation.js';
+import type { Message, Highlight, HighlightColor, MessageBlock } from '../../../types/conversation.js';
 import { HIGHLIGHT_COLORS } from '../../../types/conversation.js';
 import { addHighlight } from '../../../state/chat.state.js';
 import '../../shared/markdown-renderer.js';
 import './highlight-popover.js';
+import './tool-call-block.js';
 
 // Semi-transparent tint colors for highlight overlays
 const HIGHLIGHT_TINTS: Record<HighlightColor, string> = {
@@ -531,11 +532,30 @@ export class ConversationBlock extends LitElement {
     `;
   }
 
+  private _renderBlock(block: MessageBlock) {
+    switch (block.type) {
+      case 'text':
+        return html`<markdown-renderer
+          .content=${block.content}
+          @link-click=${this._handleLinkClick}
+        ></markdown-renderer>`;
+      case 'thinking':
+        // Thinking blocks are rendered via _renderThinkingSection using legacy thinkingContent
+        return nothing;
+      case 'tool':
+        return html`<tool-call-block
+          .block=${block}
+          .conversationId=${this.conversationId}
+          .messageId=${this.message.id}
+        ></tool-call-block>`;
+    }
+  }
+
   private _renderContent() {
     const { message } = this;
 
     // Streaming with no content yet — show typing indicator
-    if (message.isStreaming && !message.content) {
+    if (message.isStreaming && !message.content && !message.blocks?.length) {
       return this._renderTypingIndicator();
     }
 
@@ -556,7 +576,18 @@ export class ConversationBlock extends LitElement {
       `;
     }
 
-    // Regular content (possibly still streaming) — render through markdown
+    // For assistant messages with blocks, render blocks
+    if (message.role === 'assistant' && message.blocks?.length) {
+      return html`
+        ${this._renderThinkingSection()}
+        <div class="content" @mouseup=${this._handleContentMouseUp}>
+          ${message.blocks.map(block => this._renderBlock(block))}
+        </div>
+        ${message.isPartial ? html`<span class="partial-indicator">Response was interrupted</span>` : nothing}
+      `;
+    }
+
+    // Fallback: render legacy content string
     const isUser = message.role === 'user';
     const messageHighlights = this._getMessageHighlights();
 
@@ -570,7 +601,6 @@ export class ConversationBlock extends LitElement {
                 .content=${message.content}
                 @link-click=${this._handleLinkClick}
               ></markdown-renderer>
-              <!-- Prepared for Story 3-9-conversation-lifecycle: assistant message highlight overlays -->
             `
         }
       </div>

@@ -60,10 +60,11 @@ type UsageStats struct {
 
 // Model represents an available LLM model.
 type Model struct {
-	ID        string `json:"id"`
-	Name      string `json:"name"`
-	Provider  string `json:"provider"`
-	MaxTokens int    `json:"max_tokens"`
+	ID            string `json:"id"`
+	Name          string `json:"name"`
+	Provider      string `json:"provider"`
+	MaxTokens     int    `json:"max_tokens"`
+	SupportsTools bool   `json:"supports_tools"`
 }
 
 // Message represents a single message in a conversation.

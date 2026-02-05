@@ -12,6 +12,7 @@ import '@shoelace-style/shoelace/dist/components/select/select.js';
 import '@shoelace-style/shoelace/dist/components/option/option.js';
 import '@shoelace-style/shoelace/dist/components/badge/badge.js';
 import '@shoelace-style/shoelace/dist/components/divider/divider.js';
+import '@shoelace-style/shoelace/dist/components/checkbox/checkbox.js';
 
 import type SlInput from '@shoelace-style/shoelace/dist/components/input/input.js';
 
@@ -22,10 +23,12 @@ import {
   selectedModelState,
   modelsState,
   validationState,
+  trustLevelState,
   updateProviderConfig,
   setModelsForProvider,
   setValidationStatus,
 } from '../../../state/provider.state.js';
+import type { TrustLevel } from '../../../types/tool.js';
 import {
   validateProvider,
   listModels,
@@ -119,6 +122,34 @@ export class ProviderSettings extends SignalWatcher(LitElement) {
     sl-divider {
       --spacing: var(--bmad-spacing-md);
     }
+
+    .help-text {
+      font-size: var(--bmad-font-size-sm);
+      color: var(--bmad-color-text-tertiary);
+      line-height: var(--bmad-line-height-relaxed);
+      margin-top: var(--bmad-spacing-xs);
+    }
+
+    .trust-description {
+      font-size: var(--bmad-font-size-xs);
+      color: var(--bmad-color-text-tertiary);
+      padding-left: var(--bmad-spacing-md);
+      margin-top: 2px;
+    }
+
+    .model-filter {
+      margin-bottom: var(--bmad-spacing-sm);
+    }
+
+    .model-option {
+      display: flex;
+      align-items: center;
+      gap: var(--bmad-spacing-sm);
+    }
+
+    .model-option sl-badge {
+      font-size: 10px;
+    }
   `;
 
   @state() _open = false;
@@ -126,6 +157,7 @@ export class ProviderSettings extends SignalWatcher(LitElement) {
   @state() _keySaved: Record<string, boolean> = {};
   @state() _ollamaEndpoint = 'http://localhost:11434';
   @state() _errors: Record<string, string> = {};
+  @state() _showOnlyToolCapable = false;
 
   async open(): Promise<void> {
     this._open = true;
@@ -142,6 +174,11 @@ export class ProviderSettings extends SignalWatcher(LitElement) {
       activeProviderState.set((settings.default_provider || '') as ProviderType | '');
       selectedModelState.set(settings.default_model || '');
       this._ollamaEndpoint = settings.ollama_endpoint || 'http://localhost:11434';
+
+      // Load trust level (default to 'guided' if not set)
+      if (settings.trust_level) {
+        trustLevelState.set(settings.trust_level);
+      }
 
       if (settings.providers) {
         for (const [type, cfg] of Object.entries(settings.providers)) {
@@ -273,6 +310,7 @@ export class ProviderSettings extends SignalWatcher(LitElement) {
         default_provider: activeProviderState.get(),
         default_model: selectedModelState.get(),
         ollama_endpoint: this._ollamaEndpoint,
+        trust_level: trustLevelState.get(),
         providers: Object.fromEntries(
           providersState.get().map(p => [
             p.type,
@@ -308,14 +346,29 @@ export class ProviderSettings extends SignalWatcher(LitElement) {
   }
 
   private _renderModelSelector(type: ProviderType) {
-    const models: Model[] = modelsState.get()[type] ?? [];
+    let models: Model[] = modelsState.get()[type] ?? [];
     if (models.length === 0) return nothing;
+
+    // Apply filter for Ollama if enabled
+    const showFilter = type === 'ollama';
+    if (showFilter && this._showOnlyToolCapable) {
+      models = models.filter(m => m.supports_tools);
+    }
 
     const current = selectedModelState.get();
 
     return html`
       <div class="field-group">
         <span class="section-label">Model</span>
+        ${showFilter ? html`
+          <sl-checkbox
+            class="model-filter"
+            ?checked=${this._showOnlyToolCapable}
+            @sl-change=${(e: Event) => { this._showOnlyToolCapable = (e.target as HTMLInputElement).checked; }}
+          >
+            Show only tool-capable models
+          </sl-checkbox>
+        ` : nothing}
         <sl-select
           placeholder="Select a model"
           .value=${current}
@@ -323,9 +376,14 @@ export class ProviderSettings extends SignalWatcher(LitElement) {
             this._handleModelSelect((e.target as HTMLSelectElement).value);
           }}
         >
-          ${models.map(
-            m => html`<sl-option value=${m.id}>${m.name}</sl-option>`
-          )}
+          ${models.map(m => html`
+            <sl-option value=${m.id}>
+              <span class="model-option">
+                ${m.name}
+                ${m.supports_tools ? html`<sl-badge variant="success" pill>Tools</sl-badge>` : nothing}
+              </span>
+            </sl-option>
+          `)}
         </sl-select>
       </div>
     `;
@@ -440,6 +498,43 @@ export class ProviderSettings extends SignalWatcher(LitElement) {
     `;
   }
 
+  private _handleTrustLevelChange(value: string): void {
+    const level = value as TrustLevel;
+    trustLevelState.set(level);
+    this._persistSettings();
+  }
+
+  private _renderExecutionTab() {
+    const current = trustLevelState.get();
+    return html`
+      <div class="provider-form">
+        <div class="field-group">
+          <span class="section-label">Trust Level</span>
+          <sl-select
+            .value=${current}
+            @sl-change=${(e: Event) => this._handleTrustLevelChange((e.target as HTMLSelectElement).value)}
+          >
+            <sl-option value="supervised">
+              Supervised
+              <span slot="suffix" class="trust-description">Confirm all tool executions</span>
+            </sl-option>
+            <sl-option value="guided">
+              Guided (Recommended)
+              <span slot="suffix" class="trust-description">Confirm dangerous tools only</span>
+            </sl-option>
+            <sl-option value="autonomous">
+              Autonomous
+              <span slot="suffix" class="trust-description">Execute all tools without confirmation</span>
+            </sl-option>
+          </sl-select>
+          <span class="help-text">
+            Controls when you're asked to approve tool executions during conversations.
+          </span>
+        </div>
+      </div>
+    `;
+  }
+
   render() {
     return html`
       <sl-dialog
@@ -455,10 +550,12 @@ export class ProviderSettings extends SignalWatcher(LitElement) {
           <sl-tab slot="nav" panel="claude">Claude</sl-tab>
           <sl-tab slot="nav" panel="openai">OpenAI</sl-tab>
           <sl-tab slot="nav" panel="ollama">Ollama</sl-tab>
+          <sl-tab slot="nav" panel="execution">Execution</sl-tab>
 
           <sl-tab-panel name="claude">${this._renderApiKeyTab('claude')}</sl-tab-panel>
           <sl-tab-panel name="openai">${this._renderApiKeyTab('openai')}</sl-tab-panel>
           <sl-tab-panel name="ollama">${this._renderOllamaTab()}</sl-tab-panel>
+          <sl-tab-panel name="execution">${this._renderExecutionTab()}</sl-tab-panel>
         </sl-tab-group>
       </sl-dialog>
     `;

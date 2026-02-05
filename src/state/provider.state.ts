@@ -1,7 +1,10 @@
 import { Signal } from 'signal-polyfill';
 import type { ProviderConfig, ProviderType, Model, ValidationStatus } from '../types/provider.js';
+import type { TrustLevel } from '../types/tool.js';
 
 // Mutable state signals
+export const trustLevelState = new Signal.State<TrustLevel>('guided');
+
 export const providersState = new Signal.State<ProviderConfig[]>([
   { type: 'claude', enabled: false, hasValidCredentials: false },
   { type: 'openai', enabled: false, hasValidCredentials: false },

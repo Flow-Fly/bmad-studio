@@ -17,28 +17,32 @@ import (
 // openaiModels is the hardcoded list of available OpenAI models.
 var openaiModels = []Model{
 	{
-		ID:        string(openai.ChatModelGPT4o),
-		Name:      "GPT-4o",
-		Provider:  "openai",
-		MaxTokens: 16384,
+		ID:            string(openai.ChatModelGPT4o),
+		Name:          "GPT-4o",
+		Provider:      "openai",
+		MaxTokens:     16384,
+		SupportsTools: true,
 	},
 	{
-		ID:        string(openai.ChatModelGPT4oMini),
-		Name:      "GPT-4o mini",
-		Provider:  "openai",
-		MaxTokens: 16384,
+		ID:            string(openai.ChatModelGPT4oMini),
+		Name:          "GPT-4o mini",
+		Provider:      "openai",
+		MaxTokens:     16384,
+		SupportsTools: true,
 	},
 	{
-		ID:        string(openai.ChatModelGPT4_1),
-		Name:      "GPT-4.1",
-		Provider:  "openai",
-		MaxTokens: 32768,
+		ID:            string(openai.ChatModelGPT4_1),
+		Name:          "GPT-4.1",
+		Provider:      "openai",
+		MaxTokens:     32768,
+		SupportsTools: true,
 	},
 	{
-		ID:        string(openai.ChatModelGPT4_1Mini),
-		Name:      "GPT-4.1 mini",
-		Provider:  "openai",
-		MaxTokens: 32768,
+		ID:            string(openai.ChatModelGPT4_1Mini),
+		Name:          "GPT-4.1 mini",
+		Provider:      "openai",
+		MaxTokens:     32768,
+		SupportsTools: true,
 	},
 }
 

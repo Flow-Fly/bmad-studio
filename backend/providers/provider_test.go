@@ -96,10 +96,11 @@ func TestChatRequestFields(t *testing.T) {
 
 func TestModelFields(t *testing.T) {
 	model := Model{
-		ID:        "claude-opus-4-5-20251101",
-		Name:      "Claude Opus 4.5",
-		Provider:  "claude",
-		MaxTokens: 32768,
+		ID:            "claude-opus-4-5-20251101",
+		Name:          "Claude Opus 4.5",
+		Provider:      "claude",
+		MaxTokens:     32768,
+		SupportsTools: true,
 	}
 
 	if model.ID != "claude-opus-4-5-20251101" {
@@ -107,6 +108,37 @@ func TestModelFields(t *testing.T) {
 	}
 	if model.Provider != "claude" {
 		t.Errorf("Expected Provider 'claude', got %q", model.Provider)
+	}
+	if !model.SupportsTools {
+		t.Error("Expected SupportsTools to be true")
+	}
+}
+
+func TestModelSupportsToolsJSONSerialization(t *testing.T) {
+	model := Model{
+		ID:            "test-model",
+		Name:          "Test Model",
+		Provider:      "test",
+		MaxTokens:     1024,
+		SupportsTools: true,
+	}
+
+	data, err := json.Marshal(model)
+	if err != nil {
+		t.Fatalf("failed to marshal: %v", err)
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(data, &result); err != nil {
+		t.Fatalf("failed to unmarshal: %v", err)
+	}
+
+	supportsTools, ok := result["supports_tools"].(bool)
+	if !ok {
+		t.Fatal("expected supports_tools to be a boolean")
+	}
+	if !supportsTools {
+		t.Error("expected supports_tools to be true")
 	}
 }
 

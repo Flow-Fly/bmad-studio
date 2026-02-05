@@ -16,22 +16,25 @@ import (
 // claudeModels is the hardcoded list of available Claude models.
 var claudeModels = []Model{
 	{
-		ID:        string(anthropic.ModelClaudeOpus4_5_20251101),
-		Name:      "Claude Opus 4.5",
-		Provider:  "claude",
-		MaxTokens: 32768,
+		ID:            string(anthropic.ModelClaudeOpus4_5_20251101),
+		Name:          "Claude Opus 4.5",
+		Provider:      "claude",
+		MaxTokens:     32768,
+		SupportsTools: true,
 	},
 	{
-		ID:        string(anthropic.ModelClaudeSonnet4_5_20250929),
-		Name:      "Claude Sonnet 4.5",
-		Provider:  "claude",
-		MaxTokens: 16384,
+		ID:            string(anthropic.ModelClaudeSonnet4_5_20250929),
+		Name:          "Claude Sonnet 4.5",
+		Provider:      "claude",
+		MaxTokens:     16384,
+		SupportsTools: true,
 	},
 	{
-		ID:        string(anthropic.ModelClaudeHaiku4_5_20251001),
-		Name:      "Claude Haiku 4.5",
-		Provider:  "claude",
-		MaxTokens: 8192,
+		ID:            string(anthropic.ModelClaudeHaiku4_5_20251001),
+		Name:          "Claude Haiku 4.5",
+		Provider:      "claude",
+		MaxTokens:     8192,
+		SupportsTools: true,
 	},
 }
 

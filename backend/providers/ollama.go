@@ -93,12 +93,26 @@ func (p *OllamaProvider) ListModels() ([]Model, error) {
 	models := make([]Model, 0, len(tagsResp.Models))
 	for _, m := range tagsResp.Models {
 		models = append(models, Model{
-			ID:       m.Name,
-			Name:     m.Name,
-			Provider: "ollama",
+			ID:            m.Name,
+			Name:          m.Name,
+			Provider:      "ollama",
+			SupportsTools: ollamaSupportsTools(m.Name),
 		})
 	}
 	return models, nil
+}
+
+// ollamaSupportsTools checks if an Ollama model supports native tool calling.
+// Based on Ollama docs for models with native function calling support.
+func ollamaSupportsTools(modelName string) bool {
+	name := strings.ToLower(modelName)
+	toolCapable := []string{"llama3.1", "llama3.2", "llama3.3", "mistral", "qwen2.5", "qwen3", "granite3"}
+	for _, prefix := range toolCapable {
+		if strings.Contains(name, prefix) {
+			return true
+		}
+	}
+	return false
 }
 
 // ollamaChatRequest is the request body for POST /api/chat.
