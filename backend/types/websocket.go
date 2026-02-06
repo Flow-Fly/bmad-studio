@@ -135,26 +135,26 @@ type ChatMessage struct {
 
 // ChatToolStartPayload is the payload for chat:tool-start events
 type ChatToolStartPayload struct {
-	ConversationID string                 `json:"conversationId"`
-	MessageID      string                 `json:"messageId"`
-	ToolID         string                 `json:"toolId"`
-	ToolName       string                 `json:"toolName"`
+	ConversationID string                 `json:"conversation_id"`
+	MessageID      string                 `json:"message_id"`
+	ToolID         string                 `json:"tool_id"`
+	ToolName       string                 `json:"tool_name"`
 	Input          map[string]interface{} `json:"input"`
 }
 
 // ChatToolDeltaPayload is the payload for chat:tool-delta events
 type ChatToolDeltaPayload struct {
-	ConversationID string `json:"conversationId"`
-	MessageID      string `json:"messageId"`
-	ToolID         string `json:"toolId"`
+	ConversationID string `json:"conversation_id"`
+	MessageID      string `json:"message_id"`
+	ToolID         string `json:"tool_id"`
 	Chunk          string `json:"chunk"`
 }
 
 // ChatToolResultPayload is the payload for chat:tool-result events
 type ChatToolResultPayload struct {
-	ConversationID string                 `json:"conversationId"`
-	MessageID      string                 `json:"messageId"`
-	ToolID         string                 `json:"toolId"`
+	ConversationID string                 `json:"conversation_id"`
+	MessageID      string                 `json:"message_id"`
+	ToolID         string                 `json:"tool_id"`
 	Status         string                 `json:"status"` // "success" or "error"
 	Result         string                 `json:"result"`
 	Metadata       map[string]interface{} `json:"metadata,omitempty"`
@@ -162,16 +162,16 @@ type ChatToolResultPayload struct {
 
 // ChatToolConfirmPayload is the payload for chat:tool-confirm events
 type ChatToolConfirmPayload struct {
-	ConversationID string                 `json:"conversationId"`
-	MessageID      string                 `json:"messageId"`
-	ToolID         string                 `json:"toolId"`
-	ToolName       string                 `json:"toolName"`
+	ConversationID string                 `json:"conversation_id"`
+	MessageID      string                 `json:"message_id"`
+	ToolID         string                 `json:"tool_id"`
+	ToolName       string                 `json:"tool_name"`
 	Input          map[string]interface{} `json:"input"`
 }
 
 // ChatToolApprovePayload is the payload for chat:tool-approve events (client → server)
 type ChatToolApprovePayload struct {
-	ToolID   string `json:"toolId"`
+	ToolID   string `json:"tool_id"`
 	Approved bool   `json:"approved"`
 }
 

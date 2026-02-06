@@ -77,11 +77,8 @@ func (o *ToolOrchestrator) HandleToolCall(
 		}
 	}
 
-	// Broadcast tool-start
-	startEvent := types.NewChatToolStartEvent(conversationID, messageID, toolCall.ID, toolCall.Name, inputMap)
-	if err := o.hub.SendToClient(client, startEvent); err != nil {
-		log.Printf("ToolOrchestrator: failed to send tool-start: %v", err)
-	}
+	// Note: tool-start event is already sent by relayStream when ChunkTypeToolCallStart
+	// arrives, giving immediate UI feedback. No duplicate needed here.
 
 	// Execute tool
 	result, err := tool.Execute(ctx, toolCall.Input)

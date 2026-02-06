@@ -244,6 +244,7 @@ func (cs *ChatService) consumeStream(
 	}()
 
 	iteration := 0
+	var persistentMessageID string // Reused across tool-loop iterations so all content stays in one frontend message
 
 	for {
 		if iteration >= cs.maxToolLoopIters {
@@ -259,12 +260,12 @@ func (cs *ChatService) consumeStream(
 			finalChunks, err := cs.providerService.SendMessage(ctx, providerType, apiKey, req)
 			if err != nil {
 				log.Printf("Chat: failed to get final text response after max iterations: %v", err)
-				endEvent := types.NewChatStreamEndEvent(conversationID, "", nil, true)
+				endEvent := types.NewChatStreamEndEvent(conversationID, persistentMessageID, nil, true)
 				cs.hub.SendToClient(client, endEvent)
 				return
 			}
 			// Relay the final text-only response and save to conversation history
-			_, _, finalText, _ := cs.relayStream(ctx, client, conversationID, model, finalChunks)
+			_, _, finalText, _ := cs.relayStream(ctx, client, conversationID, model, finalChunks, persistentMessageID)
 			if finalText != "" {
 				messages = append(messages, providers.Message{Role: "assistant", Content: finalText})
 				cs.saveConversationMessages(conversationID, messages)
@@ -273,7 +274,10 @@ func (cs *ChatService) consumeStream(
 		}
 		iteration++
 
-		toolCalls, messageID, assistantText, done := cs.relayStream(ctx, client, conversationID, model, chunks)
+		toolCalls, messageID, assistantText, done := cs.relayStream(ctx, client, conversationID, model, chunks, persistentMessageID)
+		if persistentMessageID == "" {
+			persistentMessageID = messageID
+		}
 
 		if done {
 			// Stream ended successfully — save assistant message to history
@@ -319,7 +323,7 @@ func (cs *ChatService) consumeStream(
 		// Execute each tool call and append results
 		for _, tc := range assistantToolCalls {
 			if ctx.Err() != nil {
-				endEvent := types.NewChatStreamEndEvent(conversationID, messageID, nil, true)
+				endEvent := types.NewChatStreamEndEvent(conversationID, persistentMessageID, nil, true)
 				cs.hub.SendToClient(client, endEvent)
 				return
 			}
@@ -328,7 +332,7 @@ func (cs *ChatService) consumeStream(
 			if cs.orchestrator != nil {
 				var err error
 				// TODO: Make trust level configurable per conversation/user
-				result, err = cs.orchestrator.HandleToolCall(ctx, client, conversationID, messageID, tc, types.TrustLevelAutonomous)
+				result, err = cs.orchestrator.HandleToolCall(ctx, client, conversationID, persistentMessageID, tc, types.TrustLevelAutonomous)
 				if err != nil {
 					// System error — inject error message and continue
 					result = &tools.ToolResult{
@@ -367,9 +371,9 @@ func (cs *ChatService) consumeStream(
 		chunks, err = cs.providerService.SendMessage(ctx, providerType, apiKey, req)
 		if err != nil {
 			log.Printf("Chat: failed to re-invoke provider in tool loop: %v", err)
-			errorEvent := types.NewChatErrorEvent(conversationID, messageID, "provider_error", err.Error())
+			errorEvent := types.NewChatErrorEvent(conversationID, persistentMessageID, "provider_error", err.Error())
 			cs.hub.SendToClient(client, errorEvent)
-			endEvent := types.NewChatStreamEndEvent(conversationID, messageID, nil, true)
+			endEvent := types.NewChatStreamEndEvent(conversationID, persistentMessageID, nil, true)
 			cs.hub.SendToClient(client, endEvent)
 			return
 		}
@@ -379,12 +383,17 @@ func (cs *ChatService) consumeStream(
 // relayStream reads from a provider chunk channel, relays text/thinking events,
 // and accumulates tool call chunks. Returns the collected tool calls, last messageID,
 // accumulated text content, and whether the stream ended cleanly (no pending tool calls).
+// If existingMessageID is non-empty, it reuses that message ID instead of sending a new
+// chat:stream-start event (used for subsequent iterations in the tool loop).
 func (cs *ChatService) relayStream(
 	ctx context.Context,
 	client *websocket.Client,
 	conversationID, model string,
 	chunks <-chan providers.StreamChunk,
+	existingMessageID string,
 ) (toolCalls []*toolCallAccumulator, messageID string, textContent string, done bool) {
+
+	messageID = existingMessageID
 
 	relay := make(chan providers.StreamChunk, relayChannelSize)
 
@@ -429,11 +438,15 @@ func (cs *ChatService) relayStream(
 
 			switch chunk.Type {
 			case providers.ChunkTypeStart:
-				messageID = chunk.MessageID
-				startEvent := types.NewChatStreamStartEvent(conversationID, messageID, model)
-				if err := cs.hub.SendToClient(client, startEvent); err != nil {
-					log.Printf("Chat: failed to send stream-start: %v", err)
+				if existingMessageID == "" {
+					// First iteration: use provider's message ID, send stream-start
+					messageID = chunk.MessageID
+					startEvent := types.NewChatStreamStartEvent(conversationID, messageID, model)
+					if err := cs.hub.SendToClient(client, startEvent); err != nil {
+						log.Printf("Chat: failed to send stream-start: %v", err)
+					}
 				}
+				// Subsequent iterations: skip stream-start, keep existing messageID
 
 			case providers.ChunkTypeChunk:
 				textParts = append(textParts, chunk.Content)

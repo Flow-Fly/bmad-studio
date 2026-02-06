@@ -81,18 +81,12 @@ func TestToolOrchestrator_HandleToolCall_Success(t *testing.T) {
 	}
 
 	events := collectEvents(client, 200*time.Millisecond)
-	// Should have tool-start and tool-result
-	var hasStart, hasResult bool
+	// tool-start is sent by relayStream (not orchestrator), so only expect tool-result here
+	var hasResult bool
 	for _, e := range events {
-		switch e.Type {
-		case types.EventTypeChatToolStart:
-			hasStart = true
-		case types.EventTypeChatToolResult:
+		if e.Type == types.EventTypeChatToolResult {
 			hasResult = true
 		}
-	}
-	if !hasStart {
-		t.Error("expected chat:tool-start event")
 	}
 	if !hasResult {
 		t.Error("expected chat:tool-result event")
