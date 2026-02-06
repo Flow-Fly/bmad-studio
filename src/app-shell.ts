@@ -10,8 +10,8 @@ import '@shoelace-style/shoelace/dist/components/alert/alert.js';
 import './components/core/settings/provider-settings.js';
 import type { ProviderSettings } from './components/core/settings/provider-settings.js';
 
-import { projectState, projectLoadingState, bmadServicesAvailable$ } from './state/project.state.js';
-import { openProject } from './services/project.service.js';
+import { projectState, projectLoadingState, bmadServicesAvailable$, recentProjectsState, lastActiveProjectPath } from './state/project.state.js';
+import { openProject, loadRecentProjects } from './services/project.service.js';
 import { selectProjectFolder } from './services/dialog.service.js';
 import { connect as wsConnect, disconnect as wsDisconnect, on as wsOn } from './services/websocket.service.js';
 import { loadWorkflowStatus } from './services/workflow.service.js';
@@ -71,6 +71,50 @@ export class AppShell extends SignalWatcher(LitElement) {
       font-size: var(--bmad-font-size-md);
       color: var(--bmad-color-text-secondary);
       margin: 0 0 var(--bmad-spacing-xl) 0;
+    }
+
+    .recent-projects {
+      margin-bottom: var(--bmad-spacing-xl);
+      text-align: left;
+      max-width: 400px;
+      width: 100%;
+    }
+
+    .recent-projects h3 {
+      font-size: var(--bmad-font-size-sm);
+      color: var(--bmad-color-text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin: 0 0 var(--bmad-spacing-sm) 0;
+    }
+
+    .recent-project-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: var(--bmad-spacing-sm) var(--bmad-spacing-md);
+      border-radius: var(--bmad-radius-md);
+      cursor: pointer;
+      transition: background-color 0.15s ease;
+    }
+
+    .recent-project-item:hover {
+      background-color: var(--bmad-color-bg-secondary);
+    }
+
+    .recent-project-name {
+      font-size: var(--bmad-font-size-md);
+      color: var(--bmad-color-text-primary);
+    }
+
+    .recent-project-path {
+      font-size: var(--bmad-font-size-xs);
+      color: var(--bmad-color-text-muted);
+      margin-top: 2px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 280px;
     }
 
     /* Loading state */
@@ -197,6 +241,21 @@ export class AppShell extends SignalWatcher(LitElement) {
     window.addEventListener('keydown', this._boundKeyHandler);
     // Initialize provider state (trust level) from persisted settings
     initProviderState();
+    // Load recent projects and auto-load last active project
+    this._initializeProjectState();
+  }
+
+  private async _initializeProjectState(): Promise<void> {
+    await loadRecentProjects();
+    const lastPath = lastActiveProjectPath.get();
+    if (lastPath) {
+      // Auto-load last active project
+      await openProject(lastPath);
+      if (projectState.get()) {
+        wsConnect();
+        this._setupWorkflowSubscription();
+      }
+    }
   }
 
   disconnectedCallback(): void {
@@ -256,6 +315,16 @@ export class AppShell extends SignalWatcher(LitElement) {
         this._pendingInsightInjectId = '';
       }
     });
+  }
+
+  private async _handleOpenRecentProject(path: string): Promise<void> {
+    this._cleanupWorkflow();
+    wsDisconnect();
+    await openProject(path);
+    if (projectState.get()) {
+      wsConnect();
+      this._setupWorkflowSubscription();
+    }
   }
 
   private _setupWorkflowSubscription(): void {
@@ -332,10 +401,27 @@ export class AppShell extends SignalWatcher(LitElement) {
   }
 
   private _renderEmpty() {
+    const recentProjects = recentProjectsState.get();
     return html`
       <div class="empty-state">
         <h1>BMAD Studio</h1>
         <p>Select a BMAD project folder to get started</p>
+        ${recentProjects.length > 0 ? html`
+          <div class="recent-projects">
+            <h3>Recent Projects</h3>
+            ${recentProjects.map(project => html`
+              <div
+                class="recent-project-item"
+                @click=${() => this._handleOpenRecentProject(project.path)}
+              >
+                <div>
+                  <div class="recent-project-name">${project.name}</div>
+                  <div class="recent-project-path">${project.path}</div>
+                </div>
+              </div>
+            `)}
+          </div>
+        ` : nothing}
         <sl-button variant="primary" size="large" @click=${this._handleOpenProject}>
           Open Project
         </sl-button>

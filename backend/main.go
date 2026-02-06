@@ -19,6 +19,60 @@ import (
 	"bmad-studio/backend/types"
 )
 
+// initToolLayer initializes the tool execution layer for a project.
+// Returns the orchestrator and registry, or nil if initialization fails.
+func initToolLayer(projectRoot, projectName string, hub *websocket.Hub, configStore *storage.ConfigStore) (*services.ToolOrchestrator, *tools.ToolRegistry) {
+	if projectRoot == "" {
+		log.Printf("No project loaded — tool execution disabled")
+		return nil, nil
+	}
+
+	homeDir, _ := os.UserHomeDir()
+	centralRoot := filepath.Join(homeDir, "bmad-studio", "projects", projectName)
+
+	sandbox := tools.NewSandbox(projectRoot, centralRoot)
+	registry := tools.NewRegistry()
+
+	// Register core tools
+	if err := registry.RegisterCore(tools.NewFileReadTool(sandbox)); err != nil {
+		log.Printf("Warning: Failed to register file_read tool: %v", err)
+	}
+	if err := registry.RegisterCore(tools.NewFileWriteTool(sandbox)); err != nil {
+		log.Printf("Warning: Failed to register file_write tool: %v", err)
+	}
+	if err := registry.RegisterCore(tools.NewBashTool(sandbox)); err != nil {
+		log.Printf("Warning: Failed to register bash tool: %v", err)
+	}
+
+	// Web search providers
+	var searchProviders []tools.SearchProvider
+	searxngURL := os.Getenv("SEARXNG_URL")
+	if searxngURL == "" {
+		searxngURL = "http://localhost:8080"
+	}
+	searchProviders = append(searchProviders, tools.NewSearXNGProvider(searxngURL))
+
+	// Brave Search fallback (BYOK via env var or config store)
+	braveKey := os.Getenv("BRAVE_SEARCH_API_KEY")
+	if braveKey == "" && configStore != nil {
+		if settings, err := configStore.Load(); err == nil && settings.BraveSearchAPIKey != "" {
+			braveKey = settings.BraveSearchAPIKey
+		}
+	}
+	if braveKey != "" {
+		searchProviders = append(searchProviders, tools.NewBraveSearchProvider(braveKey))
+	}
+
+	if err := registry.RegisterCore(tools.NewWebSearchTool(searchProviders)); err != nil {
+		log.Printf("Warning: Failed to register web_search tool: %v", err)
+	}
+
+	orchestrator := services.NewToolOrchestrator(registry, sandbox, hub)
+	log.Printf("Tool execution layer initialized: %d tools registered", len(registry.ListForScope(nil)))
+
+	return orchestrator, registry
+}
+
 func main() {
 	serverCtx, serverCancel := context.WithCancel(context.Background())
 	defer serverCancel()
@@ -26,7 +80,65 @@ func main() {
 	hub := websocket.NewHub()
 	go hub.Run()
 
+	providerService := services.NewProviderService()
+
+	configStore, err := storage.NewConfigStore()
+	if err != nil {
+		log.Printf("Warning: Failed to initialize config store: %v", err)
+	}
+
+	// Create insight store and service
+	insightStore, err := storage.NewInsightStore()
+	if err != nil {
+		log.Printf("Warning: Failed to initialize insight store: %v", err)
+	}
+	var insightService *services.InsightService
+	if insightStore != nil {
+		insightService = services.NewInsightService(insightStore)
+	}
+
+	// Create chat service first (tools will be set via callback when project loads)
+	chatService := services.NewChatService(providerService, hub, nil, nil)
+
 	projectManager := services.NewProjectManager(hub)
+
+	// Set up callback to initialize tools and save project history when a project is loaded
+	projectManager.OnProjectLoaded = func(projectRoot, projectName string) {
+		orchestrator, registry := initToolLayer(projectRoot, projectName, hub, configStore)
+		chatService.SetToolLayer(orchestrator, registry)
+
+		// Update recent projects in config store
+		if configStore != nil {
+			if err := configStore.Update(func(settings *types.Settings) {
+				// Create project entry with current timestamp
+				now := types.Timestamp(time.Now())
+				entry := types.ProjectEntry{
+					Name:       projectName,
+					Path:       projectRoot,
+					LastOpened: now,
+				}
+
+				// Remove existing entry for this path (if any) and add to front
+				filtered := make([]types.ProjectEntry, 0, len(settings.RecentProjects))
+				for _, p := range settings.RecentProjects {
+					if p.Path != projectRoot {
+						filtered = append(filtered, p)
+					}
+				}
+				settings.RecentProjects = append([]types.ProjectEntry{entry}, filtered...)
+
+				// Limit to 10 recent projects
+				if len(settings.RecentProjects) > 10 {
+					settings.RecentProjects = settings.RecentProjects[:10]
+				}
+
+				// Set as last active project
+				settings.LastActiveProjectPath = projectRoot
+			}); err != nil {
+				log.Printf("Warning: Failed to update recent projects: %v", err)
+			}
+		}
+	}
 
 	// Auto-load project from BMAD_PROJECT_ROOT or current directory
 	projectRoot := os.Getenv("BMAD_PROJECT_ROOT")
@@ -45,67 +157,6 @@ func main() {
 			log.Printf("Loaded project: %s (%s)", info.ProjectName, info.ProjectRoot)
 		}
 	}
-
-	providerService := services.NewProviderService()
-
-	configStore, err := storage.NewConfigStore()
-	if err != nil {
-		log.Printf("Warning: Failed to initialize config store: %v", err)
-	}
-
-	// Tool execution layer
-	var orchestrator *services.ToolOrchestrator
-	var registry *tools.ToolRegistry
-
-	if pmRoot := projectManager.ProjectRoot(); pmRoot != "" {
-		pmName := projectManager.ProjectName()
-		homeDir, _ := os.UserHomeDir()
-		centralRoot := filepath.Join(homeDir, "bmad-studio", "projects", pmName)
-
-		sandbox := tools.NewSandbox(pmRoot, centralRoot)
-		registry = tools.NewRegistry()
-
-		// Register core tools
-		if err := registry.RegisterCore(tools.NewFileReadTool(sandbox)); err != nil {
-			log.Printf("Warning: Failed to register file_read tool: %v", err)
-		}
-		if err := registry.RegisterCore(tools.NewFileWriteTool(sandbox)); err != nil {
-			log.Printf("Warning: Failed to register file_write tool: %v", err)
-		}
-		if err := registry.RegisterCore(tools.NewBashTool(sandbox)); err != nil {
-			log.Printf("Warning: Failed to register bash tool: %v", err)
-		}
-
-		// Web search providers
-		var searchProviders []tools.SearchProvider
-		searxngURL := os.Getenv("SEARXNG_URL")
-		if searxngURL == "" {
-			searxngURL = "http://localhost:8080"
-		}
-		searchProviders = append(searchProviders, tools.NewSearXNGProvider(searxngURL))
-
-		// Brave Search fallback (BYOK via env var or config store)
-		braveKey := os.Getenv("BRAVE_SEARCH_API_KEY")
-		if braveKey == "" && configStore != nil {
-			if settings, err := configStore.Load(); err == nil && settings.BraveSearchAPIKey != "" {
-				braveKey = settings.BraveSearchAPIKey
-			}
-		}
-		if braveKey != "" {
-			searchProviders = append(searchProviders, tools.NewBraveSearchProvider(braveKey))
-		}
-
-		if err := registry.RegisterCore(tools.NewWebSearchTool(searchProviders)); err != nil {
-			log.Printf("Warning: Failed to register web_search tool: %v", err)
-		}
-
-		orchestrator = services.NewToolOrchestrator(registry, sandbox, hub)
-		log.Printf("Tool execution layer initialized: %d tools registered", len(registry.ListForScope(nil)))
-	} else {
-		log.Printf("No project loaded — tool execution disabled")
-	}
-
-	chatService := services.NewChatService(providerService, hub, orchestrator, registry)
 
 	hub.SetMessageHandler(func(client *websocket.Client, event *types.WebSocketEvent) {
 		switch event.Type {
@@ -142,7 +193,8 @@ func main() {
 			}
 
 		case types.EventTypeChatToolApprove:
-			if orchestrator == nil {
+			orch := chatService.Orchestrator()
+			if orch == nil {
 				log.Printf("Chat: tool-approve received but orchestrator not initialized")
 				return
 			}
@@ -156,7 +208,7 @@ func main() {
 				log.Printf("Chat: failed to parse chat:tool-approve payload: %v", err)
 				return
 			}
-			orchestrator.HandleApproval(payload.ToolID, payload.Approved)
+			orch.HandleApproval(payload.ToolID, payload.Approved)
 
 		default:
 			// Unknown message types — log and ignore
@@ -169,6 +221,7 @@ func main() {
 		ConfigStore:    configStore,
 		Hub:            hub,
 		ProjectManager: projectManager,
+		Insight:        insightService,
 	})
 
 	stop := make(chan os.Signal, 1)
