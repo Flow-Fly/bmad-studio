@@ -75,6 +75,7 @@ func NewRouterWithServices(svc RouterServices) *chi.Mux {
 					r.Route("/insights", func(r chi.Router) {
 						r.Get("/", insightHandler.ListInsights)
 						r.Post("/", insightHandler.CreateInsight)
+						r.Post("/compact", insightHandler.CompactInsight)
 						r.Route("/{insightId}", func(r chi.Router) {
 							r.Get("/", insightHandler.GetInsight)
 							r.Put("/", insightHandler.UpdateInsight)

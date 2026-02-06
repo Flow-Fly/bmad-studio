@@ -11,7 +11,7 @@ func newTestInsightService(t *testing.T) *InsightService {
 	t.Helper()
 	dir := t.TempDir()
 	store := storage.NewInsightStoreWithPath(dir)
-	return NewInsightService(store)
+	return NewInsightService(store, nil)
 }
 
 func TestCreateInsight_Success(t *testing.T) {

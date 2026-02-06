@@ -94,7 +94,7 @@ func main() {
 	}
 	var insightService *services.InsightService
 	if insightStore != nil {
-		insightService = services.NewInsightService(insightStore)
+		insightService = services.NewInsightService(insightStore, providerService)
 	}
 
 	// Create chat service first (tools will be set via callback when project loads)

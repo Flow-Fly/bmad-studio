@@ -55,6 +55,35 @@ export async function markInsightUsed(projectId: string, insight: Insight): Prom
   await updateInsight(projectId, updated);
 }
 
+export interface CompactConversationRequest {
+  messages: { role: string; content: string }[];
+  provider: string;
+  model: string;
+  api_key: string;
+  source_agent: string;
+  highlight_colors_used: string[];
+}
+
+export async function compactConversation(
+  projectId: string,
+  request: CompactConversationRequest,
+): Promise<Insight> {
+  const response = await fetch(`${API_BASE}/projects/${projectId}/insights/compact`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(request),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text().catch(() => response.statusText);
+    throw new Error(`Failed to compact conversation: ${errorText}`);
+  }
+
+  const insight: Insight = await response.json();
+  addInsight(insight);
+  return insight;
+}
+
 export async function deleteInsight(projectId: string, insightId: string): Promise<void> {
   const response = await fetch(`${API_BASE}/projects/${projectId}/insights/${insightId}`, {
     method: 'DELETE',
