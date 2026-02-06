@@ -375,12 +375,9 @@ export class ConversationBlock extends LitElement {
       return;
     }
 
+    // Shadow DOM boundaries prevent cross-component containment checks.
+    // If mouseup fires within .content, trust that the selection is valid.
     const range = selection.getRangeAt(0);
-    const content = this.shadowRoot?.querySelector('.content');
-    if (!content || !content.contains(range.commonAncestorContainer)) {
-      return;
-    }
-
     const rect = range.getBoundingClientRect();
     this._popoverX = rect.right;
     this._popoverY = rect.bottom + 4;

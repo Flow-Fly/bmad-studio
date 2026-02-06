@@ -11,6 +11,9 @@ target/
 src-tauri/binaries/*
 !src-tauri/binaries/.gitkeep
 
+# Tauri generated files
+src-tauri/gen/
+
 # Environment files
 .env
 .env.local

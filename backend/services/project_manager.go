@@ -27,6 +27,10 @@ type ProjectManager struct {
 	workflowStatusService *WorkflowStatusService
 	artifactService       *ArtifactService
 	fileWatcherService    *FileWatcherService
+
+	// OnProjectLoaded is called after a project is successfully loaded.
+	// Use this to initialize dependent services like the tool execution layer.
+	OnProjectLoaded func(projectRoot, projectName string)
 }
 
 // ServiceStatus reports the availability of each BMAD service.
@@ -160,8 +164,6 @@ func (pm *ProjectManager) LoadProject(projectRoot string) (*ProjectInfo, error) 
 
 	// Phase 3: Atomic swap — acquire lock only to stop old services and assign new ones
 	pm.mu.Lock()
-	defer pm.mu.Unlock()
-
 	pm.stopServicesLocked()
 
 	pm.configService = configService
@@ -172,6 +174,15 @@ func (pm *ProjectManager) LoadProject(projectRoot string) (*ProjectInfo, error) 
 	pm.workflowStatusService = workflowStatusService
 	pm.artifactService = artifactService
 	pm.fileWatcherService = fileWatcherService
+
+	// Capture callback before releasing lock
+	onLoaded := pm.OnProjectLoaded
+	pm.mu.Unlock()
+
+	// Call callback outside lock to avoid holding it during potentially slow operations
+	if onLoaded != nil {
+		onLoaded(projectRoot, projectName)
+	}
 
 	return &ProjectInfo{
 		ProjectName: projectName,

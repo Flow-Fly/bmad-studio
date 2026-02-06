@@ -18,4 +18,11 @@ export default defineConfig({
   build: {
     target: 'esnext',
   },
+  // Pre-bundle Tauri plugins for dynamic imports to work in WebView
+  optimizeDeps: {
+    include: [
+      '@tauri-apps/plugin-dialog',
+      'tauri-plugin-keyring-api',
+    ],
+  },
 });

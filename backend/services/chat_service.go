@@ -16,11 +16,21 @@ import (
 )
 
 const (
-	streamTimeout           = 5 * time.Minute
-	relayChannelSize        = 64
-	defaultMaxTokens        = 8192
-	DefaultMaxToolLoopIters = 200
+	streamTimeout              = 5 * time.Minute
+	relayChannelSize           = 64
+	defaultMaxTokens           = 8192
+	DefaultMaxToolLoopIters    = 200
+	conversationTTL            = 1 * time.Hour
+	conversationCleanupInterval = 5 * time.Minute
 )
+
+// ConversationState holds the accumulated history for a conversation.
+type ConversationState struct {
+	Messages     []providers.Message
+	LastActivity time.Time
+	Provider     string
+	Model        string
+}
 
 // ChatService manages chat streaming sessions between clients and LLM providers.
 type ChatService struct {
@@ -29,25 +39,100 @@ type ChatService struct {
 	orchestrator     *ToolOrchestrator
 	registry         *tools.ToolRegistry
 	activeStreams    map[string]context.CancelFunc
+	conversations    map[string]*ConversationState
 	mu               sync.RWMutex
-	maxToolLoopIters int // configurable for testing; defaults to DefaultMaxToolLoopIters
+	convMu           sync.RWMutex // separate mutex for conversations to reduce contention
+	maxToolLoopIters int          // configurable for testing; defaults to DefaultMaxToolLoopIters
+	cleanupCancel    context.CancelFunc
 }
 
 // NewChatService creates a new ChatService.
+// Note: cleanupCancel is set without mutex because initialization completes
+// before the service is returned (happens-before relationship guarantees safety).
 func NewChatService(providerService *ProviderService, hub *websocket.Hub, orchestrator *ToolOrchestrator, registry *tools.ToolRegistry) *ChatService {
-	return &ChatService{
+	ctx, cancel := context.WithCancel(context.Background())
+	cs := &ChatService{
 		providerService:  providerService,
 		hub:              hub,
 		orchestrator:     orchestrator,
 		registry:         registry,
 		activeStreams:    make(map[string]context.CancelFunc),
+		conversations:    make(map[string]*ConversationState),
 		maxToolLoopIters: DefaultMaxToolLoopIters,
+		cleanupCancel:    cancel,
+	}
+	go cs.cleanupStaleConversations(ctx)
+	return cs
+}
+
+// cleanupStaleConversations periodically removes conversations that have been inactive.
+func (cs *ChatService) cleanupStaleConversations(ctx context.Context) {
+	ticker := time.NewTicker(conversationCleanupInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			cs.convMu.Lock()
+			now := time.Now()
+			for id, conv := range cs.conversations {
+				if now.Sub(conv.LastActivity) > conversationTTL {
+					delete(cs.conversations, id)
+					log.Printf("Chat: cleaned up stale conversation %s (inactive for >%v)", id, conversationTTL)
+				}
+			}
+			cs.convMu.Unlock()
+		}
+	}
+}
+
+// Stop gracefully shuts down the ChatService cleanup goroutine.
+func (cs *ChatService) Stop() {
+	cs.mu.Lock()
+	defer cs.mu.Unlock()
+	if cs.cleanupCancel != nil {
+		cs.cleanupCancel()
 	}
 }
 
 // SetMaxToolLoopIters sets the maximum tool loop iterations (for testing).
 func (cs *ChatService) SetMaxToolLoopIters(max int) {
 	cs.maxToolLoopIters = max
+}
+
+// saveConversationMessages replaces the conversation's message history with the provided messages.
+// This is called during the tool loop to persist accumulated messages.
+func (cs *ChatService) saveConversationMessages(conversationID string, messages []providers.Message) {
+	cs.convMu.Lock()
+	defer cs.convMu.Unlock()
+	if conv, exists := cs.conversations[conversationID]; exists {
+		conv.Messages = make([]providers.Message, len(messages))
+		copy(conv.Messages, messages)
+		conv.LastActivity = time.Now()
+	}
+}
+
+// SetToolLayer updates the tool execution layer (registry and orchestrator).
+// Called when a project is loaded to enable tool execution.
+func (cs *ChatService) SetToolLayer(orchestrator *ToolOrchestrator, registry *tools.ToolRegistry) {
+	cs.mu.Lock()
+	defer cs.mu.Unlock()
+	cs.orchestrator = orchestrator
+	cs.registry = registry
+	if registry != nil {
+		log.Printf("ChatService: tool layer updated, %d tools available", len(registry.ListForScope(nil)))
+	} else {
+		log.Printf("ChatService: tool layer cleared")
+	}
+}
+
+// Orchestrator returns the current tool orchestrator (may be nil).
+func (cs *ChatService) Orchestrator() *ToolOrchestrator {
+	cs.mu.RLock()
+	defer cs.mu.RUnlock()
+	return cs.orchestrator
 }
 
 // HandleMessage processes an incoming chat:send message from a client.
@@ -68,21 +153,46 @@ func (cs *ChatService) HandleMessage(ctx context.Context, client *websocket.Clie
 		return fmt.Errorf("api_key is required")
 	}
 
-	// Build messages from history + current user message
-	messages := convertHistory(payload.History)
-	messages = append(messages, providers.Message{Role: "user", Content: payload.Content})
+	// Lookup or create conversation state
+	cs.convMu.Lock()
+	conv, exists := cs.conversations[payload.ConversationID]
+	if !exists {
+		conv = &ConversationState{
+			Messages:     make([]providers.Message, 0),
+			Provider:     payload.Provider,
+			Model:        payload.Model,
+		}
+		cs.conversations[payload.ConversationID] = conv
+	}
+
+	// Append user message to conversation history
+	userMsg := providers.Message{Role: "user", Content: payload.Content}
+	conv.Messages = append(conv.Messages, userMsg)
+
+	// Copy messages for request (avoid race with concurrent updates)
+	messages := make([]providers.Message, len(conv.Messages))
+	copy(messages, conv.Messages)
+
+	// Update LastActivity after all modifications, just before releasing lock
+	conv.LastActivity = time.Now()
+	cs.convMu.Unlock()
 
 	// Get tool definitions if registry is available
 	var toolDefs []types.ToolDefinition
+	cs.mu.RLock()
 	if cs.registry != nil {
 		toolDefs = cs.registry.ListDefinitionsForScope(nil)
 	}
+	cs.mu.RUnlock()
+
+	// Build system prompt with tool awareness
+	systemPrompt := buildSystemPrompt(payload.SystemPrompt, toolDefs)
 
 	req := providers.ChatRequest{
 		Messages:     messages,
 		Model:        payload.Model,
 		MaxTokens:    defaultMaxTokens,
-		SystemPrompt: payload.SystemPrompt,
+		SystemPrompt: systemPrompt,
 		Tools:        toolDefs,
 	}
 
@@ -104,7 +214,7 @@ func (cs *ChatService) HandleMessage(ctx context.Context, client *websocket.Clie
 		return err
 	}
 
-	go cs.consumeStream(streamCtx, cancel, client, payload.ConversationID, payload.Provider, payload.APIKey, payload.SystemPrompt, payload.Model, messages, toolDefs, chunks)
+	go cs.consumeStream(streamCtx, cancel, client, payload.ConversationID, payload.Provider, payload.APIKey, systemPrompt, payload.Model, messages, toolDefs, chunks)
 
 	return nil
 }
@@ -153,27 +263,40 @@ func (cs *ChatService) consumeStream(
 				cs.hub.SendToClient(client, endEvent)
 				return
 			}
-			// Relay the final text-only response
-			_, _, _ = cs.relayStream(ctx, client, conversationID, model, finalChunks)
+			// Relay the final text-only response and save to conversation history
+			_, _, finalText, _ := cs.relayStream(ctx, client, conversationID, model, finalChunks)
+			if finalText != "" {
+				messages = append(messages, providers.Message{Role: "assistant", Content: finalText})
+				cs.saveConversationMessages(conversationID, messages)
+			}
 			return
 		}
 		iteration++
 
-		toolCalls, messageID, done := cs.relayStream(ctx, client, conversationID, model, chunks)
+		toolCalls, messageID, assistantText, done := cs.relayStream(ctx, client, conversationID, model, chunks)
 
 		if done {
+			// Stream ended successfully — save assistant message to history
+			if assistantText != "" {
+				messages = append(messages, providers.Message{Role: "assistant", Content: assistantText})
+				cs.saveConversationMessages(conversationID, messages)
+			}
 			return
 		}
 
 		// No tool calls → stream ended normally (already handled in relayStream)
 		if len(toolCalls) == 0 {
+			if assistantText != "" {
+				messages = append(messages, providers.Message{Role: "assistant", Content: assistantText})
+				cs.saveConversationMessages(conversationID, messages)
+			}
 			return
 		}
 
 		// Tool calls detected — execute them and loop
 		log.Printf("Chat: %d tool call(s) in iteration %d for conversation %s", len(toolCalls), iteration, conversationID)
 
-		// Build assistant message with tool calls
+		// Build assistant message with tool calls (may also include text content)
 		assistantToolCalls := make([]types.ToolCall, 0, len(toolCalls))
 		for _, acc := range toolCalls {
 			fullInput := strings.Join(acc.inputParts, "")
@@ -183,10 +306,15 @@ func (cs *ChatService) consumeStream(
 				Input: json.RawMessage(fullInput),
 			})
 		}
-		messages = append(messages, providers.Message{
+		assistantMsg := providers.Message{
 			Role:      "assistant",
+			Content:   assistantText, // Include any text that preceded tool calls
 			ToolCalls: assistantToolCalls,
-		})
+		}
+		messages = append(messages, assistantMsg)
+
+		// Save after assistant message with tool calls
+		cs.saveConversationMessages(conversationID, messages)
 
 		// Execute each tool call and append results
 		for _, tc := range assistantToolCalls {
@@ -199,7 +327,8 @@ func (cs *ChatService) consumeStream(
 			var result *tools.ToolResult
 			if cs.orchestrator != nil {
 				var err error
-				result, err = cs.orchestrator.HandleToolCall(ctx, client, conversationID, messageID, tc, types.TrustLevelGuided)
+				// TODO: Make trust level configurable per conversation/user
+				result, err = cs.orchestrator.HandleToolCall(ctx, client, conversationID, messageID, tc, types.TrustLevelAutonomous)
 				if err != nil {
 					// System error — inject error message and continue
 					result = &tools.ToolResult{
@@ -220,6 +349,9 @@ func (cs *ChatService) consumeStream(
 				ToolName:   tc.Name,
 				Content:    result.Output,
 			})
+
+			// Save after each tool result to preserve progress
+			cs.saveConversationMessages(conversationID, messages)
 		}
 
 		// Re-invoke provider with updated messages
@@ -246,13 +378,13 @@ func (cs *ChatService) consumeStream(
 
 // relayStream reads from a provider chunk channel, relays text/thinking events,
 // and accumulates tool call chunks. Returns the collected tool calls, last messageID,
-// and whether the stream ended cleanly (no pending tool calls).
+// accumulated text content, and whether the stream ended cleanly (no pending tool calls).
 func (cs *ChatService) relayStream(
 	ctx context.Context,
 	client *websocket.Client,
 	conversationID, model string,
 	chunks <-chan providers.StreamChunk,
-) (toolCalls []*toolCallAccumulator, messageID string, done bool) {
+) (toolCalls []*toolCallAccumulator, messageID string, textContent string, done bool) {
 
 	relay := make(chan providers.StreamChunk, relayChannelSize)
 
@@ -270,6 +402,7 @@ func (cs *ChatService) relayStream(
 		}
 	}()
 
+	var textParts []string
 	textIndex := 0
 	thinkingIndex := 0
 	ended := false
@@ -291,7 +424,7 @@ func (cs *ChatService) relayStream(
 				for _, acc := range accumulators {
 					pendingCalls = append(pendingCalls, acc)
 				}
-				return pendingCalls, messageID, len(pendingCalls) == 0
+				return pendingCalls, messageID, strings.Join(textParts, ""), len(pendingCalls) == 0
 			}
 
 			switch chunk.Type {
@@ -303,6 +436,7 @@ func (cs *ChatService) relayStream(
 				}
 
 			case providers.ChunkTypeChunk:
+				textParts = append(textParts, chunk.Content)
 				deltaEvent := types.NewChatTextDeltaEvent(conversationID, messageID, chunk.Content, textIndex)
 				if err := cs.hub.SendToClient(client, deltaEvent); err != nil {
 					log.Printf("Chat: failed to send text-delta: %v", err)
@@ -321,9 +455,9 @@ func (cs *ChatService) relayStream(
 					toolID:   chunk.ToolID,
 					toolName: chunk.ToolName,
 				}
-				// Broadcast tool delta event for the frontend
-				deltaEvent := types.NewChatToolDeltaEvent(conversationID, messageID, chunk.ToolID, "")
-				cs.hub.SendToClient(client, deltaEvent)
+				// Broadcast tool-start event for the frontend to create tool block UI
+				startEvent := types.NewChatToolStartEvent(conversationID, messageID, chunk.ToolID, chunk.ToolName, map[string]interface{}{})
+				cs.hub.SendToClient(client, startEvent)
 
 			case providers.ChunkTypeToolCallDelta:
 				if acc, ok := accumulators[chunk.ToolID]; ok {
@@ -343,7 +477,7 @@ func (cs *ChatService) relayStream(
 					for _, acc := range accumulators {
 						pendingCalls = append(pendingCalls, acc)
 					}
-					return pendingCalls, messageID, false
+					return pendingCalls, messageID, strings.Join(textParts, ""), false
 				}
 				// No tool calls — normal end
 				var usage *types.UsageStats
@@ -357,7 +491,7 @@ func (cs *ChatService) relayStream(
 				if err := cs.hub.SendToClient(client, endEvent); err != nil {
 					log.Printf("Chat: CRITICAL failed to send stream-end: %v", err)
 				}
-				return nil, messageID, true
+				return nil, messageID, strings.Join(textParts, ""), true
 
 			case providers.ChunkTypeError:
 				ended = true
@@ -369,7 +503,7 @@ func (cs *ChatService) relayStream(
 				if err := cs.hub.SendToClient(client, endEvent); err != nil {
 					log.Printf("Chat: CRITICAL failed to send stream-end: %v", err)
 				}
-				return nil, messageID, true
+				return nil, messageID, strings.Join(textParts, ""), true
 			}
 
 		case <-ctx.Done():
@@ -379,7 +513,7 @@ func (cs *ChatService) relayStream(
 					log.Printf("Chat: CRITICAL failed to send stream-end: %v", err)
 				}
 			}
-			return nil, messageID, true
+			return nil, messageID, strings.Join(textParts, ""), true
 		}
 	}
 }
@@ -403,6 +537,35 @@ func convertHistory(history []types.ChatMessage) []providers.Message {
 		messages = append(messages, msg)
 	}
 	return messages
+}
+
+// buildSystemPrompt constructs a system prompt that includes tool awareness.
+// If tools are available, prepends instructions about using them.
+func buildSystemPrompt(userPrompt string, tools []types.ToolDefinition) string {
+	if len(tools) == 0 {
+		return userPrompt
+	}
+
+	// Build tool list
+	var toolNames []string
+	for _, t := range tools {
+		toolNames = append(toolNames, t.Name)
+	}
+
+	toolPrompt := fmt.Sprintf(`You have access to the following tools: %s.
+
+Use these tools when appropriate to help the user. For example:
+- Use 'bash' to run shell commands like 'ls', 'cat', 'grep', etc.
+- Use 'file_read' to read file contents
+- Use 'file_write' to create or modify files
+- Use 'web_search' to search the internet for information
+
+When the user asks you to perform tasks that require these capabilities, use the appropriate tool rather than saying you cannot do it.`, strings.Join(toolNames, ", "))
+
+	if userPrompt == "" {
+		return toolPrompt
+	}
+	return toolPrompt + "\n\n" + userPrompt
 }
 
 // CancelStream cancels an active streaming session.

@@ -1,8 +1,16 @@
 import { Signal } from 'signal-polyfill';
 import type { ProjectData, LoadingState } from '../types/project.js';
 
+export interface RecentProject {
+  name: string;
+  path: string;
+  lastOpened: string;
+}
+
 export const projectState = new Signal.State<ProjectData | null>(null);
 export const projectLoadingState = new Signal.State<LoadingState>({ status: 'idle' });
+export const recentProjectsState = new Signal.State<RecentProject[]>([]);
+export const lastActiveProjectPath = new Signal.State<string | null>(null);
 
 export const bmadServicesAvailable$ = new Signal.Computed(() => {
   const project = projectState.get();
@@ -31,4 +39,12 @@ export function setProjectError(message: string, code?: string): void {
 export function clearProject(): void {
   projectState.set(null);
   projectLoadingState.set({ status: 'idle' });
+}
+
+export function setRecentProjects(projects: RecentProject[]): void {
+  recentProjectsState.set(projects);
+}
+
+export function setLastActiveProjectPath(path: string | null): void {
+  lastActiveProjectPath.set(path);
 }
