@@ -527,14 +527,14 @@ func TestToolEventPayloadJSONSerialization(t *testing.T) {
 	}
 
 	payload := result["payload"].(map[string]interface{})
-	if payload["conversationId"] != "conv-1" {
-		t.Errorf("expected conversationId %q, got %v", "conv-1", payload["conversationId"])
+	if payload["conversation_id"] != "conv-1" {
+		t.Errorf("expected conversation_id %q, got %v", "conv-1", payload["conversation_id"])
 	}
-	if payload["toolId"] != "toolu_1" {
-		t.Errorf("expected toolId %q, got %v", "toolu_1", payload["toolId"])
+	if payload["tool_id"] != "toolu_1" {
+		t.Errorf("expected tool_id %q, got %v", "toolu_1", payload["tool_id"])
 	}
-	if payload["toolName"] != "file_read" {
-		t.Errorf("expected toolName %q, got %v", "file_read", payload["toolName"])
+	if payload["tool_name"] != "file_read" {
+		t.Errorf("expected tool_name %q, got %v", "file_read", payload["tool_name"])
 	}
 }
 

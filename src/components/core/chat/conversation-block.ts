@@ -366,17 +366,34 @@ export class ConversationBlock extends LitElement {
     this._thinkingExpanded = !this._thinkingExpanded;
   }
 
+  /**
+   * Get the active text selection, checking shadow roots since
+   * window.getSelection() doesn't see selections inside Shadow DOM.
+   */
+  private _getDeepSelection(): Selection | null {
+    // Try window selection first (works for user-text without shadow DOM)
+    const win = window.getSelection();
+    if (win && !win.isCollapsed && win.rangeCount > 0) return win;
+
+    // Check markdown-renderer shadow roots (Chromium-only API, fine for Tauri)
+    const renderers = this.shadowRoot?.querySelectorAll('markdown-renderer');
+    if (renderers) {
+      for (const renderer of renderers) {
+        const sel = (renderer.shadowRoot as any)?.getSelection?.() as Selection | null;
+        if (sel && !sel.isCollapsed && sel.rangeCount > 0) return sel;
+      }
+    }
+
+    return null;
+  }
+
   private _handleContentMouseUp(): void {
     // Do not show popover during streaming
     if (this.message.isStreaming) return;
 
-    const selection = window.getSelection();
-    if (!selection || selection.isCollapsed || !selection.rangeCount) {
-      return;
-    }
+    const selection = this._getDeepSelection();
+    if (!selection) return;
 
-    // Shadow DOM boundaries prevent cross-component containment checks.
-    // If mouseup fires within .content, trust that the selection is valid.
     const range = selection.getRangeAt(0);
     const rect = range.getBoundingClientRect();
     this._popoverX = rect.right;
@@ -386,26 +403,29 @@ export class ConversationBlock extends LitElement {
 
   private _handleHighlightSelect(e: CustomEvent<{ color: HighlightColor }>): void {
     const { color } = e.detail;
-    const selection = window.getSelection();
-    if (!selection || selection.isCollapsed || !selection.rangeCount) {
+    const selection = this._getDeepSelection();
+    if (!selection) {
       this._showPopover = false;
       return;
     }
 
-    // Compute offsets relative to the message content text
     const range = selection.getRangeAt(0);
-    const content = this.shadowRoot?.querySelector('.content');
-    if (!content) {
+    const selectedText = range.toString();
+    if (!selectedText) {
       this._showPopover = false;
       return;
     }
 
-    // Use a pre-range to measure start offset from beginning of content
-    const preRange = document.createRange();
-    preRange.selectNodeContents(content);
-    preRange.setEnd(range.startContainer, range.startOffset);
-    const startOffset = preRange.toString().length;
-    const endOffset = startOffset + range.toString().length;
+    // Compute offset relative to the full message content text.
+    // Since the selection may be inside a nested shadow root (markdown-renderer),
+    // use the message content string to locate the selected text.
+    const fullText = this.message.content;
+    const startOffset = fullText.indexOf(selectedText);
+    if (startOffset === -1) {
+      this._showPopover = false;
+      return;
+    }
+    const endOffset = startOffset + selectedText.length;
 
     const highlight: Highlight = {
       id: crypto.randomUUID(),
