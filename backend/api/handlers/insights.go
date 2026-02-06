@@ -104,6 +104,39 @@ func (h *InsightHandler) UpdateInsight(w http.ResponseWriter, r *http.Request) {
 	response.WriteJSON(w, http.StatusOK, insight)
 }
 
+// CompactInsight handles POST /api/v1/projects/{id}/insights/compact.
+func (h *InsightHandler) CompactInsight(w http.ResponseWriter, r *http.Request) {
+	projectID := chi.URLParam(r, "id")
+	if projectID == "" {
+		response.WriteInvalidRequest(w, "Project ID is required")
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, 2<<20) // 2 MB limit
+	var req types.CompactInsightRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		response.WriteInvalidRequest(w, "Invalid JSON body")
+		return
+	}
+
+	if len(req.Messages) == 0 {
+		response.WriteInvalidRequest(w, "Messages are required")
+		return
+	}
+	if req.Provider == "" || req.Model == "" {
+		response.WriteInvalidRequest(w, "Provider and model are required")
+		return
+	}
+
+	insight, err := h.service.CompactConversation(r.Context(), projectID, req)
+	if err != nil {
+		response.WriteInternalError(w, err.Error())
+		return
+	}
+
+	response.WriteJSON(w, http.StatusCreated, insight)
+}
+
 // DeleteInsight handles DELETE /api/v1/projects/{id}/insights/{insightId}.
 func (h *InsightHandler) DeleteInsight(w http.ResponseWriter, r *http.Request) {
 	projectID := chi.URLParam(r, "id")

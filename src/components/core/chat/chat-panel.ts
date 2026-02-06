@@ -31,8 +31,9 @@ import {
   clearAgentConversation,
 } from '../../../state/agent.state.js';
 import type { Conversation, Message } from '../../../types/conversation.js';
-import type { Insight } from '../../../types/insight.js';
-import { createInsight } from '../../../services/insight.service.js';
+import { compactConversation } from '../../../services/insight.service.js';
+import type { CompactConversationRequest } from '../../../services/insight.service.js';
+import { getApiKey } from '../../../services/keychain.service.js';
 
 // Lucide arrow-down icon SVG definition
 const ARROW_DOWN_ICON = [
@@ -264,6 +265,7 @@ export class ChatPanel extends SignalWatcher(LitElement) {
   @state() private _showContextFullModal = false;
   @state() private _showAttachPicker = false;
   @state() private _preSelectedInsightId = '';
+  @state() private _compactLoading = false;
   private _lastAgentId: string | null = null;
   private _lastMessageCount = 0;
   private _contextFullShown = false;
@@ -491,32 +493,52 @@ export class ChatPanel extends SignalWatcher(LitElement) {
     const conversation = activeConversations.get().get(this._conversationId);
     if (!conversation) return;
 
-    const firstUserMsg = conversation.messages.find(m => m.role === 'user');
-    const agent = activeAgent$.get();
-
-    const insight: Insight = {
-      id: crypto.randomUUID(),
-      title: firstUserMsg?.content.slice(0, 100) || 'Untitled conversation',
-      origin_context: '',
-      extracted_idea: '',
-      tags: [],
-      highlight_colors_used: [...new Set(conversation.highlights.map(h => h.color))],
-      created_at: new Date().toISOString(),
-      source_agent: agent?.name || 'Unknown',
-      status: 'fresh',
-      used_in_count: 0,
-    };
-
     const projectId = projectName$.get();
-    if (projectId) {
+    if (!projectId) return;
+
+    const provider = activeProviderState.get();
+    const model = selectedModelState.get();
+    if (!provider || !model) return;
+
+    // Get API key
+    let apiKey = '';
+    if (provider !== 'ollama') {
       try {
-        await createInsight(projectId, insight);
-      } catch (err) {
-        console.error('Failed to create insight:', err);
+        const key = await getApiKey(provider as 'claude' | 'openai');
+        if (!key) return;
+        apiKey = key;
+      } catch {
+        return;
       }
     }
 
-    this._clearCurrentConversation();
+    const agent = activeAgent$.get();
+
+    // Filter out context messages, map to simplified format
+    const messages = conversation.messages
+      .filter(m => !m.isContext)
+      .map(m => ({ role: m.role, content: m.content }));
+
+    if (messages.length === 0) return;
+
+    const request: CompactConversationRequest = {
+      messages,
+      provider,
+      model,
+      api_key: apiKey,
+      source_agent: agent?.name || 'Unknown',
+      highlight_colors_used: [...new Set(conversation.highlights.map(h => h.color))],
+    };
+
+    this._compactLoading = true;
+    try {
+      await compactConversation(projectId, request);
+      this._clearCurrentConversation();
+    } catch (err) {
+      console.error('Failed to compact conversation:', err);
+    } finally {
+      this._compactLoading = false;
+    }
   }
 
   private _handleLifecycleDiscard(): void {
@@ -606,15 +628,19 @@ export class ChatPanel extends SignalWatcher(LitElement) {
         ${this._renderConnectionStatus()}
         ${messages.length > 0 ? html`
           <div class="header-actions">
-            <button
-              class="menu-trigger"
-              @click=${this._handleLifecycleMenuToggle}
-              aria-label="Conversation actions"
-              aria-haspopup="menu"
-              aria-expanded=${this._showLifecycleMenu}
-            >
-              ${this._renderMoreVerticalIcon()}
-            </button>
+            ${this._compactLoading ? html`
+              <span class="header-title" style="font-style: italic">Compacting...</span>
+            ` : html`
+              <button
+                class="menu-trigger"
+                @click=${this._handleLifecycleMenuToggle}
+                aria-label="Conversation actions"
+                aria-haspopup="menu"
+                aria-expanded=${this._showLifecycleMenu}
+              >
+                ${this._renderMoreVerticalIcon()}
+              </button>
+            `}
             <conversation-lifecycle-menu
               ?open=${this._showLifecycleMenu}
               .forceAction=${this._getContextPercentage() >= 100}

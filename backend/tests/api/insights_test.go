@@ -17,7 +17,7 @@ func newRouterWithInsights(t *testing.T) http.Handler {
 	t.Helper()
 	dir := t.TempDir()
 	store := storage.NewInsightStoreWithPath(dir)
-	svc := services.NewInsightService(store)
+	svc := services.NewInsightService(store, nil)
 	return api.NewRouterWithServices(api.RouterServices{
 		Insight: svc,
 	})
