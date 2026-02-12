@@ -115,7 +115,7 @@ func (s *StreamService) Get(projectName, streamName string) (*types.StreamMeta, 
 	// Delegate to StreamStore
 	meta, err := s.streamStore.ReadStreamMeta(projectName, streamName)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read stream metadata: %w", err)
+		return nil, fmt.Errorf("stream not found: %s-%s", projectName, streamName)
 	}
 
 	return meta, nil
@@ -162,4 +162,45 @@ func (s *StreamService) Archive(projectName, streamName, outcome string) (*types
 	}
 
 	return archivedMeta, nil
+}
+
+// UpdateMetadata updates stream metadata fields
+func (s *StreamService) UpdateMetadata(projectName, streamName string, updates map[string]interface{}) (*types.StreamMeta, error) {
+	// Verify project exists
+	entry, found := s.registryStore.FindByName(projectName)
+	if !found || entry == nil {
+		return nil, fmt.Errorf("project not found: %s", projectName)
+	}
+
+	// Read existing metadata
+	meta, err := s.streamStore.ReadStreamMeta(projectName, streamName)
+	if err != nil {
+		return nil, fmt.Errorf("stream not found: %s-%s", projectName, streamName)
+	}
+
+	// Apply updates (only allow updating specific fields)
+	if branch, ok := updates["branch"].(string); ok {
+		meta.Branch = branch
+	}
+	if worktree, ok := updates["worktree"].(string); ok {
+		meta.Worktree = worktree
+	}
+	if phase, ok := updates["phase"].(string); ok {
+		meta.Phase = phase
+	}
+
+	// Update timestamp
+	meta.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+
+	// Write back atomically
+	if err := s.streamStore.WriteStreamMeta(projectName, streamName, *meta); err != nil {
+		return nil, fmt.Errorf("failed to update stream metadata: %w", err)
+	}
+
+	// Broadcast stream:updated event
+	streamID := projectName + "-" + streamName
+	event := types.NewStreamUpdatedEvent(projectName, streamID, updates)
+	s.hub.BroadcastEvent(event)
+
+	return meta, nil
 }
