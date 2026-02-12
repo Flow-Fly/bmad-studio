@@ -99,8 +99,14 @@ func main() {
 	registryStore := storage.NewRegistryStore(centralStore)
 	projectStore := storage.NewProjectStore(centralStore)
 
+	// Create stream store
+	streamStore := storage.NewStreamStore(centralStore)
+
 	// Create project service
 	projectService := services.NewProjectService(registryStore, projectStore)
+
+	// Create stream service
+	streamService := services.NewStreamService(streamStore, registryStore, hub)
 
 	// Create insight store and service
 	insightStore, err := storage.NewInsightStore()
@@ -237,7 +243,8 @@ func main() {
 		Hub:            hub,
 		ProjectManager: projectManager,
 		Insight:        insightService,
-		Project:        projectService, // Prepared for Story 1.3: REST API endpoints
+		Project:        projectService,
+		Stream:         streamService,
 	})
 
 	stop := make(chan os.Signal, 1)

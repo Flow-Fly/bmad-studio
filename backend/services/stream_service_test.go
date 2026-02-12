@@ -415,7 +415,7 @@ func TestStreamService_Get_ErrorIfStreamNotFound(t *testing.T) {
 	// Attempt to get non-existent stream
 	_, err = streamService.Get(projectName, "nonexistent-stream")
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to read stream.json")
+	assert.Contains(t, err.Error(), "stream not found")
 }
 
 func TestStreamService_Get_ErrorIfProjectNotFound(t *testing.T) {
