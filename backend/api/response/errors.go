@@ -25,6 +25,7 @@ const (
 	ErrCodeValidationError = "validation_error"
 	ErrCodeNotImplemented  = "not_implemented"
 	ErrCodeUnauthorized    = "unauthorized"
+	ErrCodeAlreadyExists   = "already_exists"
 )
 
 // WriteError writes a standardized error response
