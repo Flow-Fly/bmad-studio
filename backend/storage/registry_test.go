@@ -163,3 +163,193 @@ func TestRegistryStore_Save_AtomicWrite(t *testing.T) {
 		t.Error("Save() left .tmp file behind")
 	}
 }
+
+func TestRegistryStore_AddProject(t *testing.T) {
+	tmpDir := resolveDir(t, t.TempDir())
+	centralStore := NewCentralStoreWithPath(tmpDir)
+	if err := centralStore.Init(); err != nil {
+		t.Fatalf("Failed to init central store: %v", err)
+	}
+
+	registryStore := NewRegistryStore(centralStore)
+
+	entry := types.RegistryEntry{
+		Name:      "my-app",
+		RepoPath:  "/path/to/my-app",
+		StorePath: filepath.Join(tmpDir, "projects", "my-app"),
+	}
+
+	// Add project
+	err := registryStore.AddProject(entry)
+	if err != nil {
+		t.Fatalf("AddProject() error = %v", err)
+	}
+
+	// Verify it was added
+	registry, _ := registryStore.Load()
+	if len(registry.Projects) != 1 {
+		t.Fatalf("Expected 1 project, got %d", len(registry.Projects))
+	}
+	if registry.Projects[0].Name != "my-app" {
+		t.Errorf("Expected name 'my-app', got %s", registry.Projects[0].Name)
+	}
+}
+
+func TestRegistryStore_AddProject_Duplicate(t *testing.T) {
+	tmpDir := resolveDir(t, t.TempDir())
+	centralStore := NewCentralStoreWithPath(tmpDir)
+	if err := centralStore.Init(); err != nil {
+		t.Fatalf("Failed to init central store: %v", err)
+	}
+
+	registryStore := NewRegistryStore(centralStore)
+
+	entry := types.RegistryEntry{
+		Name:      "my-app",
+		RepoPath:  "/path/to/my-app",
+		StorePath: filepath.Join(tmpDir, "projects", "my-app"),
+	}
+
+	// Add project first time
+	if err := registryStore.AddProject(entry); err != nil {
+		t.Fatalf("First AddProject() error = %v", err)
+	}
+
+	// Try to add again with same repoPath
+	err := registryStore.AddProject(entry)
+	if err == nil {
+		t.Fatal("AddProject() should fail for duplicate repoPath")
+	}
+	if err.Error() != "project already registered: /path/to/my-app" {
+		t.Errorf("Expected duplicate error message, got: %v", err)
+	}
+
+	// Verify only one entry exists
+	registry, _ := registryStore.Load()
+	if len(registry.Projects) != 1 {
+		t.Errorf("Expected 1 project after duplicate attempt, got %d", len(registry.Projects))
+	}
+}
+
+func TestRegistryStore_RemoveProject(t *testing.T) {
+	tmpDir := resolveDir(t, t.TempDir())
+	centralStore := NewCentralStoreWithPath(tmpDir)
+	if err := centralStore.Init(); err != nil {
+		t.Fatalf("Failed to init central store: %v", err)
+	}
+
+	registryStore := NewRegistryStore(centralStore)
+
+	// Add a project first
+	entry := types.RegistryEntry{
+		Name:      "my-app",
+		RepoPath:  "/path/to/my-app",
+		StorePath: filepath.Join(tmpDir, "projects", "my-app"),
+	}
+	if err := registryStore.AddProject(entry); err != nil {
+		t.Fatalf("AddProject() error = %v", err)
+	}
+
+	// Remove it
+	err := registryStore.RemoveProject("my-app")
+	if err != nil {
+		t.Fatalf("RemoveProject() error = %v", err)
+	}
+
+	// Verify it's gone
+	registry, _ := registryStore.Load()
+	if len(registry.Projects) != 0 {
+		t.Errorf("Expected 0 projects after removal, got %d", len(registry.Projects))
+	}
+}
+
+func TestRegistryStore_RemoveProject_NotFound(t *testing.T) {
+	tmpDir := resolveDir(t, t.TempDir())
+	centralStore := NewCentralStoreWithPath(tmpDir)
+	if err := centralStore.Init(); err != nil {
+		t.Fatalf("Failed to init central store: %v", err)
+	}
+
+	registryStore := NewRegistryStore(centralStore)
+
+	// Try to remove non-existent project
+	err := registryStore.RemoveProject("nonexistent")
+	if err == nil {
+		t.Fatal("RemoveProject() should fail for non-existent project")
+	}
+	if err.Error() != "project not found: nonexistent" {
+		t.Errorf("Expected 'project not found' error, got: %v", err)
+	}
+}
+
+func TestRegistryStore_FindByRepoPath(t *testing.T) {
+	tmpDir := resolveDir(t, t.TempDir())
+	centralStore := NewCentralStoreWithPath(tmpDir)
+	if err := centralStore.Init(); err != nil {
+		t.Fatalf("Failed to init central store: %v", err)
+	}
+
+	registryStore := NewRegistryStore(centralStore)
+
+	// Add some projects
+	entries := []types.RegistryEntry{
+		{Name: "app1", RepoPath: "/path/to/app1", StorePath: "/store/app1"},
+		{Name: "app2", RepoPath: "/path/to/app2", StorePath: "/store/app2"},
+	}
+	for _, e := range entries {
+		if err := registryStore.AddProject(e); err != nil {
+			t.Fatalf("AddProject() error = %v", err)
+		}
+	}
+
+	// Find existing project
+	entry, found := registryStore.FindByRepoPath("/path/to/app1")
+	if !found {
+		t.Fatal("FindByRepoPath() should find existing project")
+	}
+	if entry.Name != "app1" {
+		t.Errorf("Expected name 'app1', got %s", entry.Name)
+	}
+
+	// Find non-existent project
+	_, found = registryStore.FindByRepoPath("/nonexistent")
+	if found {
+		t.Error("FindByRepoPath() should not find non-existent project")
+	}
+}
+
+func TestRegistryStore_FindByName(t *testing.T) {
+	tmpDir := resolveDir(t, t.TempDir())
+	centralStore := NewCentralStoreWithPath(tmpDir)
+	if err := centralStore.Init(); err != nil {
+		t.Fatalf("Failed to init central store: %v", err)
+	}
+
+	registryStore := NewRegistryStore(centralStore)
+
+	// Add some projects
+	entries := []types.RegistryEntry{
+		{Name: "app1", RepoPath: "/path/to/app1", StorePath: "/store/app1"},
+		{Name: "app2", RepoPath: "/path/to/app2", StorePath: "/store/app2"},
+	}
+	for _, e := range entries {
+		if err := registryStore.AddProject(e); err != nil {
+			t.Fatalf("AddProject() error = %v", err)
+		}
+	}
+
+	// Find existing project
+	entry, found := registryStore.FindByName("app1")
+	if !found {
+		t.Fatal("FindByName() should find existing project")
+	}
+	if entry.RepoPath != "/path/to/app1" {
+		t.Errorf("Expected repoPath '/path/to/app1', got %s", entry.RepoPath)
+	}
+
+	// Find non-existent project
+	_, found = registryStore.FindByName("nonexistent")
+	if found {
+		t.Error("FindByName() should not find non-existent project")
+	}
+}
