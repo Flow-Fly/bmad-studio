@@ -82,10 +82,21 @@ func main() {
 
 	providerService := services.NewProviderService()
 
-	configStore, err := storage.NewConfigStore()
+	// Initialize central store first
+	centralStore, err := storage.NewCentralStore()
 	if err != nil {
-		log.Printf("Warning: Failed to initialize config store: %v", err)
+		log.Fatalf("Fatal: Failed to create central store: %v", err)
 	}
+	if err := centralStore.Init(); err != nil {
+		log.Fatalf("Fatal: Failed to initialize central store: %v", err)
+	}
+	log.Printf("Central store initialized at: %s", centralStore.RootDir())
+
+	// Create config store using central store
+	configStore := storage.NewConfigStore(centralStore)
+
+	// Create registry store using central store (prepared for Story 1.2)
+	_ = storage.NewRegistryStore(centralStore)
 
 	// Create insight store and service
 	insightStore, err := storage.NewInsightStore()
