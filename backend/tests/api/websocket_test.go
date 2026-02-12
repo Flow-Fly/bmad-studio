@@ -1,6 +1,7 @@
 package api_test
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -9,6 +10,7 @@ import (
 
 	"bmad-studio/backend/api"
 	"bmad-studio/backend/api/websocket"
+	"bmad-studio/backend/types"
 
 	ws "github.com/gorilla/websocket"
 )
@@ -59,6 +61,13 @@ func TestWebSocketReceivesBroadcast(t *testing.T) {
 	}
 	defer conn.Close()
 
+	// Read and discard connection:status message
+	conn.SetReadDeadline(time.Now().Add(time.Second))
+	_, _, err = conn.ReadMessage()
+	if err != nil {
+		t.Fatalf("Failed to read connection:status: %v", err)
+	}
+
 	// Wait for client to be registered
 	time.Sleep(50 * time.Millisecond)
 
@@ -100,6 +109,15 @@ func TestMultipleWebSocketClientsReceiveBroadcast(t *testing.T) {
 		}
 		defer conn.Close()
 		conns[i] = conn
+	}
+
+	// Read and discard connection:status from each client
+	for i, conn := range conns {
+		conn.SetReadDeadline(time.Now().Add(time.Second))
+		_, _, err := conn.ReadMessage()
+		if err != nil {
+			t.Fatalf("Client %d failed to read connection:status: %v", i, err)
+		}
 	}
 
 	// Wait for clients to be registered
@@ -206,4 +224,207 @@ func TestWebSocketCheckOrigin(t *testing.T) {
 
 	// Wait for cleanup
 	time.Sleep(50 * time.Millisecond)
+}
+
+func TestWebSocketConnectionStatusOnConnect(t *testing.T) {
+	hub := websocket.NewHub()
+	go hub.Run()
+	defer hub.Stop()
+
+	router := api.NewRouterWithServices(api.RouterServices{Hub: hub})
+
+	server := httptest.NewServer(router)
+	defer server.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/ws"
+
+	dialer := ws.Dialer{}
+	conn, _, err := dialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("Failed to connect to WebSocket: %v", err)
+	}
+	defer conn.Close()
+
+	// First message should be connection:status
+	conn.SetReadDeadline(time.Now().Add(time.Second))
+	_, message, err := conn.ReadMessage()
+	if err != nil {
+		t.Fatalf("Failed to read connection:status: %v", err)
+	}
+
+	var event types.WebSocketEvent
+	if err := json.Unmarshal(message, &event); err != nil {
+		t.Fatalf("Failed to unmarshal event: %v", err)
+	}
+
+	if event.Type != types.EventTypeConnectionStatus {
+		t.Errorf("Expected first event type %q, got %q", types.EventTypeConnectionStatus, event.Type)
+	}
+
+	payloadBytes, err := json.Marshal(event.Payload)
+	if err != nil {
+		t.Fatalf("Failed to marshal payload: %v", err)
+	}
+
+	var payload types.ConnectionStatusPayload
+	if err := json.Unmarshal(payloadBytes, &payload); err != nil {
+		t.Fatalf("Failed to unmarshal payload: %v", err)
+	}
+
+	if payload.Status != "connected" {
+		t.Errorf("Expected status %q, got %q", "connected", payload.Status)
+	}
+}
+
+func TestWebSocketConnectionStatusOnReconnect(t *testing.T) {
+	hub := websocket.NewHub()
+	go hub.Run()
+	defer hub.Stop()
+
+	router := api.NewRouterWithServices(api.RouterServices{Hub: hub})
+
+	server := httptest.NewServer(router)
+	defer server.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/ws"
+
+	// First connection
+	dialer := ws.Dialer{}
+	conn1, _, err := dialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("Failed to connect first time: %v", err)
+	}
+
+	// Read and discard connection:status from first connection
+	conn1.SetReadDeadline(time.Now().Add(time.Second))
+	_, _, err = conn1.ReadMessage()
+	if err != nil {
+		t.Fatalf("Failed to read first connection:status: %v", err)
+	}
+
+	// Disconnect
+	conn1.Close()
+
+	// Wait for unregistration
+	time.Sleep(100 * time.Millisecond)
+
+	// Reconnect
+	conn2, _, err := dialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("Failed to reconnect: %v", err)
+	}
+	defer conn2.Close()
+
+	// Should receive connection:status on reconnect
+	conn2.SetReadDeadline(time.Now().Add(time.Second))
+	_, message, err := conn2.ReadMessage()
+	if err != nil {
+		t.Fatalf("Failed to read connection:status on reconnect: %v", err)
+	}
+
+	var event types.WebSocketEvent
+	if err := json.Unmarshal(message, &event); err != nil {
+		t.Fatalf("Failed to unmarshal event: %v", err)
+	}
+
+	if event.Type != types.EventTypeConnectionStatus {
+		t.Errorf("Expected connection:status on reconnect, got %q", event.Type)
+	}
+}
+
+func TestWebSocketMultipleClientsReceiveOwnConnectionStatus(t *testing.T) {
+	hub := websocket.NewHub()
+	go hub.Run()
+	defer hub.Stop()
+
+	router := api.NewRouterWithServices(api.RouterServices{Hub: hub})
+
+	server := httptest.NewServer(router)
+	defer server.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/ws"
+
+	// Connect 3 clients
+	conns := make([]*ws.Conn, 3)
+	for i := range conns {
+		dialer := ws.Dialer{}
+		conn, _, err := dialer.Dial(wsURL, nil)
+		if err != nil {
+			t.Fatalf("Failed to connect client %d: %v", i, err)
+		}
+		defer conn.Close()
+		conns[i] = conn
+	}
+
+	// Each client should receive their own connection:status
+	for i, conn := range conns {
+		conn.SetReadDeadline(time.Now().Add(time.Second))
+		_, message, err := conn.ReadMessage()
+		if err != nil {
+			t.Fatalf("Client %d failed to read connection:status: %v", i, err)
+		}
+
+		var event types.WebSocketEvent
+		if err := json.Unmarshal(message, &event); err != nil {
+			t.Fatalf("Client %d failed to unmarshal event: %v", i, err)
+		}
+
+		if event.Type != types.EventTypeConnectionStatus {
+			t.Errorf("Client %d expected connection:status, got %q", i, event.Type)
+		}
+	}
+}
+
+func TestWebSocketBroadcastAfterConnectionStatus(t *testing.T) {
+	hub := websocket.NewHub()
+	go hub.Run()
+	defer hub.Stop()
+
+	router := api.NewRouterWithServices(api.RouterServices{Hub: hub})
+
+	server := httptest.NewServer(router)
+	defer server.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/ws"
+
+	dialer := ws.Dialer{}
+	conn, _, err := dialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("Failed to connect: %v", err)
+	}
+	defer conn.Close()
+
+	// First message should be connection:status
+	conn.SetReadDeadline(time.Now().Add(time.Second))
+	_, msg1, err := conn.ReadMessage()
+	if err != nil {
+		t.Fatalf("Failed to read connection:status: %v", err)
+	}
+
+	var event1 types.WebSocketEvent
+	if err := json.Unmarshal(msg1, &event1); err != nil {
+		t.Fatalf("Failed to unmarshal first event: %v", err)
+	}
+
+	if event1.Type != types.EventTypeConnectionStatus {
+		t.Errorf("Expected first event to be connection:status, got %q", event1.Type)
+	}
+
+	// Wait for client to be fully registered
+	time.Sleep(50 * time.Millisecond)
+
+	// Broadcast a test message
+	testMessage := []byte(`{"type":"test-event","payload":"broadcast-test"}`)
+	hub.Broadcast(testMessage)
+
+	// Second message should be the broadcast
+	conn.SetReadDeadline(time.Now().Add(time.Second))
+	_, msg2, err := conn.ReadMessage()
+	if err != nil {
+		t.Fatalf("Failed to read broadcast: %v", err)
+	}
+
+	if string(msg2) != string(testMessage) {
+		t.Errorf("Expected broadcast %q, got %q", testMessage, msg2)
+	}
 }
