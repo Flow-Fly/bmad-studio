@@ -1,6 +1,6 @@
 # Story 1.3: Project Management REST API
 
-Status: review
+Status: done
 
 ## Story
 
