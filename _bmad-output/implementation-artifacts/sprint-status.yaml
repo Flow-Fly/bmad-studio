@@ -51,7 +51,7 @@ development_status:
   epic-1: in-progress
   1-1-central-store-initialization-atomic-write-layer: done
   1-2-project-registration-store-directory-setup: done
-  1-3-project-management-rest-api: backlog
+  1-3-project-management-rest-api: done
   1-4-websocket-event-hub: backlog
   epic-1-retrospective: optional
 
