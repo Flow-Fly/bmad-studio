@@ -1,4 +1,4 @@
-import type { TrustLevel } from './tool.js';
+import type { TrustLevel } from './tool';
 
 export type ProviderType = 'claude' | 'openai' | 'ollama' | 'gemini';
 

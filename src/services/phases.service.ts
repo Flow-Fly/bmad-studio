@@ -1,14 +1,14 @@
-import { apiFetch, API_BASE } from './api.service.js';
-import type { PhasesResponse } from '../types/phases.js';
-import { phasesLoadingState, updatePhasesState } from '../state/phases.state.js';
+import { apiFetch, API_BASE } from './api.service';
+import type { PhasesResponse } from '../types/phases';
+import { usePhasesStore } from '../stores/phases.store';
 
 export async function loadPhases(): Promise<void> {
-  phasesLoadingState.set({ status: 'loading' });
+  usePhasesStore.getState().setLoadingState({ status: 'loading' });
   try {
     const phases = await apiFetch<PhasesResponse>(`${API_BASE}/bmad/phases`);
-    updatePhasesState(phases);
+    usePhasesStore.getState().updatePhases(phases);
   } catch (err) {
-    phasesLoadingState.set({
+    usePhasesStore.getState().setLoadingState({
       status: 'error',
       error: err instanceof Error ? err.message : 'Failed to load phase definitions',
     });

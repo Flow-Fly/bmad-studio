@@ -16,6 +16,14 @@ import (
 
 const compactSystemPrompt = `You are a conversation summarizer. Analyze the conversation below and extract a structured insight.
 
+The user may have highlighted specific sections of the conversation. Highlight colors have semantic meaning:
+- "interesting": Content the user found noteworthy or valuable
+- "to-remember": Content the user wants to retain for future reference
+- "disagree": Content the user disagrees with or wants to challenge
+- "to-explore": Content the user wants to investigate further
+
+Prioritize highlighted content in your summary — it reflects the user's focus and intent.
+
 Return ONLY a JSON object with these fields:
 - "title": A short, descriptive title (max 100 chars)
 - "origin_context": The context/background that led to this conversation (1-3 sentences)
@@ -51,6 +59,15 @@ func (s *InsightService) CompactConversation(ctx context.Context, projectName st
 		conv.WriteString(": ")
 		conv.WriteString(msg.Content)
 		conv.WriteString("\n\n")
+	}
+
+	// Append highlighted sections if present
+	if len(req.HighlightedSections) > 0 {
+		conv.WriteString("---\nHighlighted Sections:\n")
+		for _, hs := range req.HighlightedSections {
+			conv.WriteString(fmt.Sprintf("- [%s] (%s): \"%s\"\n", hs.Color, hs.MessageRole, hs.Text))
+		}
+		conv.WriteString("\n")
 	}
 
 	chatReq := providers.ChatRequest{

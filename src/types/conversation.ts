@@ -1,4 +1,4 @@
-import type { ToolCallBlock } from './tool.js';
+import type { ToolCallBlock } from './tool';
 
 // Chat event type constants
 export const CHAT_STREAM_START = 'chat:stream-start';
@@ -114,10 +114,10 @@ export interface UsageStats {
 export type HighlightColor = 'yellow' | 'green' | 'red' | 'blue';
 
 export const HIGHLIGHT_COLORS: Record<HighlightColor, string> = {
-  yellow: 'important',
-  green: 'keep',
+  yellow: 'interesting',
+  green: 'to-remember',
   red: 'disagree',
-  blue: 'question',
+  blue: 'to-explore',
 };
 
 export interface Highlight {
@@ -154,7 +154,7 @@ export interface Message {
   usage?: UsageStats;
   isContext?: boolean;
   contextLabel?: string;
-  blocks?: MessageBlock[]; // Block-based content for tool calls, text, thinking
+  blocks?: MessageBlock[];
 }
 
 export interface Conversation {

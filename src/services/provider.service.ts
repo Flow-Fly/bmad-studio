@@ -1,7 +1,7 @@
-import type { ProviderType, Model, AppSettings } from '../types/provider.js';
-import { getApiKey, setApiKey, hasApiKey } from './keychain.service.js';
-import { apiFetch, API_BASE } from './api.service.js';
-import { trustLevelState } from '../state/provider.state.js';
+import type { ProviderType, Model, AppSettings } from '../types/provider';
+import { getApiKey, setApiKey, hasApiKey } from './keychain.service';
+import { apiFetch, API_BASE } from './api.service';
+import { useProviderStore } from '../stores/provider.store';
 
 interface ValidateResponse {
   valid: boolean;
@@ -10,7 +10,6 @@ interface ValidateResponse {
 export function friendlyValidationError(type: ProviderType, err: unknown): string {
   const raw = err instanceof Error ? err.message : 'Validation failed';
 
-  // Network error
   if (raw === 'Failed to fetch' || raw.includes('NetworkError')) {
     if (type === 'ollama') {
       return 'Cannot connect to Ollama. Please ensure Ollama is running.';
@@ -18,7 +17,6 @@ export function friendlyValidationError(type: ProviderType, err: unknown): strin
     return 'Network error. Please check your internet connection and try again.';
   }
 
-  // Provider-specific hints
   if (raw.includes('401') || raw.toLowerCase().includes('invalid') || raw.toLowerCase().includes('auth')) {
     if (type === 'claude') return 'Invalid Claude API key. Check your key at console.anthropic.com.';
     if (type === 'openai') return 'Invalid OpenAI API key. Check your key at platform.openai.com.';
@@ -60,15 +58,11 @@ export function saveSettings(settings: AppSettings): Promise<AppSettings> {
   });
 }
 
-/**
- * Initialize provider state from persisted settings.
- * Call this at app startup to ensure trust level is loaded before any tool confirmations.
- */
 export async function initProviderState(): Promise<void> {
   try {
     const settings = await loadSettings();
     if (settings.trust_level) {
-      trustLevelState.set(settings.trust_level);
+      useProviderStore.getState().setTrustLevel(settings.trust_level);
     }
   } catch {
     // Settings not available — use defaults

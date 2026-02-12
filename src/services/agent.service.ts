@@ -1,9 +1,7 @@
-import { apiFetch, API_BASE } from './api.service.js';
-import type { AgentsResponse } from '../types/agent.js';
-import type { Agent } from '../types/agent.js';
-import { agentsState } from '../state/agent.state.js';
+import { apiFetch, API_BASE } from './api.service';
+import type { AgentsResponse, Agent } from '../types/agent';
+import { useAgentStore } from '../stores/agent.store';
 
-/** Validate that an agent object has the minimum required fields */
 function isValidAgent(agent: unknown): agent is Agent {
   if (!agent || typeof agent !== 'object') return false;
   const a = agent as Record<string, unknown>;
@@ -16,9 +14,9 @@ export async function loadAgents(): Promise<void> {
     const agents = Array.isArray(response.agents)
       ? response.agents.filter(isValidAgent)
       : [];
-    agentsState.set(agents);
+    useAgentStore.getState().setAgents(agents);
   } catch (err) {
     console.warn('Failed to load agents:', err instanceof Error ? err.message : err);
-    agentsState.set([]);
+    useAgentStore.getState().setAgents([]);
   }
 }

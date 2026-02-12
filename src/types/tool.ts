@@ -9,7 +9,7 @@ export interface ToolCallBlock {
   toolId: string;
   toolName: string;
   input: Record<string, unknown>;
-  inputRaw: string; // accumulated JSON string during streaming
+  inputRaw: string;
   status: ToolStatus;
   output?: string;
   error?: string;
@@ -25,7 +25,6 @@ export interface PendingToolConfirm {
   input: Record<string, unknown>;
 }
 
-// Tool explanation hints for modal
 export const TOOL_HINTS: Record<string, string> = {
   bash: 'Executes a shell command on your system',
   file_write: 'Creates or overwrites a file',
@@ -33,7 +32,6 @@ export const TOOL_HINTS: Record<string, string> = {
   web_search: 'Searches the web for information',
 };
 
-// Dangerous tools that require confirmation in guided mode
 export const DANGEROUS_TOOLS = new Set(['bash', 'file_write']);
 
 export function isDangerousTool(toolName: string): boolean {
