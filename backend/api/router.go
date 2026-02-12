@@ -24,6 +24,7 @@ type RouterServices struct {
 	Hub            *websocket.Hub
 	ProjectManager *services.ProjectManager
 	Insight        *services.InsightService
+	Project        *services.ProjectService // Prepared for Story 1.3: REST API endpoints
 }
 
 // NewRouter creates and configures the main router with all routes and middleware
@@ -48,17 +49,27 @@ func NewRouterWithServices(svc RouterServices) *chi.Mux {
 	r.Route("/api/v1", func(r chi.Router) {
 		// Projects resource
 		r.Route("/projects", func(r chi.Router) {
-			r.Get("/", handlers.ListProjects)
-			r.Post("/", handlers.CreateProject)
+			// Project registration and management endpoints
+			if svc.Project != nil {
+				projectsHandler := handlers.NewProjectsHandler(svc.Project)
+				r.Get("/", projectsHandler.ListProjects)
+				r.Post("/", projectsHandler.RegisterProject)
+			}
 
+			// Legacy OpenProject endpoint (BMAD config loading)
 			if svc.ProjectManager != nil {
 				projectHandler := handlers.NewProjectHandler(svc.ProjectManager)
 				r.Post("/open", projectHandler.OpenProject)
 			}
 
+			// Nested resources under project
 			r.Route("/{id}", func(r chi.Router) {
-				r.Get("/", handlers.GetProject)
-				r.Put("/", handlers.UpdateProject)
+				// Project detail endpoints
+				if svc.Project != nil {
+					projectsHandler := handlers.NewProjectsHandler(svc.Project)
+					r.Get("/", projectsHandler.GetProject)
+					r.Delete("/", projectsHandler.UnregisterProject)
+				}
 
 				// Files resource (nested under project)
 				if svc.ProjectManager != nil {
