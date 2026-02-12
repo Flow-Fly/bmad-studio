@@ -327,3 +327,210 @@ func TestStreamStore_ListProjectStreams_VerifySortingOrder(t *testing.T) {
 	assert.Equal(t, "middle", streams[1].Name)
 	assert.Equal(t, "oldest", streams[2].Name)
 }
+
+// Test helper: creates an active stream for archive tests
+func createActiveStream(t *testing.T, streamStore *StreamStore, projectName, streamName string) {
+	t.Helper()
+
+	_, err := streamStore.CreateStreamDir(projectName, streamName)
+	require.NoError(t, err)
+
+	meta := types.StreamMeta{
+		Name:      streamName,
+		Project:   projectName,
+		Status:    types.StreamStatusActive,
+		Type:      types.StreamTypeFull,
+		CreatedAt: "2026-02-12T10:00:00Z",
+		UpdatedAt: "2026-02-12T10:00:00Z",
+	}
+	err = streamStore.WriteStreamMeta(projectName, streamName, meta)
+	require.NoError(t, err)
+}
+
+func TestStreamStore_ArchiveStream_WithMergedOutcome(t *testing.T) {
+	rootDir := resolveDir(t, t.TempDir())
+	store := NewCentralStoreWithPath(rootDir)
+	err := store.Init()
+	require.NoError(t, err)
+
+	streamStore := NewStreamStore(store)
+	projectName := "test-project"
+	streamName := "payment-integration"
+
+	// Create active stream
+	createActiveStream(t, streamStore, projectName, streamName)
+
+	// Archive with merged outcome
+	err = streamStore.ArchiveStream(projectName, streamName, types.StreamOutcomeMerged)
+	require.NoError(t, err)
+
+	// Verify source directory no longer exists
+	srcDir := filepath.Join(rootDir, "projects", projectName+"-"+streamName)
+	_, err = os.Stat(srcDir)
+	assert.True(t, os.IsNotExist(err), "source directory should not exist after archive")
+
+	// Verify archive directory exists
+	archiveDir := filepath.Join(rootDir, "projects", "archive", projectName+"-"+streamName)
+	info, err := os.Stat(archiveDir)
+	require.NoError(t, err)
+	assert.True(t, info.IsDir())
+
+	// Read archived metadata
+	archivedMeta, err := streamStore.ReadArchivedStreamMeta(projectName, streamName)
+	require.NoError(t, err)
+	assert.Equal(t, types.StreamStatusArchived, archivedMeta.Status)
+	assert.Equal(t, types.StreamOutcomeMerged, archivedMeta.Outcome)
+	assert.NotEqual(t, "2026-02-12T10:00:00Z", archivedMeta.UpdatedAt, "UpdatedAt should be updated")
+}
+
+func TestStreamStore_ArchiveStream_WithAbandonedOutcome(t *testing.T) {
+	rootDir := resolveDir(t, t.TempDir())
+	store := NewCentralStoreWithPath(rootDir)
+	err := store.Init()
+	require.NoError(t, err)
+
+	streamStore := NewStreamStore(store)
+	projectName := "test-project"
+	streamName := "cancelled-feature"
+
+	// Create active stream
+	createActiveStream(t, streamStore, projectName, streamName)
+
+	// Archive with abandoned outcome
+	err = streamStore.ArchiveStream(projectName, streamName, types.StreamOutcomeAbandoned)
+	require.NoError(t, err)
+
+	// Verify archived metadata
+	archivedMeta, err := streamStore.ReadArchivedStreamMeta(projectName, streamName)
+	require.NoError(t, err)
+	assert.Equal(t, types.StreamStatusArchived, archivedMeta.Status)
+	assert.Equal(t, types.StreamOutcomeAbandoned, archivedMeta.Outcome)
+}
+
+func TestStreamStore_ArchiveStream_CreatesArchiveDirectory(t *testing.T) {
+	rootDir := resolveDir(t, t.TempDir())
+	store := NewCentralStoreWithPath(rootDir)
+	err := store.Init()
+	require.NoError(t, err)
+
+	streamStore := NewStreamStore(store)
+	projectName := "test-project"
+	streamName := "feature-1"
+
+	// Verify archive directory doesn't exist initially
+	archiveBaseDir := filepath.Join(rootDir, "projects", "archive")
+	_, err = os.Stat(archiveBaseDir)
+	assert.True(t, os.IsNotExist(err), "archive directory should not exist initially")
+
+	// Create and archive stream
+	createActiveStream(t, streamStore, projectName, streamName)
+	err = streamStore.ArchiveStream(projectName, streamName, types.StreamOutcomeMerged)
+	require.NoError(t, err)
+
+	// Verify archive directory was created
+	info, err := os.Stat(archiveBaseDir)
+	require.NoError(t, err)
+	assert.True(t, info.IsDir())
+}
+
+func TestStreamStore_ArchiveStream_ErrorIfStreamNotFound(t *testing.T) {
+	rootDir := resolveDir(t, t.TempDir())
+	store := NewCentralStoreWithPath(rootDir)
+	err := store.Init()
+	require.NoError(t, err)
+
+	streamStore := NewStreamStore(store)
+
+	// Attempt to archive non-existent stream
+	err = streamStore.ArchiveStream("test-project", "nonexistent", types.StreamOutcomeMerged)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "stream not found")
+}
+
+func TestStreamStore_ArchiveStream_ErrorIfAlreadyArchived(t *testing.T) {
+	rootDir := resolveDir(t, t.TempDir())
+	store := NewCentralStoreWithPath(rootDir)
+	err := store.Init()
+	require.NoError(t, err)
+
+	streamStore := NewStreamStore(store)
+	projectName := "test-project"
+	streamName := "feature-1"
+
+	// Create and archive stream
+	createActiveStream(t, streamStore, projectName, streamName)
+	err = streamStore.ArchiveStream(projectName, streamName, types.StreamOutcomeMerged)
+	require.NoError(t, err)
+
+	// Attempt to archive again
+	err = streamStore.ArchiveStream(projectName, streamName, types.StreamOutcomeMerged)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "stream not found")
+}
+
+func TestStreamStore_ArchiveStream_MetadataIncludesOutcome(t *testing.T) {
+	rootDir := resolveDir(t, t.TempDir())
+	store := NewCentralStoreWithPath(rootDir)
+	err := store.Init()
+	require.NoError(t, err)
+
+	streamStore := NewStreamStore(store)
+	projectName := "test-project"
+	streamName := "feature-1"
+
+	// Create and archive stream
+	createActiveStream(t, streamStore, projectName, streamName)
+	err = streamStore.ArchiveStream(projectName, streamName, types.StreamOutcomeMerged)
+	require.NoError(t, err)
+
+	// Read archived metadata
+	archivedMeta, err := streamStore.ReadArchivedStreamMeta(projectName, streamName)
+	require.NoError(t, err)
+	assert.Equal(t, types.StreamOutcomeMerged, archivedMeta.Outcome)
+	assert.NotEmpty(t, archivedMeta.Outcome)
+}
+
+func TestStreamStore_ArchiveStream_StatusIsArchived(t *testing.T) {
+	rootDir := resolveDir(t, t.TempDir())
+	store := NewCentralStoreWithPath(rootDir)
+	err := store.Init()
+	require.NoError(t, err)
+
+	streamStore := NewStreamStore(store)
+	projectName := "test-project"
+	streamName := "feature-1"
+
+	// Create and archive stream
+	createActiveStream(t, streamStore, projectName, streamName)
+	err = streamStore.ArchiveStream(projectName, streamName, types.StreamOutcomeMerged)
+	require.NoError(t, err)
+
+	// Verify status
+	archivedMeta, err := streamStore.ReadArchivedStreamMeta(projectName, streamName)
+	require.NoError(t, err)
+	assert.Equal(t, types.StreamStatusArchived, archivedMeta.Status)
+}
+
+func TestStreamStore_ArchiveStream_UpdatesTimestamp(t *testing.T) {
+	rootDir := resolveDir(t, t.TempDir())
+	store := NewCentralStoreWithPath(rootDir)
+	err := store.Init()
+	require.NoError(t, err)
+
+	streamStore := NewStreamStore(store)
+	projectName := "test-project"
+	streamName := "feature-1"
+
+	// Create active stream
+	createActiveStream(t, streamStore, projectName, streamName)
+
+	// Archive stream
+	err = streamStore.ArchiveStream(projectName, streamName, types.StreamOutcomeMerged)
+	require.NoError(t, err)
+
+	// Verify UpdatedAt was changed
+	archivedMeta, err := streamStore.ReadArchivedStreamMeta(projectName, streamName)
+	require.NoError(t, err)
+	assert.NotEqual(t, "2026-02-12T10:00:00Z", archivedMeta.UpdatedAt)
+	assert.NotEmpty(t, archivedMeta.UpdatedAt)
+}

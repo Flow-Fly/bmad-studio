@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"bmad-studio/backend/types"
 )
@@ -24,6 +25,25 @@ func NewStreamStore(store *CentralStore) *StreamStore {
 // streamDir returns the path to a stream directory
 func (s *StreamStore) streamDir(projectName, streamName string) string {
 	return filepath.Join(s.store.rootDir, "projects", projectName+"-"+streamName)
+}
+
+// archivedStreamDir returns the path to an archived stream directory
+func (s *StreamStore) archivedStreamDir(projectName, streamName string) string {
+	return filepath.Join(s.store.rootDir, "projects", "archive", projectName+"-"+streamName)
+}
+
+// ReadArchivedStreamMeta reads archived stream metadata
+func (s *StreamStore) ReadArchivedStreamMeta(projectName, streamName string) (*types.StreamMeta, error) {
+	archiveDir := s.archivedStreamDir(projectName, streamName)
+	metaPath := filepath.Join(archiveDir, "stream.json")
+	streamID := projectName + "-" + streamName
+
+	var meta types.StreamMeta
+	if err := ReadJSON(metaPath, &meta); err != nil {
+		return nil, fmt.Errorf("failed to read archived stream.json for %s: %w", streamID, err)
+	}
+
+	return &meta, nil
 }
 
 // CreateStreamDir creates a stream directory and fsyncs parent
@@ -82,6 +102,60 @@ func (s *StreamStore) StreamDirExists(projectName, streamName string) bool {
 	streamDir := s.streamDir(projectName, streamName)
 	_, err := os.Stat(streamDir)
 	return err == nil
+}
+
+// ArchiveStream moves a stream directory to archive/ and updates its metadata
+func (s *StreamStore) ArchiveStream(projectName, streamName string, outcome types.StreamOutcome) error {
+	streamID := projectName + "-" + streamName
+	srcDir := s.streamDir(projectName, streamName)
+
+	// Verify stream exists
+	if _, err := os.Stat(srcDir); os.IsNotExist(err) {
+		return fmt.Errorf("stream not found: %s", streamID)
+	}
+
+	// Read existing metadata
+	meta, err := s.ReadStreamMeta(projectName, streamName)
+	if err != nil {
+		return fmt.Errorf("failed to read stream metadata for %s: %w", streamID, err)
+	}
+
+	// Check if already archived
+	if meta.Status == types.StreamStatusArchived {
+		return fmt.Errorf("stream already archived: %s", streamID)
+	}
+
+	// Create archive directory if it doesn't exist
+	archiveDir := filepath.Join(s.store.rootDir, "projects", "archive")
+	if err := os.MkdirAll(archiveDir, 0755); err != nil {
+		return fmt.Errorf("failed to create archive directory: %w", err)
+	}
+	if err := syncDir(archiveDir); err != nil {
+		return fmt.Errorf("failed to sync archive directory: %w", err)
+	}
+
+	// Update metadata
+	meta.Status = types.StreamStatusArchived
+	meta.Outcome = outcome
+	meta.UpdatedAt = fmt.Sprintf("%s", time.Now().UTC().Format(time.RFC3339))
+
+	// Write updated metadata to source directory (before move)
+	if err := s.WriteStreamMeta(projectName, streamName, *meta); err != nil {
+		return fmt.Errorf("failed to update stream metadata for %s: %w", streamID, err)
+	}
+
+	// Move directory to archive
+	destDir := filepath.Join(archiveDir, projectName+"-"+streamName)
+	if err := os.Rename(srcDir, destDir); err != nil {
+		return fmt.Errorf("failed to move stream directory for %s: %w", streamID, err)
+	}
+
+	// Fsync archive parent directory
+	if err := syncDir(archiveDir); err != nil {
+		return fmt.Errorf("failed to sync archive directory after move: %w", err)
+	}
+
+	return nil
 }
 
 // ListProjectStreams scans all stream directories for a project and returns metadata sorted by UpdatedAt descending
