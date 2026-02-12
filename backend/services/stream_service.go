@@ -120,3 +120,46 @@ func (s *StreamService) Get(projectName, streamName string) (*types.StreamMeta, 
 
 	return meta, nil
 }
+
+// Archive archives a stream with the given outcome ("merged" or "abandoned")
+func (s *StreamService) Archive(projectName, streamName, outcome string) (*types.StreamMeta, error) {
+	// Validate outcome
+	if outcome != string(types.StreamOutcomeMerged) && outcome != string(types.StreamOutcomeAbandoned) {
+		return nil, fmt.Errorf("invalid outcome: must be 'merged' or 'abandoned', got '%s'", outcome)
+	}
+
+	// Verify project exists in registry
+	entry, found := s.registryStore.FindByName(projectName)
+	if !found || entry == nil {
+		return nil, fmt.Errorf("project not found: %s", projectName)
+	}
+
+	// Verify stream exists and is active
+	meta, err := s.streamStore.ReadStreamMeta(projectName, streamName)
+	if err != nil {
+		return nil, fmt.Errorf("stream not found: %s-%s", projectName, streamName)
+	}
+
+	if meta.Status == types.StreamStatusArchived {
+		return nil, fmt.Errorf("stream already archived: %s-%s", projectName, streamName)
+	}
+
+	// Archive the stream
+	streamOutcome := types.StreamOutcome(outcome)
+	if err := s.streamStore.ArchiveStream(projectName, streamName, streamOutcome); err != nil {
+		return nil, fmt.Errorf("failed to archive stream: %w", err)
+	}
+
+	// Broadcast stream:archived event
+	streamID := projectName + "-" + streamName
+	event := types.NewStreamArchivedEvent(projectName, streamID, outcome)
+	s.hub.BroadcastEvent(event)
+
+	// Read and return archived metadata from new location
+	archivedMeta, err := s.streamStore.ReadArchivedStreamMeta(projectName, streamName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read archived stream metadata: %w", err)
+	}
+
+	return archivedMeta, nil
+}
