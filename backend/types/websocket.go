@@ -10,6 +10,12 @@ const (
 	EventTypeWorkflowStatusChanged = "workflow:status-changed"
 	EventTypeConnectionStatus      = "connection:status"
 
+	// Stream event types (server → client)
+	EventTypeStreamCreated      = "stream:created"
+	EventTypeStreamArchived     = "stream:archived"
+	EventTypeStreamUpdated      = "stream:updated"
+	EventTypeStreamPhaseChanged = "stream:phase-changed"
+
 	// Chat event types (client → server)
 	EventTypeChatSend   = "chat:send"
 	EventTypeChatCancel = "chat:cancel"
@@ -46,9 +52,9 @@ type ArtifactEventPayload struct {
 	Path      string  `json:"path"`
 	Status    string  `json:"status"`
 	Phase     int     `json:"phase"`
-	PhaseName string  `json:"phase_name"`
-	IsSharded bool    `json:"is_sharded"`
-	ParentID  *string `json:"parent_id,omitempty"`
+	PhaseName string  `json:"phaseName"`
+	IsSharded bool    `json:"isSharded"`
+	ParentID  *string `json:"parentId,omitempty"`
 }
 
 // ArtifactDeletedPayload is the payload for artifact:deleted events
@@ -65,6 +71,35 @@ type WorkflowStatusEventPayload struct {
 // ConnectionStatusPayload is the payload for connection:status events
 type ConnectionStatusPayload struct {
 	Status string `json:"status"` // "connected", "disconnected"
+}
+
+// StreamCreatedPayload is the payload for stream:created events
+type StreamCreatedPayload struct {
+	ProjectID string `json:"projectId"`
+	StreamID  string `json:"streamId"`
+	Name      string `json:"name"`
+}
+
+// StreamArchivedPayload is the payload for stream:archived events
+type StreamArchivedPayload struct {
+	ProjectID string `json:"projectId"`
+	StreamID  string `json:"streamId"`
+	Outcome   string `json:"outcome"`
+}
+
+// StreamUpdatedPayload is the payload for stream:updated events
+type StreamUpdatedPayload struct {
+	ProjectID string                 `json:"projectId"`
+	StreamID  string                 `json:"streamId"`
+	Changes   map[string]interface{} `json:"changes"`
+}
+
+// StreamPhaseChangedPayload is the payload for stream:phase-changed events
+type StreamPhaseChangedPayload struct {
+	ProjectID string   `json:"projectId"`
+	StreamID  string   `json:"streamId"`
+	Phase     string   `json:"phase"`
+	Artifacts []string `json:"artifacts"`
 }
 
 // ChatStreamStartPayload is the payload for chat:stream-start events
@@ -321,5 +356,42 @@ func NewChatToolConfirmEvent(conversationID, messageID, toolID, toolName string,
 		ToolID:         toolID,
 		ToolName:       toolName,
 		Input:          input,
+	})
+}
+
+// NewStreamCreatedEvent creates a stream:created event
+func NewStreamCreatedEvent(projectID, streamID, name string) *WebSocketEvent {
+	return NewWebSocketEvent(EventTypeStreamCreated, &StreamCreatedPayload{
+		ProjectID: projectID,
+		StreamID:  streamID,
+		Name:      name,
+	})
+}
+
+// NewStreamArchivedEvent creates a stream:archived event
+func NewStreamArchivedEvent(projectID, streamID, outcome string) *WebSocketEvent {
+	return NewWebSocketEvent(EventTypeStreamArchived, &StreamArchivedPayload{
+		ProjectID: projectID,
+		StreamID:  streamID,
+		Outcome:   outcome,
+	})
+}
+
+// NewStreamUpdatedEvent creates a stream:updated event
+func NewStreamUpdatedEvent(projectID, streamID string, changes map[string]interface{}) *WebSocketEvent {
+	return NewWebSocketEvent(EventTypeStreamUpdated, &StreamUpdatedPayload{
+		ProjectID: projectID,
+		StreamID:  streamID,
+		Changes:   changes,
+	})
+}
+
+// NewStreamPhaseChangedEvent creates a stream:phase-changed event
+func NewStreamPhaseChangedEvent(projectID, streamID, phase string, artifacts []string) *WebSocketEvent {
+	return NewWebSocketEvent(EventTypeStreamPhaseChanged, &StreamPhaseChangedPayload{
+		ProjectID: projectID,
+		StreamID:  streamID,
+		Phase:     phase,
+		Artifacts: artifacts,
 	})
 }
