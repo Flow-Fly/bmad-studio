@@ -23,6 +23,7 @@ type RouterServices struct {
 	ConfigStore    *storage.ConfigStore
 	Hub            *websocket.Hub
 	ProjectManager *services.ProjectManager
+	Insight        *services.InsightService
 }
 
 // NewRouter creates and configures the main router with all routes and middleware
@@ -58,6 +59,30 @@ func NewRouterWithServices(svc RouterServices) *chi.Mux {
 			r.Route("/{id}", func(r chi.Router) {
 				r.Get("/", handlers.GetProject)
 				r.Put("/", handlers.UpdateProject)
+
+				// Files resource (nested under project)
+				if svc.ProjectManager != nil {
+					fileHandler := handlers.NewFileHandler(services.NewFileService(svc.ProjectManager))
+					r.Route("/files", func(r chi.Router) {
+						r.Get("/", fileHandler.ListFiles)
+						r.Get("/*", fileHandler.ReadFile)
+					})
+				}
+
+				// Insights resource (nested under project)
+				if svc.Insight != nil {
+					insightHandler := handlers.NewInsightHandler(svc.Insight)
+					r.Route("/insights", func(r chi.Router) {
+						r.Get("/", insightHandler.ListInsights)
+						r.Post("/", insightHandler.CreateInsight)
+						r.Post("/compact", insightHandler.CompactInsight)
+						r.Route("/{insightId}", func(r chi.Router) {
+							r.Get("/", insightHandler.GetInsight)
+							r.Put("/", insightHandler.UpdateInsight)
+							r.Delete("/", insightHandler.DeleteInsight)
+						})
+					})
+				}
 			})
 		})
 

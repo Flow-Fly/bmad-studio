@@ -2,38 +2,47 @@ package providers
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 
+	"bmad-studio/backend/types"
+
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/option"
+	"github.com/openai/openai-go/v3/packages/param"
+	"github.com/openai/openai-go/v3/shared"
 )
 
 // openaiModels is the hardcoded list of available OpenAI models.
 var openaiModels = []Model{
 	{
-		ID:        string(openai.ChatModelGPT4o),
-		Name:      "GPT-4o",
-		Provider:  "openai",
-		MaxTokens: 16384,
+		ID:            string(openai.ChatModelGPT4o),
+		Name:          "GPT-4o",
+		Provider:      "openai",
+		MaxTokens:     16384,
+		SupportsTools: true,
 	},
 	{
-		ID:        string(openai.ChatModelGPT4oMini),
-		Name:      "GPT-4o mini",
-		Provider:  "openai",
-		MaxTokens: 16384,
+		ID:            string(openai.ChatModelGPT4oMini),
+		Name:          "GPT-4o mini",
+		Provider:      "openai",
+		MaxTokens:     16384,
+		SupportsTools: true,
 	},
 	{
-		ID:        string(openai.ChatModelGPT4_1),
-		Name:      "GPT-4.1",
-		Provider:  "openai",
-		MaxTokens: 32768,
+		ID:            string(openai.ChatModelGPT4_1),
+		Name:          "GPT-4.1",
+		Provider:      "openai",
+		MaxTokens:     32768,
+		SupportsTools: true,
 	},
 	{
-		ID:        string(openai.ChatModelGPT4_1Mini),
-		Name:      "GPT-4.1 mini",
-		Provider:  "openai",
-		MaxTokens: 32768,
+		ID:            string(openai.ChatModelGPT4_1Mini),
+		Name:          "GPT-4.1 mini",
+		Provider:      "openai",
+		MaxTokens:     32768,
+		SupportsTools: true,
 	},
 }
 
@@ -72,27 +81,16 @@ func (p *OpenAIProvider) ListModels() ([]Model, error) {
 	return models, nil
 }
 
+// RequiresAPIKey returns true as OpenAI requires an API key.
+func (p *OpenAIProvider) RequiresAPIKey() bool {
+	return true
+}
+
 // SendMessage sends a chat request and returns a channel streaming response chunks.
 func (p *OpenAIProvider) SendMessage(ctx context.Context, req ChatRequest) (<-chan StreamChunk, error) {
-	messages := make([]openai.ChatCompletionMessageParamUnion, 0, len(req.Messages)+1)
-
-	if req.SystemPrompt != "" {
-		messages = append(messages, openai.SystemMessage(req.SystemPrompt))
-	}
-
-	for _, msg := range req.Messages {
-		switch msg.Role {
-		case "user":
-			messages = append(messages, openai.UserMessage(msg.Content))
-		case "assistant":
-			messages = append(messages, openai.AssistantMessage(msg.Content))
-		default:
-			return nil, &ProviderError{
-				Code:        "invalid_role",
-				Message:     fmt.Sprintf("unsupported message role: %s", msg.Role),
-				UserMessage: fmt.Sprintf("Unsupported message role: %s. Use 'user' or 'assistant'.", msg.Role),
-			}
-		}
+	messages, err := buildOpenAIMessages(req)
+	if err != nil {
+		return nil, err
 	}
 
 	params := openai.ChatCompletionNewParams{
@@ -102,6 +100,11 @@ func (p *OpenAIProvider) SendMessage(ctx context.Context, req ChatRequest) (<-ch
 		StreamOptions: openai.ChatCompletionStreamOptionsParam{
 			IncludeUsage: openai.Bool(true),
 		},
+	}
+
+	// Convert tool definitions to OpenAI format
+	if len(req.Tools) > 0 {
+		params.Tools = buildOpenAITools(req.Tools)
 	}
 
 	stream := p.client.Chat.Completions.NewStreaming(ctx, params)
@@ -115,6 +118,14 @@ func (p *OpenAIProvider) SendMessage(ctx context.Context, req ChatRequest) (<-ch
 		var messageID string
 		chunkIndex := 0
 		ended := false
+
+		// Track active tool calls by index
+		type toolCallAcc struct {
+			id   string
+			name string
+			seen bool // whether tool_call_start was emitted
+		}
+		activeToolCalls := make(map[int64]*toolCallAcc)
 
 		send := func(chunk StreamChunk) bool {
 			select {
@@ -131,7 +142,7 @@ func (p *OpenAIProvider) SendMessage(ctx context.Context, req ChatRequest) (<-ch
 			if messageID == "" && chunk.ID != "" {
 				messageID = chunk.ID
 				if !send(StreamChunk{
-					Type:      "start",
+					Type:      ChunkTypeStart,
 					MessageID: messageID,
 				}) {
 					return
@@ -139,10 +150,13 @@ func (p *OpenAIProvider) SendMessage(ctx context.Context, req ChatRequest) (<-ch
 			}
 
 			if len(chunk.Choices) > 0 {
-				delta := chunk.Choices[0].Delta.Content
+				choice := chunk.Choices[0]
+
+				// Handle text content
+				delta := choice.Delta.Content
 				if delta != "" {
 					if !send(StreamChunk{
-						Type:      "chunk",
+						Type:      ChunkTypeChunk,
 						Content:   delta,
 						MessageID: messageID,
 						Index:     chunkIndex,
@@ -151,12 +165,64 @@ func (p *OpenAIProvider) SendMessage(ctx context.Context, req ChatRequest) (<-ch
 					}
 					chunkIndex++
 				}
+
+				// Handle tool calls in delta
+				for _, tc := range choice.Delta.ToolCalls {
+					acc, exists := activeToolCalls[tc.Index]
+					if !exists {
+						// First appearance of this tool call
+						acc = &toolCallAcc{
+							id:   tc.ID,
+							name: tc.Function.Name,
+						}
+						activeToolCalls[tc.Index] = acc
+					}
+
+					// Emit start on first encounter
+					if !acc.seen {
+						acc.seen = true
+						if !send(StreamChunk{
+							Type:      ChunkTypeToolCallStart,
+							ToolID:    acc.id,
+							ToolName:  acc.name,
+							MessageID: messageID,
+						}) {
+							return
+						}
+					}
+
+					// Emit delta for argument fragments
+					if tc.Function.Arguments != "" {
+						if !send(StreamChunk{
+							Type:      ChunkTypeToolCallDelta,
+							ToolID:    acc.id,
+							Content:   tc.Function.Arguments,
+							MessageID: messageID,
+						}) {
+							return
+						}
+					}
+				}
+
+				// Check for tool_calls finish reason → emit tool_call_end for each active tool
+				if choice.FinishReason == "tool_calls" {
+					for _, acc := range activeToolCalls {
+						if !send(StreamChunk{
+							Type:      ChunkTypeToolCallEnd,
+							ToolID:    acc.id,
+							MessageID: messageID,
+						}) {
+							return
+						}
+					}
+					activeToolCalls = make(map[int64]*toolCallAcc)
+				}
 			}
 
 			if chunk.Usage.TotalTokens > 0 {
 				ended = true
 				if !send(StreamChunk{
-					Type:      "end",
+					Type:      ChunkTypeEnd,
 					MessageID: messageID,
 					Usage: &UsageStats{
 						InputTokens:  int(chunk.Usage.PromptTokens),
@@ -171,19 +237,91 @@ func (p *OpenAIProvider) SendMessage(ctx context.Context, req ChatRequest) (<-ch
 		if err := stream.Err(); err != nil && !ended {
 			providerErr := mapOpenAIProviderError(err)
 			send(StreamChunk{
-				Type:      "error",
+				Type:      ChunkTypeError,
 				Content:   providerErr.UserMessage,
 				MessageID: messageID,
 			})
 		} else if !ended {
 			send(StreamChunk{
-				Type:      "end",
+				Type:      ChunkTypeEnd,
 				MessageID: messageID,
 			})
 		}
 	}()
 
 	return ch, nil
+}
+
+// buildOpenAIMessages converts ChatRequest messages to OpenAI message params.
+func buildOpenAIMessages(req ChatRequest) ([]openai.ChatCompletionMessageParamUnion, error) {
+	messages := make([]openai.ChatCompletionMessageParamUnion, 0, len(req.Messages)+1)
+
+	if req.SystemPrompt != "" {
+		messages = append(messages, openai.SystemMessage(req.SystemPrompt))
+	}
+
+	for _, msg := range req.Messages {
+		switch msg.Role {
+		case "user":
+			messages = append(messages, openai.UserMessage(msg.Content))
+
+		case "assistant":
+			if len(msg.ToolCalls) > 0 {
+				// Assistant message with tool calls
+				toolCalls := make([]openai.ChatCompletionMessageToolCallUnionParam, 0, len(msg.ToolCalls))
+				for _, tc := range msg.ToolCalls {
+					toolCalls = append(toolCalls, openai.ChatCompletionMessageToolCallUnionParam{
+						OfFunction: &openai.ChatCompletionMessageFunctionToolCallParam{
+							ID: tc.ID,
+							Function: openai.ChatCompletionMessageFunctionToolCallFunctionParam{
+								Name:      tc.Name,
+								Arguments: string(tc.Input),
+							},
+						},
+					})
+				}
+				messages = append(messages, openai.ChatCompletionMessageParamUnion{
+					OfAssistant: &openai.ChatCompletionAssistantMessageParam{
+						Content: openai.ChatCompletionAssistantMessageParamContentUnion{
+							OfString: param.NewOpt(msg.Content),
+						},
+						ToolCalls: toolCalls,
+					},
+				})
+			} else {
+				messages = append(messages, openai.AssistantMessage(msg.Content))
+			}
+
+		case "tool":
+			messages = append(messages, openai.ToolMessage(msg.Content, msg.ToolCallID))
+
+		default:
+			return nil, &ProviderError{
+				Code:        "invalid_role",
+				Message:     fmt.Sprintf("unsupported message role: %s", msg.Role),
+				UserMessage: fmt.Sprintf("Unsupported message role: %s. Use 'user', 'assistant', or 'tool'.", msg.Role),
+			}
+		}
+	}
+	return messages, nil
+}
+
+// buildOpenAITools converts ToolDefinitions to OpenAI function tool format.
+func buildOpenAITools(defs []types.ToolDefinition) []openai.ChatCompletionToolUnionParam {
+	tools := make([]openai.ChatCompletionToolUnionParam, 0, len(defs))
+	for _, td := range defs {
+		var params shared.FunctionParameters
+		if err := json.Unmarshal(td.InputSchema, &params); err != nil {
+			continue
+		}
+
+		tools = append(tools, openai.ChatCompletionFunctionTool(shared.FunctionDefinitionParam{
+			Name:        td.Name,
+			Description: param.NewOpt(td.Description),
+			Parameters:  params,
+		}))
+	}
+	return tools
 }
 
 // mapOpenAIProviderError converts OpenAI SDK errors to user-friendly ProviderError values.

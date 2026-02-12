@@ -24,11 +24,13 @@ func (s *ProviderService) GetProvider(providerType string, apiKey string) (provi
 		return providers.NewOpenAIProvider(apiKey), nil
 	case "ollama":
 		return providers.NewOllamaProvider(apiKey), nil // endpoint URL passed via apiKey parameter
+	case "gemini":
+		return providers.NewGeminiProvider(apiKey), nil
 	default:
 		return nil, &providers.ProviderError{
 			Code:        "unsupported_provider",
 			Message:     fmt.Sprintf("provider type not supported: %s", providerType),
-			UserMessage: fmt.Sprintf("Provider type '%s' is not supported. Available providers: claude, openai, ollama.", providerType),
+			UserMessage: fmt.Sprintf("Provider type '%s' is not supported. Available providers: claude, openai, ollama, gemini.", providerType),
 		}
 	}
 }
@@ -60,4 +62,15 @@ func (s *ProviderService) SendMessage(ctx context.Context, providerType string, 
 		return nil, err
 	}
 	return provider.SendMessage(ctx, req)
+}
+
+// RequiresAPIKey returns true if the given provider type requires an API key.
+func (s *ProviderService) RequiresAPIKey(providerType string) bool {
+	// Create provider with empty key just to check the requirement
+	provider, err := s.GetProvider(providerType, "")
+	if err != nil {
+		// Unknown provider — assume it needs a key to be safe
+		return true
+	}
+	return provider.RequiresAPIKey()
 }

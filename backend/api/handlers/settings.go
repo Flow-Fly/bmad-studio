@@ -13,6 +13,7 @@ var validProviders = map[string]bool{
 	"claude": true,
 	"openai": true,
 	"ollama": true,
+	"gemini": true,
 }
 
 // SettingsHandler handles settings-related API endpoints.
@@ -45,7 +46,7 @@ func (h *SettingsHandler) UpdateSettings(w http.ResponseWriter, r *http.Request)
 
 	// Validate provider name if provided
 	if req.DefaultProvider != "" && !validProviders[req.DefaultProvider] {
-		response.WriteInvalidRequest(w, "Invalid provider. Must be one of: claude, openai, ollama")
+		response.WriteInvalidRequest(w, "Invalid provider. Must be one of: claude, openai, ollama, gemini")
 		return
 	}
 

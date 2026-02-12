@@ -1,23 +1,22 @@
-function isTauriAvailable(): boolean {
-  return typeof window !== 'undefined' && '__TAURI__' in window;
+interface ElectronAPI {
+  openFolder: () => Promise<string | null>;
 }
 
-/**
- * Opens a native folder picker dialog. In dev mode (no Tauri),
- * falls back to a browser prompt for manual path entry.
- * Returns the selected folder path or null if cancelled.
- */
+function getElectronAPI(): ElectronAPI | null {
+  if (typeof window !== 'undefined' && 'electronAPI' in window) {
+    return (window as unknown as { electronAPI: ElectronAPI }).electronAPI;
+  }
+  return null;
+}
+
 export async function selectProjectFolder(): Promise<string | null> {
-  if (isTauriAvailable()) {
-    const { open } = await import('@tauri-apps/plugin-dialog');
-    const selected = await open({
-      directory: true,
-      title: 'Select BMAD Project Folder',
-    });
-    // open() returns string | string[] | null for directory mode
-    if (typeof selected === 'string') return selected;
-    if (Array.isArray(selected) && selected.length > 0) return selected[0];
-    return null;
+  const electronAPI = getElectronAPI();
+  if (electronAPI) {
+    try {
+      return await electronAPI.openFolder();
+    } catch (err) {
+      console.error('[dialog] Failed to open folder picker:', err);
+    }
   }
 
   // Dev mode fallback: prompt for path
