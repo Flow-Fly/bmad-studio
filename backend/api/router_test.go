@@ -5,6 +5,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"bmad-studio/backend/services"
+	"bmad-studio/backend/storage"
 )
 
 func TestHealthEndpoint(t *testing.T) {
@@ -402,3 +405,78 @@ func TestCORSAllowsAllRequiredMethods(t *testing.T) {
 		})
 	}
 }
+
+// Story 1.3 Tests: Project Routes Resolution
+
+func TestProjectRoutesExist(t *testing.T) {
+	// Create minimal service instances for route registration
+	// Using real services with temp directories
+	tmpDir := t.TempDir()
+	centralStore := storage.NewCentralStoreWithPath(tmpDir)
+	registryStore := storage.NewRegistryStore(centralStore)
+	projectStore := storage.NewProjectStore(centralStore)
+	projectService := services.NewProjectService(registryStore, projectStore)
+
+	router := NewRouterWithServices(RouterServices{
+		Project: projectService,
+	})
+
+	routes := []struct {
+		method string
+		path   string
+	}{
+		{"GET", "/api/v1/projects"},
+		{"POST", "/api/v1/projects"},
+		{"GET", "/api/v1/projects/test-project"},
+		{"DELETE", "/api/v1/projects/test-project"},
+	}
+
+	for _, route := range routes {
+		t.Run(route.method+" "+route.path, func(t *testing.T) {
+			req, err := http.NewRequest(route.method, route.path, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			rr := httptest.NewRecorder()
+			router.ServeHTTP(rr, req)
+
+			// Route should exist - verified by NOT getting "404 page not found"
+			// A 404 with JSON error response means the handler ran but didn't find the resource
+			// A 404 with "404 page not found" text means chi couldn't route the request
+			// Any 2xx, 4xx (except raw 404), or 5xx means the route was wired correctly
+			if status := rr.Code; status == http.StatusNotFound {
+				// Check if it's a JSON 404 from handler or chi's raw 404
+				if rr.Body.String() == "404 page not found\n" {
+					t.Errorf("Route %s %s should be wired in router (chi returned raw 404)", route.method, route.path)
+				}
+				// JSON 404 from handler is acceptable - route exists, resource doesn't
+			}
+		})
+	}
+}
+
+func TestCORSMiddlewareActive(t *testing.T) {
+	router := NewRouter()
+
+	req, err := http.NewRequest("OPTIONS", "/api/v1/projects", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Origin", "http://localhost:3007")
+	req.Header.Set("Access-Control-Request-Method", "POST")
+
+	rr := httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+
+	// Verify CORS middleware is active by checking for Access-Control-Allow-Origin header
+	allowOrigin := rr.Header().Get("Access-Control-Allow-Origin")
+	if allowOrigin == "" {
+		t.Error("CORS middleware should set Access-Control-Allow-Origin header")
+	}
+
+	if allowOrigin != "http://localhost:3007" {
+		t.Errorf("CORS should allow localhost:3007 origin, got %v", allowOrigin)
+	}
+}
+
