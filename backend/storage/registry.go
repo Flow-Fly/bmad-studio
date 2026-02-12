@@ -29,13 +29,13 @@ func (r *RegistryStore) Load() (types.Registry, error) {
 
 	if os.IsNotExist(err) {
 		// File doesn't exist yet, return empty registry
-		return types.Registry{Projects: []types.RegistryEntry{}}, nil
+		return types.NewRegistry(), nil
 	}
 
 	if err != nil {
 		// Corruption detected, log warning and return empty registry
 		log.Printf("WARNING: Failed to read registry.json: %v (falling back to empty registry)", err)
-		return types.Registry{Projects: []types.RegistryEntry{}}, nil
+		return types.NewRegistry(), nil
 	}
 
 	// Ensure Projects array is never nil

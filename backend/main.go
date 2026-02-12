@@ -28,7 +28,7 @@ func initToolLayer(projectRoot, projectName string, hub *websocket.Hub, configSt
 	}
 
 	homeDir, _ := os.UserHomeDir()
-	centralRoot := filepath.Join(homeDir, "bmad-studio", "projects", projectName)
+	centralRoot := filepath.Join(homeDir, ".bmad-studio", "projects", projectName)
 
 	sandbox := tools.NewSandbox(projectRoot, centralRoot)
 	registry := tools.NewRegistry()
