@@ -56,7 +56,7 @@ development_status:
   epic-1-retrospective: optional
 
   # Epic 2: Stream Lifecycle Management
-  epic-2: backlog
+  epic-2: in-progress
   2-1-create-stream: backlog
   2-2-list-view-streams: backlog
   2-3-archive-stream: backlog
