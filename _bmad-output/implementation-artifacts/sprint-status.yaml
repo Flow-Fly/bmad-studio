@@ -59,8 +59,8 @@ development_status:
   epic-2: in-progress
   2-1-create-stream: done
   2-2-list-view-streams: done
-  2-3-archive-stream: ready-for-dev
-  2-4-stream-rest-endpoints: backlog
+  2-3-archive-stream: done
+  2-4-stream-rest-endpoints: ready-for-dev
   epic-2-retrospective: optional
 
   # Epic 3: Artifact Detection & Phase State
