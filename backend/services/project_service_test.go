@@ -8,16 +8,6 @@ import (
 	"bmad-studio/backend/storage"
 )
 
-// resolveDir resolves symlinks in the directory path (for macOS compatibility)
-func resolveDir(t *testing.T, dir string) string {
-	t.Helper()
-	resolved, err := filepath.EvalSymlinks(dir)
-	if err != nil {
-		t.Fatalf("Failed to resolve symlinks for %s: %v", dir, err)
-	}
-	return resolved
-}
-
 // createMockGitRepo creates a .git directory to simulate a git repository
 func createMockGitRepo(t *testing.T, dir string) {
 	t.Helper()
