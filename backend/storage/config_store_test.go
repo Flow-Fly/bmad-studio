@@ -140,3 +140,37 @@ func TestSave_CreatesFile(t *testing.T) {
 		t.Error("config file should exist after save")
 	}
 }
+
+func TestSave_AtomicWrite(t *testing.T) {
+	cs := tempConfigStore(t)
+
+	// Save initial settings
+	initial := DefaultSettings()
+	initial.DefaultProvider = "openai"
+	if err := cs.Save(initial); err != nil {
+		t.Fatalf("initial save error: %v", err)
+	}
+
+	// Save updated settings (atomic overwrite)
+	updated := DefaultSettings()
+	updated.DefaultProvider = "claude"
+	updated.DefaultModel = "claude-opus-4"
+	if err := cs.Save(updated); err != nil {
+		t.Fatalf("updated save error: %v", err)
+	}
+
+	// Verify .tmp file was cleaned up
+	tmpFile := cs.filePath + ".tmp"
+	if _, err := os.Stat(tmpFile); !os.IsNotExist(err) {
+		t.Error("Save() left .tmp file behind")
+	}
+
+	// Verify new content replaced old
+	loaded, _ := cs.Load()
+	if loaded.DefaultProvider != "claude" {
+		t.Errorf("After atomic overwrite: got provider %s, expected claude", loaded.DefaultProvider)
+	}
+	if loaded.DefaultModel != "claude-opus-4" {
+		t.Errorf("After atomic overwrite: got model %s, expected claude-opus-4", loaded.DefaultModel)
+	}
+}
