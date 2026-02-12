@@ -14,6 +14,31 @@ type CentralStore struct {
 	rootDir string
 }
 
+// defaultConfigSettings returns the default settings for config.json
+func defaultConfigSettings() types.Settings {
+	return types.Settings{
+		DefaultProvider: "claude",
+		DefaultModel:    "claude-sonnet-4-5-20250929",
+		OllamaEndpoint:  "http://localhost:11434",
+		Providers: map[string]types.ProviderSettings{
+			"claude": {Enabled: true},
+			"openai": {Enabled: false},
+			"ollama": {Enabled: false, Endpoint: "http://localhost:11434"},
+			"gemini": {Enabled: false},
+		},
+	}
+}
+
+// syncDir fsyncs a directory to ensure metadata reaches disk (crash-safe directory operations)
+func syncDir(path string) error {
+	f, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	return f.Sync()
+}
+
 // NewCentralStore creates a CentralStore with the default path (~/.bmad-studio/)
 func NewCentralStore() (*CentralStore, error) {
 	homeDir, err := os.UserHomeDir()
@@ -44,12 +69,16 @@ func (s *CentralStore) Init() error {
 	if err := os.MkdirAll(projectsDir, 0755); err != nil {
 		return fmt.Errorf("create projects directory: %w", err)
 	}
+	// Fsync parent directory to ensure directory metadata reaches disk (crash-safe)
+	if err := syncDir(s.rootDir); err != nil {
+		return fmt.Errorf("fsync root directory: %w", err)
+	}
 
 	// Initialize registry.json if it doesn't exist
 	registryPath := filepath.Join(s.rootDir, "registry.json")
 	if _, err := os.Stat(registryPath); os.IsNotExist(err) {
 		// Create empty registry
-		defaultRegistry := types.Registry{Projects: []types.RegistryEntry{}}
+		defaultRegistry := types.NewRegistry()
 		if err := WriteJSON(registryPath, defaultRegistry); err != nil {
 			return fmt.Errorf("create default registry: %w", err)
 		}
@@ -64,17 +93,8 @@ func (s *CentralStore) Init() error {
 	// Initialize config.json if it doesn't exist
 	configPath := filepath.Join(s.rootDir, "config.json")
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
-		// Create default config
-		defaultSettings := types.Settings{
-			DefaultProvider: "anthropic",
-			DefaultModel:    "claude-sonnet-4",
-			Providers: map[string]types.ProviderSettings{
-				"anthropic": {Enabled: true},
-				"openai":    {Enabled: false},
-				"ollama":    {Enabled: false},
-			},
-		}
-		if err := WriteJSON(configPath, defaultSettings); err != nil {
+		// Create default config using ConfigStore defaults
+		if err := WriteJSON(configPath, defaultConfigSettings()); err != nil {
 			return fmt.Errorf("create default config: %w", err)
 		}
 	} else if err == nil {
@@ -117,7 +137,7 @@ func (s *CentralStore) Validate() error {
 	return nil
 }
 
-// RootDir returns the root directory path
+// RootDir returns the root directory path of the central store
 func (s *CentralStore) RootDir() string {
 	return s.rootDir
 }
