@@ -24,6 +24,7 @@ type RouterServices struct {
 	Hub            *websocket.Hub
 	ProjectManager *services.ProjectManager
 	Insight        *services.InsightService
+	Project        *services.ProjectService // Prepared for Story 1.3: REST API endpoints
 }
 
 // NewRouter creates and configures the main router with all routes and middleware

@@ -95,8 +95,12 @@ func main() {
 	// Create config store using central store
 	configStore := storage.NewConfigStore(centralStore)
 
-	// Create registry store using central store (prepared for Story 1.2)
-	_ = storage.NewRegistryStore(centralStore)
+	// Create registry store and project store using central store
+	registryStore := storage.NewRegistryStore(centralStore)
+	projectStore := storage.NewProjectStore(centralStore)
+
+	// Create project service
+	projectService := services.NewProjectService(registryStore, projectStore)
 
 	// Create insight store and service
 	insightStore, err := storage.NewInsightStore()
@@ -233,6 +237,7 @@ func main() {
 		Hub:            hub,
 		ProjectManager: projectManager,
 		Insight:        insightService,
+		Project:        projectService, // Prepared for Story 1.3: REST API endpoints
 	})
 
 	stop := make(chan os.Signal, 1)
