@@ -26,21 +26,22 @@ func (s *StreamStore) streamDir(projectName, streamName string) string {
 // CreateStreamDir creates a stream directory and fsyncs parent
 func (s *StreamStore) CreateStreamDir(projectName, streamName string) (string, error) {
 	streamDir := s.streamDir(projectName, streamName)
+	streamID := projectName + "-" + streamName
 
 	// Check if directory already exists
 	if _, err := os.Stat(streamDir); err == nil {
-		return "", fmt.Errorf("stream directory already exists: %s", streamDir)
+		return "", fmt.Errorf("stream %s already exists: %s", streamID, streamDir)
 	}
 
 	// Create the directory
 	if err := os.MkdirAll(streamDir, 0755); err != nil {
-		return "", fmt.Errorf("failed to create stream directory: %w", err)
+		return "", fmt.Errorf("failed to create stream directory for %s: %w", streamID, err)
 	}
 
 	// Fsync parent directory
 	parentDir := filepath.Dir(streamDir)
 	if err := syncDir(parentDir); err != nil {
-		return "", fmt.Errorf("failed to sync parent directory: %w", err)
+		return "", fmt.Errorf("failed to sync parent directory for stream %s: %w", streamID, err)
 	}
 
 	return streamDir, nil
@@ -50,9 +51,10 @@ func (s *StreamStore) CreateStreamDir(projectName, streamName string) (string, e
 func (s *StreamStore) WriteStreamMeta(projectName, streamName string, meta types.StreamMeta) error {
 	streamDir := s.streamDir(projectName, streamName)
 	metaPath := filepath.Join(streamDir, "stream.json")
+	streamID := projectName + "-" + streamName
 
 	if err := WriteJSON(metaPath, meta); err != nil {
-		return fmt.Errorf("failed to write stream.json: %w", err)
+		return fmt.Errorf("failed to write stream.json for %s: %w", streamID, err)
 	}
 
 	return nil
@@ -62,10 +64,11 @@ func (s *StreamStore) WriteStreamMeta(projectName, streamName string, meta types
 func (s *StreamStore) ReadStreamMeta(projectName, streamName string) (*types.StreamMeta, error) {
 	streamDir := s.streamDir(projectName, streamName)
 	metaPath := filepath.Join(streamDir, "stream.json")
+	streamID := projectName + "-" + streamName
 
 	var meta types.StreamMeta
 	if err := ReadJSON(metaPath, &meta); err != nil {
-		return nil, fmt.Errorf("failed to read stream.json: %w", err)
+		return nil, fmt.Errorf("failed to read stream.json for %s: %w", streamID, err)
 	}
 
 	return &meta, nil

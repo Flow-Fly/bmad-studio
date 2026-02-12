@@ -6,16 +6,6 @@ import (
 	"testing"
 )
 
-// resolveDir returns the real path of a directory (resolves symlinks).
-func resolveDir(t *testing.T, dir string) string {
-	t.Helper()
-	resolved, err := filepath.EvalSymlinks(dir)
-	if err != nil {
-		t.Fatalf("failed to resolve %q: %v", dir, err)
-	}
-	return resolved
-}
-
 func TestSandbox_ValidatePath_ReadWithinProject(t *testing.T) {
 	dir := resolveDir(t, t.TempDir())
 	sandbox := NewSandbox(dir, "")
