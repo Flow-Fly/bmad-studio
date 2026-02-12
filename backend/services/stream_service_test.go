@@ -251,3 +251,178 @@ func TestStreamService_Create_StreamJSONPersistsCorrectly(t *testing.T) {
 	assert.Equal(t, meta.CreatedAt, diskMeta.CreatedAt)
 	assert.Equal(t, meta.UpdatedAt, diskMeta.UpdatedAt)
 }
+
+// Test helper: creates test stream with specific metadata
+func createTestStreamForService(t *testing.T, store *storage.CentralStore, projectName, streamName, updatedAt string) {
+	t.Helper()
+	streamStore := storage.NewStreamStore(store)
+
+	_, err := streamStore.CreateStreamDir(projectName, streamName)
+	require.NoError(t, err)
+
+	meta := types.StreamMeta{
+		Name:      streamName,
+		Project:   projectName,
+		Status:    types.StreamStatusActive,
+		Type:      types.StreamTypeFull,
+		CreatedAt: "2026-02-12T10:00:00Z",
+		UpdatedAt: updatedAt,
+	}
+	err = streamStore.WriteStreamMeta(projectName, streamName, meta)
+	require.NoError(t, err)
+}
+
+func TestStreamService_List_ReturnsAllStreamsForProject(t *testing.T) {
+	streamService, store, _, rootDir := setupStreamService(t)
+
+	// Register a project
+	projectName := "test-project"
+	projectPath := filepath.Join(rootDir, "test-project-repo")
+	err := os.MkdirAll(projectPath, 0755)
+	require.NoError(t, err)
+
+	registryStore := storage.NewRegistryStore(store)
+	err = registryStore.AddProject(types.RegistryEntry{
+		Name:     projectName,
+		RepoPath: projectPath,
+	})
+	require.NoError(t, err)
+
+	// Create multiple streams
+	createTestStreamForService(t, store, projectName, "feature-1", "2026-02-12T10:00:00Z")
+	createTestStreamForService(t, store, projectName, "feature-2", "2026-02-12T12:00:00Z")
+
+	// List streams
+	streams, err := streamService.List(projectName)
+	require.NoError(t, err)
+	require.Len(t, streams, 2)
+
+	// Should be sorted by UpdatedAt descending
+	assert.Equal(t, "feature-2", streams[0].Name)
+	assert.Equal(t, "feature-1", streams[1].Name)
+}
+
+func TestStreamService_List_EmptyArrayForNoStreams(t *testing.T) {
+	streamService, store, _, rootDir := setupStreamService(t)
+
+	// Register a project
+	projectName := "test-project"
+	projectPath := filepath.Join(rootDir, "test-project-repo")
+	err := os.MkdirAll(projectPath, 0755)
+	require.NoError(t, err)
+
+	registryStore := storage.NewRegistryStore(store)
+	err = registryStore.AddProject(types.RegistryEntry{
+		Name:     projectName,
+		RepoPath: projectPath,
+	})
+	require.NoError(t, err)
+
+	// List streams for project with no streams
+	streams, err := streamService.List(projectName)
+	require.NoError(t, err)
+	require.NotNil(t, streams)
+	assert.Len(t, streams, 0)
+	assert.Equal(t, []*types.StreamMeta{}, streams)
+}
+
+func TestStreamService_List_ErrorIfProjectNotFound(t *testing.T) {
+	streamService, _, _, _ := setupStreamService(t)
+
+	// Attempt to list streams for non-existent project
+	_, err := streamService.List("nonexistent-project")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "project not found")
+}
+
+func TestStreamService_List_SortedByUpdatedAtDescending(t *testing.T) {
+	streamService, store, _, rootDir := setupStreamService(t)
+
+	// Register a project
+	projectName := "test-project"
+	projectPath := filepath.Join(rootDir, "test-project-repo")
+	err := os.MkdirAll(projectPath, 0755)
+	require.NoError(t, err)
+
+	registryStore := storage.NewRegistryStore(store)
+	err = registryStore.AddProject(types.RegistryEntry{
+		Name:     projectName,
+		RepoPath: projectPath,
+	})
+	require.NoError(t, err)
+
+	// Create streams with different timestamps
+	createTestStreamForService(t, store, projectName, "oldest", "2026-02-10T10:00:00Z")
+	createTestStreamForService(t, store, projectName, "newest", "2026-02-12T10:00:00Z")
+	createTestStreamForService(t, store, projectName, "middle", "2026-02-11T10:00:00Z")
+
+	// List and verify sorting
+	streams, err := streamService.List(projectName)
+	require.NoError(t, err)
+	require.Len(t, streams, 3)
+
+	assert.Equal(t, "newest", streams[0].Name)
+	assert.Equal(t, "middle", streams[1].Name)
+	assert.Equal(t, "oldest", streams[2].Name)
+}
+
+func TestStreamService_Get_ReturnsStreamMetadata(t *testing.T) {
+	streamService, store, _, rootDir := setupStreamService(t)
+
+	// Register a project
+	projectName := "test-project"
+	projectPath := filepath.Join(rootDir, "test-project-repo")
+	err := os.MkdirAll(projectPath, 0755)
+	require.NoError(t, err)
+
+	registryStore := storage.NewRegistryStore(store)
+	err = registryStore.AddProject(types.RegistryEntry{
+		Name:     projectName,
+		RepoPath: projectPath,
+	})
+	require.NoError(t, err)
+
+	// Create stream
+	streamName := "feature-1"
+	createTestStreamForService(t, store, projectName, streamName, "2026-02-12T10:00:00Z")
+
+	// Get stream
+	meta, err := streamService.Get(projectName, streamName)
+	require.NoError(t, err)
+	require.NotNil(t, meta)
+
+	assert.Equal(t, streamName, meta.Name)
+	assert.Equal(t, projectName, meta.Project)
+	assert.Equal(t, types.StreamStatusActive, meta.Status)
+}
+
+func TestStreamService_Get_ErrorIfStreamNotFound(t *testing.T) {
+	streamService, store, _, rootDir := setupStreamService(t)
+
+	// Register a project
+	projectName := "test-project"
+	projectPath := filepath.Join(rootDir, "test-project-repo")
+	err := os.MkdirAll(projectPath, 0755)
+	require.NoError(t, err)
+
+	registryStore := storage.NewRegistryStore(store)
+	err = registryStore.AddProject(types.RegistryEntry{
+		Name:     projectName,
+		RepoPath: projectPath,
+	})
+	require.NoError(t, err)
+
+	// Attempt to get non-existent stream
+	_, err = streamService.Get(projectName, "nonexistent-stream")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to read stream.json")
+}
+
+func TestStreamService_Get_ErrorIfProjectNotFound(t *testing.T) {
+	streamService, _, _, _ := setupStreamService(t)
+
+	// Attempt to get stream for non-existent project
+	_, err := streamService.Get("nonexistent-project", "feature-1")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "project not found")
+}

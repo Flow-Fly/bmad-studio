@@ -86,3 +86,37 @@ func (s *StreamService) Create(projectName, streamName string) (*types.StreamMet
 
 	return &meta, nil
 }
+
+// List returns all streams for a project, sorted by UpdatedAt descending
+func (s *StreamService) List(projectName string) ([]*types.StreamMeta, error) {
+	// Verify project exists in registry
+	entry, found := s.registryStore.FindByName(projectName)
+	if !found || entry == nil {
+		return nil, fmt.Errorf("project not found: %s", projectName)
+	}
+
+	// Delegate to StreamStore
+	streams, err := s.streamStore.ListProjectStreams(projectName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list streams for project %s: %w", projectName, err)
+	}
+
+	return streams, nil
+}
+
+// Get returns a specific stream's metadata
+func (s *StreamService) Get(projectName, streamName string) (*types.StreamMeta, error) {
+	// Verify project exists in registry
+	entry, found := s.registryStore.FindByName(projectName)
+	if !found || entry == nil {
+		return nil, fmt.Errorf("project not found: %s", projectName)
+	}
+
+	// Delegate to StreamStore
+	meta, err := s.streamStore.ReadStreamMeta(projectName, streamName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read stream metadata: %w", err)
+	}
+
+	return meta, nil
+}
