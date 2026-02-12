@@ -4,8 +4,10 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"time"
 
 	"bmad-studio/backend/api/websocket"
+	"bmad-studio/backend/types"
 
 	ws "github.com/gorilla/websocket"
 )
@@ -62,4 +64,14 @@ func (h *WebSocketHandler) HandleWebSocket(w http.ResponseWriter, r *http.Reques
 	client := websocket.NewClient(h.hub, conn)
 	h.hub.Register(client)
 	client.Start()
+
+	// Send connection:status to the newly connected client
+	go func() {
+		// Brief delay to ensure write pump is ready
+		time.Sleep(10 * time.Millisecond)
+		event := types.NewWebSocketEvent(types.EventTypeConnectionStatus, &types.ConnectionStatusPayload{
+			Status: "connected",
+		})
+		_ = h.hub.SendToClient(client, event)
+	}()
 }

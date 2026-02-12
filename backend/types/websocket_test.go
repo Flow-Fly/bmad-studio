@@ -29,6 +29,10 @@ func TestWebSocketEventTypes(t *testing.T) {
 		{"chat tool result", EventTypeChatToolResult, "chat:tool-result"},
 		{"chat tool confirm", EventTypeChatToolConfirm, "chat:tool-confirm"},
 		{"chat tool approve", EventTypeChatToolApprove, "chat:tool-approve"},
+		{"stream created", EventTypeStreamCreated, "stream:created"},
+		{"stream archived", EventTypeStreamArchived, "stream:archived"},
+		{"stream updated", EventTypeStreamUpdated, "stream:updated"},
+		{"stream phase changed", EventTypeStreamPhaseChanged, "stream:phase-changed"},
 	}
 
 	for _, tt := range tests {
@@ -274,15 +278,15 @@ func TestArtifactEventPayloadJSONTags(t *testing.T) {
 		t.Fatalf("failed to unmarshal: %v", err)
 	}
 
-	// Verify snake_case JSON tags
-	if _, ok := result["phase_name"]; !ok {
-		t.Error("expected phase_name field (snake_case)")
+	// Verify camelCase JSON tags
+	if _, ok := result["phaseName"]; !ok {
+		t.Error("expected phaseName field (camelCase)")
 	}
-	if _, ok := result["is_sharded"]; !ok {
-		t.Error("expected is_sharded field (snake_case)")
+	if _, ok := result["isSharded"]; !ok {
+		t.Error("expected isSharded field (camelCase)")
 	}
-	if _, ok := result["parent_id"]; !ok {
-		t.Error("expected parent_id field (snake_case)")
+	if _, ok := result["parentId"]; !ok {
+		t.Error("expected parentId field (camelCase)")
 	}
 }
 
@@ -310,9 +314,9 @@ func TestArtifactDeletedPayloadOmitsEmptyParentID(t *testing.T) {
 		t.Fatalf("failed to unmarshal: %v", err)
 	}
 
-	// parent_id should be omitted when nil (due to omitempty)
-	if _, ok := result["parent_id"]; ok {
-		t.Error("expected parent_id to be omitted when nil")
+	// parentId should be omitted when nil (due to omitempty)
+	if _, ok := result["parentId"]; ok {
+		t.Error("expected parentId to be omitted when nil")
 	}
 }
 
@@ -656,6 +660,157 @@ func TestChatEventPayloadJSONSerialization(t *testing.T) {
 				}
 				if payload["message"] != "Too many requests" {
 					t.Errorf("expected message 'Too many requests', got %v", payload["message"])
+				}
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			data, err := json.Marshal(tt.event)
+			if err != nil {
+				t.Fatalf("failed to marshal: %v", err)
+			}
+
+			var result map[string]interface{}
+			if err := json.Unmarshal(data, &result); err != nil {
+				t.Fatalf("failed to unmarshal: %v", err)
+			}
+
+			tt.check(t, result)
+		})
+	}
+}
+
+func TestNewStreamCreatedEvent(t *testing.T) {
+	event := NewStreamCreatedEvent("proj-1", "stream-1", "Feature Development")
+
+	if event.Type != EventTypeStreamCreated {
+		t.Errorf("expected type %q, got %q", EventTypeStreamCreated, event.Type)
+	}
+
+	payload, ok := event.Payload.(*StreamCreatedPayload)
+	if !ok {
+		t.Fatalf("expected *StreamCreatedPayload, got %T", event.Payload)
+	}
+	if payload.ProjectID != "proj-1" {
+		t.Errorf("expected ProjectID %q, got %q", "proj-1", payload.ProjectID)
+	}
+	if payload.StreamID != "stream-1" {
+		t.Errorf("expected StreamID %q, got %q", "stream-1", payload.StreamID)
+	}
+	if payload.Name != "Feature Development" {
+		t.Errorf("expected Name %q, got %q", "Feature Development", payload.Name)
+	}
+}
+
+func TestNewStreamArchivedEvent(t *testing.T) {
+	event := NewStreamArchivedEvent("proj-1", "stream-1", "completed")
+
+	if event.Type != EventTypeStreamArchived {
+		t.Errorf("expected type %q, got %q", EventTypeStreamArchived, event.Type)
+	}
+
+	payload, ok := event.Payload.(*StreamArchivedPayload)
+	if !ok {
+		t.Fatalf("expected *StreamArchivedPayload, got %T", event.Payload)
+	}
+	if payload.Outcome != "completed" {
+		t.Errorf("expected Outcome %q, got %q", "completed", payload.Outcome)
+	}
+}
+
+func TestNewStreamUpdatedEvent(t *testing.T) {
+	changes := map[string]interface{}{"name": "New Name"}
+	event := NewStreamUpdatedEvent("proj-1", "stream-1", changes)
+
+	if event.Type != EventTypeStreamUpdated {
+		t.Errorf("expected type %q, got %q", EventTypeStreamUpdated, event.Type)
+	}
+
+	payload, ok := event.Payload.(*StreamUpdatedPayload)
+	if !ok {
+		t.Fatalf("expected *StreamUpdatedPayload, got %T", event.Payload)
+	}
+	if payload.Changes["name"] != "New Name" {
+		t.Errorf("expected changes name %q, got %v", "New Name", payload.Changes["name"])
+	}
+}
+
+func TestNewStreamPhaseChangedEvent(t *testing.T) {
+	artifacts := []string{"artifact-1", "artifact-2"}
+	event := NewStreamPhaseChangedEvent("proj-1", "stream-1", "development", artifacts)
+
+	if event.Type != EventTypeStreamPhaseChanged {
+		t.Errorf("expected type %q, got %q", EventTypeStreamPhaseChanged, event.Type)
+	}
+
+	payload, ok := event.Payload.(*StreamPhaseChangedPayload)
+	if !ok {
+		t.Fatalf("expected *StreamPhaseChangedPayload, got %T", event.Payload)
+	}
+	if payload.Phase != "development" {
+		t.Errorf("expected Phase %q, got %q", "development", payload.Phase)
+	}
+	if len(payload.Artifacts) != 2 {
+		t.Errorf("expected 2 artifacts, got %d", len(payload.Artifacts))
+	}
+}
+
+func TestStreamEventPayloadJSONSerialization(t *testing.T) {
+	tests := []struct {
+		name  string
+		event *WebSocketEvent
+		check func(t *testing.T, result map[string]interface{})
+	}{
+		{
+			name:  "stream created",
+			event: NewStreamCreatedEvent("proj-1", "stream-1", "Feature Dev"),
+			check: func(t *testing.T, result map[string]interface{}) {
+				payload := result["payload"].(map[string]interface{})
+				if payload["projectId"] != "proj-1" {
+					t.Errorf("expected projectId proj-1, got %v", payload["projectId"])
+				}
+				if payload["streamId"] != "stream-1" {
+					t.Errorf("expected streamId stream-1, got %v", payload["streamId"])
+				}
+				if payload["name"] != "Feature Dev" {
+					t.Errorf("expected name 'Feature Dev', got %v", payload["name"])
+				}
+			},
+		},
+		{
+			name:  "stream archived",
+			event: NewStreamArchivedEvent("proj-1", "stream-1", "completed"),
+			check: func(t *testing.T, result map[string]interface{}) {
+				payload := result["payload"].(map[string]interface{})
+				if payload["outcome"] != "completed" {
+					t.Errorf("expected outcome completed, got %v", payload["outcome"])
+				}
+			},
+		},
+		{
+			name:  "stream updated",
+			event: NewStreamUpdatedEvent("proj-1", "stream-1", map[string]interface{}{"name": "Updated"}),
+			check: func(t *testing.T, result map[string]interface{}) {
+				payload := result["payload"].(map[string]interface{})
+				changes := payload["changes"].(map[string]interface{})
+				if changes["name"] != "Updated" {
+					t.Errorf("expected changes name Updated, got %v", changes["name"])
+				}
+			},
+		},
+		{
+			name:  "stream phase changed",
+			event: NewStreamPhaseChangedEvent("proj-1", "stream-1", "implementation", []string{"art-1"}),
+			check: func(t *testing.T, result map[string]interface{}) {
+				payload := result["payload"].(map[string]interface{})
+				if payload["phase"] != "implementation" {
+					t.Errorf("expected phase implementation, got %v", payload["phase"])
+				}
+				artifacts := payload["artifacts"].([]interface{})
+				if len(artifacts) != 1 {
+					t.Errorf("expected 1 artifact, got %d", len(artifacts))
 				}
 			},
 		},

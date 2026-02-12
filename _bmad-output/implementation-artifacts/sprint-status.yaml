@@ -52,7 +52,7 @@ development_status:
   1-1-central-store-initialization-atomic-write-layer: done
   1-2-project-registration-store-directory-setup: done
   1-3-project-management-rest-api: done
-  1-4-websocket-event-hub: backlog
+  1-4-websocket-event-hub: review
   epic-1-retrospective: optional
 
   # Epic 2: Stream Lifecycle Management
