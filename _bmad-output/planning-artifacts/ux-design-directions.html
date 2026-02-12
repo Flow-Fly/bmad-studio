@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BMAD Studio — Design Direction Mockups</title>
+<style>
+  :root {
+    --surface-base: #0a0a0b;
+    --surface-raised: #141416;
+    --surface-overlay: #1c1c20;
+    --surface-sunken: #07070a;
+    --surface-border: #27272a;
+    --surface-border-hover: #3f3f46;
+
+    --phase-analysis: #7cacf0;
+    --phase-planning: #7ad4a0;
+    --phase-solutioning: #e4b874;
+    --phase-implementation: #e88a8a;
+    --phase-analysis-bg: rgba(124, 172, 240, 0.10);
+    --phase-planning-bg: rgba(122, 212, 160, 0.10);
+    --phase-solutioning-bg: rgba(228, 184, 116, 0.10);
+    --phase-implementation-bg: rgba(232, 138, 138, 0.10);
+
+    --phase-qf-spec: #a78bfa;
+    --phase-qf-dev: #c084fc;
+    --phase-qf-spec-bg: rgba(167, 139, 250, 0.12);
+    --phase-qf-dev-bg: rgba(192, 132, 252, 0.12);
+
+    --agent-mary: #f0abfc;
+    --agent-john: #86efac;
+    --agent-winston: #fbbf24;
+    --agent-sally: #c4b5fd;
+    --agent-bob: #67e8f9;
+    --agent-amelia: #fca5a5;
+    --agent-barry: #a78bfa;
+
+    --status-complete: #4ade80;
+    --status-active: #60a5fa;
+    --status-pending: #71717a;
+
+    --interactive-default: #a1a1aa;
+    --interactive-hover: #e4e4e7;
+    --interactive-active: #ffffff;
+    --interactive-muted: #52525b;
+    --interactive-accent: #60a5fa;
+
+    --font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: var(--font-sans);
+    background: #000;
+    color: var(--interactive-default);
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  .nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+    background: var(--surface-overlay);
+    border-bottom: 1px solid var(--surface-border);
+    display: flex; align-items: center; gap: 8px;
+    padding: 12px 24px; flex-wrap: wrap;
+  }
+  .nav h1 { font-size: 14px; font-weight: 600; color: var(--interactive-active); margin-right: 16px; }
+  .nav-btn {
+    padding: 6px 14px; border-radius: 6px; border: 1px solid var(--surface-border);
+    background: transparent; color: var(--interactive-default); cursor: pointer;
+    font-size: 12px; font-family: var(--font-sans); transition: all 0.15s;
+  }
+  .nav-btn:hover { border-color: var(--surface-border-hover); color: var(--interactive-hover); }
+  .nav-btn.active { background: var(--interactive-accent); border-color: var(--interactive-accent); color: #fff; }
+
+  .section { display: none; padding-top: 56px; min-height: 100vh; }
+  .section.active { display: block; }
+  .section-header {
+    padding: 24px 32px 16px;
+    border-bottom: 1px solid var(--surface-border);
+    background: var(--surface-base);
+  }
+  .section-header h2 { font-size: 16px; font-weight: 600; color: var(--interactive-active); margin-bottom: 4px; }
+  .section-header p { font-size: 12px; color: var(--interactive-muted); }
+
+  .mockup {
+    margin: 24px 32px;
+    border: 1px solid var(--surface-border);
+    border-radius: 10px;
+    overflow: hidden;
+    background: var(--surface-base);
+    position: relative;
+  }
+  .mockup-title-bar {
+    height: 28px; background: var(--surface-raised);
+    border-bottom: 1px solid var(--surface-border);
+    display: flex; align-items: center; padding: 0 12px; gap: 6px;
+  }
+  .traffic-light { width: 10px; height: 10px; border-radius: 50%; }
+  .tl-red { background: #ff5f57; }
+  .tl-yellow { background: #febc2e; }
+  .tl-green { background: #28c840; }
+  .mockup-title { flex: 1; text-align: center; font-size: 11px; color: var(--interactive-muted); }
+
+  .app-layout { display: flex; height: 640px; }
+  .app-layout-tall { display: flex; height: 720px; }
+
+  .sidebar {
+    width: 240px; min-width: 240px;
+    background: var(--surface-raised);
+    border-right: 1px solid var(--surface-border);
+    display: flex; flex-direction: column; overflow-y: auto;
+  }
+  .sidebar-section { padding: 12px; }
+  .sidebar-label {
+    font-size: 11px; font-weight: 500; color: var(--interactive-muted);
+    text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;
+  }
+  .project-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 8px; border-radius: 6px; cursor: pointer; margin-bottom: 2px;
+  }
+  .project-item:hover { background: rgba(255,255,255,0.04); }
+  .project-item.active { background: rgba(96, 165, 250, 0.1); }
+  .project-icon {
+    width: 20px; height: 20px; border-radius: 4px;
+    background: var(--interactive-accent); display: flex;
+    align-items: center; justify-content: center;
+    font-size: 10px; color: #fff; font-weight: 600;
+  }
+  .project-name { font-size: 13px; color: var(--interactive-hover); }
+
+  .stream-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px; border-radius: 6px; cursor: pointer; margin-bottom: 2px;
+  }
+  .stream-item:hover { background: rgba(255,255,255,0.04); }
+  .stream-item.active { background: rgba(255,255,255,0.06); border: 1px solid var(--surface-border-hover); }
+  .stream-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .stream-info { flex: 1; min-width: 0; }
+  .stream-name { font-size: 13px; color: var(--interactive-hover); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .stream-meta { font-size: 11px; color: var(--interactive-muted); }
+
+  .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+  .status-bar {
+    height: 24px; background: var(--surface-raised);
+    border-top: 1px solid var(--surface-border);
+    display: flex; align-items: center; padding: 0 12px;
+    font-size: 11px; color: var(--interactive-muted); gap: 16px;
+  }
+
+  .phase-graph { display: flex; gap: 12px; padding: 16px; flex: 1; overflow-x: auto; }
+  .phase-container {
+    flex: 1; min-width: 200px; border-radius: 8px;
+    border: 1px solid var(--surface-border);
+    display: flex; flex-direction: column;
+  }
+  .phase-header {
+    padding: 10px 12px; border-bottom: 1px solid var(--surface-border);
+    display: flex; align-items: center; gap: 8px; border-radius: 8px 8px 0 0;
+  }
+  .phase-number {
+    width: 22px; height: 22px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 600; color: #fff;
+  }
+  .phase-title { font-size: 13px; font-weight: 600; }
+  .phase-tag {
+    font-size: 10px; padding: 1px 5px; border-radius: 3px;
+    background: rgba(255,255,255,0.06); color: var(--interactive-muted);
+  }
+  .phase-body { padding: 8px; flex: 1; display: flex; flex-direction: column; gap: 6px; }
+
+  .workflow-node {
+    padding: 8px 10px; border-radius: 6px;
+    border: 1px solid var(--surface-border);
+    background: var(--surface-raised);
+    display: flex; align-items: center; gap: 8px;
+    cursor: pointer; transition: all 0.15s;
+  }
+  .workflow-node:hover { border-color: var(--surface-border-hover); background: var(--surface-overlay); }
+  .workflow-node.complete { border-color: rgba(74, 222, 128, 0.3); }
+  .workflow-node.active-node { border-color: var(--interactive-accent); box-shadow: 0 0 0 1px var(--interactive-accent); }
+
+  .agent-badge {
+    width: 24px; height: 24px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 600; color: #fff; flex-shrink: 0;
+  }
+  .node-info { flex: 1; min-width: 0; }
+  .node-name { font-size: 12px; color: var(--interactive-hover); font-weight: 500; }
+  .node-artifact { font-size: 10px; color: var(--interactive-muted); font-family: var(--font-mono); }
+  .node-check { color: var(--status-complete); font-size: 14px; }
+  .node-arrow { color: var(--interactive-accent); font-size: 10px; }
+
+  .gate-node {
+    padding: 6px 10px; border-radius: 6px;
+    background: linear-gradient(135deg, rgba(167,139,250,0.15), rgba(192,132,252,0.15));
+    border: 1px solid rgba(167,139,250,0.3);
+    text-align: center; font-size: 11px; color: #c4b5fd; font-weight: 500;
+  }
+
+  .breadcrumb-strip {
+    height: 36px; background: var(--surface-raised);
+    border-bottom: 1px solid var(--surface-border);
+    display: flex; align-items: center; padding: 0 16px; gap: 8px;
+  }
+  .bc-phase { display: flex; align-items: center; gap: 4px; font-size: 12px; padding: 4px 8px; border-radius: 4px; }
+  .bc-arrow { color: var(--interactive-muted); font-size: 10px; }
+  .bc-active { border: 1px solid var(--interactive-accent); background: rgba(96,165,250,0.1); }
+
+  .conversation-panel {
+    flex: 1; background: var(--surface-sunken);
+    padding: 16px; overflow-y: auto;
+    font-family: var(--font-mono); font-size: 13px; line-height: 1.6;
+  }
+  .conv-msg { margin-bottom: 16px; }
+  .conv-role { font-size: 11px; font-weight: 600; margin-bottom: 4px; }
+  .conv-role.agent { color: var(--agent-john); }
+  .conv-role.user { color: var(--interactive-accent); }
+  .conv-text { color: var(--interactive-default); }
+  .conv-cursor { display: inline-block; width: 7px; height: 14px; background: var(--interactive-accent); animation: blink 1s infinite; }
+  @keyframes blink { 0%, 50% { opacity: 1; } 51%, 100% { opacity: 0; } }
+
+  .dashboard { padding: 20px; flex: 1; overflow-y: auto; }
+  .dash-section { margin-bottom: 24px; }
+  .dash-title { font-size: 14px; font-weight: 600; color: var(--interactive-active); margin-bottom: 12px; }
+
+  .stream-card {
+    padding: 12px 16px; border-radius: 8px;
+    background: var(--surface-raised); border: 1px solid var(--surface-border);
+    margin-bottom: 8px; cursor: pointer; transition: all 0.15s;
+    display: flex; align-items: center; gap: 12px;
+  }
+  .stream-card:hover { border-color: var(--surface-border-hover); }
+  .sc-phase-dots { display: flex; gap: 3px; }
+  .sc-dot { width: 6px; height: 6px; border-radius: 50%; }
+  .sc-info { flex: 1; }
+  .sc-name { font-size: 13px; font-weight: 500; color: var(--interactive-hover); }
+  .sc-detail { font-size: 11px; color: var(--interactive-muted); margin-top: 2px; }
+  .sc-badge { font-size: 10px; padding: 2px 8px; border-radius: 4px; font-weight: 500; }
+  .sc-time { font-size: 11px; color: var(--interactive-muted); }
+
+  .artifact-panel { flex: 1; padding: 20px 24px; overflow-y: auto; background: var(--surface-sunken); }
+  .artifact-content { max-width: 720px; }
+  .artifact-content h1 { font-size: 18px; font-weight: 600; color: var(--interactive-active); margin-bottom: 16px; }
+  .artifact-content h2 { font-size: 15px; font-weight: 600; color: var(--interactive-hover); margin: 20px 0 8px; }
+  .artifact-content p { color: var(--interactive-default); margin-bottom: 12px; line-height: 1.7; }
+
+  .modal-overlay {
+    position: absolute; inset: 0; background: rgba(0,0,0,0.6);
+    display: flex; align-items: center; justify-content: center; z-index: 10;
+  }
+  .modal {
+    width: 440px; background: var(--surface-overlay);
+    border: 1px solid var(--surface-border-hover);
+    border-radius: 10px; box-shadow: 0 16px 48px rgba(0,0,0,0.5); padding: 20px;
+  }
+  .modal h3 { font-size: 15px; font-weight: 600; color: var(--interactive-active); margin-bottom: 16px; }
+  .modal-field { margin-bottom: 12px; }
+  .modal-label { font-size: 12px; color: var(--interactive-muted); margin-bottom: 4px; display: block; }
+  .modal-input {
+    width: 100%; padding: 8px 12px; background: var(--surface-sunken);
+    border: 1px solid var(--surface-border); border-radius: 6px;
+    color: var(--interactive-active); font-size: 13px; font-family: var(--font-sans); outline: none;
+  }
+  .modal-input:focus { border-color: var(--interactive-accent); }
+  .template-options { display: flex; gap: 8px; }
+  .template-opt {
+    flex: 1; padding: 10px; border-radius: 6px;
+    border: 1px solid var(--surface-border);
+    background: var(--surface-raised); cursor: pointer;
+    text-align: center; transition: all 0.15s;
+  }
+  .template-opt:hover { border-color: var(--surface-border-hover); }
+  .template-opt.selected { border-color: var(--interactive-accent); background: rgba(96,165,250,0.08); }
+  .template-opt .t-name { font-size: 12px; font-weight: 500; color: var(--interactive-hover); }
+  .template-opt .t-desc { font-size: 10px; color: var(--interactive-muted); margin-top: 2px; }
+  .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+  .btn-secondary {
+    padding: 7px 14px; border-radius: 6px; border: 1px solid var(--surface-border);
+    background: transparent; color: var(--interactive-default); cursor: pointer;
+    font-size: 12px; font-family: var(--font-sans);
+  }
+  .btn-primary {
+    padding: 7px 14px; border-radius: 6px; border: none;
+    background: var(--interactive-accent); color: #fff; cursor: pointer;
+    font-size: 12px; font-weight: 500; font-family: var(--font-sans);
+  }
+
+  .cmd-palette {
+    position: absolute; top: 80px; left: 50%; transform: translateX(-50%);
+    width: 520px; background: var(--surface-overlay);
+    border: 1px solid var(--surface-border-hover);
+    border-radius: 10px; box-shadow: 0 16px 48px rgba(0,0,0,0.5);
+    overflow: hidden; z-index: 10;
+  }
+  .cmd-input-field {
+    width: 100%; padding: 12px 16px; background: transparent;
+    border: none; border-bottom: 1px solid var(--surface-border);
+    color: var(--interactive-active); font-size: 14px;
+    font-family: var(--font-mono); outline: none;
+  }
+  .cmd-results { padding: 4px; }
+  .cmd-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 12px; border-radius: 6px; cursor: pointer;
+  }
+  .cmd-item:hover, .cmd-item.selected { background: rgba(96,165,250,0.1); }
+  .cmd-icon { font-size: 14px; width: 20px; text-align: center; }
+  .cmd-label { font-size: 13px; color: var(--interactive-hover); flex: 1; }
+  .cmd-hint { font-size: 11px; color: var(--interactive-muted); font-family: var(--font-mono); }
+
+  .notes { padding: 24px 32px; }
+  .note-box {
+    background: var(--surface-raised); border: 1px solid var(--surface-border);
+    border-radius: 8px; padding: 16px; margin-bottom: 16px;
+  }
+  .note-box h3 { font-size: 13px; font-weight: 600; color: var(--interactive-hover); margin-bottom: 8px; }
+  .note-box li { font-size: 12px; color: var(--interactive-default); line-height: 1.6; margin-bottom: 4px; }
+  .note-box ul { padding-left: 16px; }
+
+  @keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <h1>BMAD Studio — Design Directions</h1>
+  <button class="nav-btn active" onclick="show('dir1')">A: Dashboard</button>
+  <button class="nav-btn" onclick="show('dir2')">B: Phase Graph</button>
+  <button class="nav-btn" onclick="show('dir3')">C: Active Session</button>
+  <button class="nav-btn" onclick="show('dir4')">D: Stream Creation</button>
+  <button class="nav-btn" onclick="show('dir5')">E: Cmd+K Palette</button>
+  <button class="nav-btn" onclick="show('dir6')">F: Artifact Viewer</button>
+  <button class="nav-btn" onclick="show('dir7')">G: Quick Flow</button>
+</nav>
+
+<!-- A: Dashboard -->
+<div id="dir1" class="section active">
+  <div class="section-header">
+    <h2>Direction A — Multi-Stream Dashboard ("Morning Coffee" View)</h2>
+    <p>All projects, all streams, current status at a glance. Linear-style list density with phase-colored badges.</p>
+  </div>
+  <div class="mockup">
+    <div class="mockup-title-bar">
+      <div class="traffic-light tl-red"></div><div class="traffic-light tl-yellow"></div><div class="traffic-light tl-green"></div>
+      <div class="mockup-title">BMAD Studio</div>
+    </div>
+    <div class="app-layout">
+      <div class="sidebar">
+        <div class="sidebar-section">
+          <div class="sidebar-label">Projects</div>
+          <div class="project-item active"><div class="project-icon">B</div><span class="project-name">bmad-studio</span></div>
+          <div class="project-item"><div class="project-icon" style="background: var(--phase-planning);">A</div><span class="project-name">acme-platform</span></div>
+        </div>
+        <div class="sidebar-section" style="border-top: 1px solid var(--surface-border); padding-top: 12px;">
+          <div class="sidebar-label">Streams — bmad-studio</div>
+          <div class="stream-item active"><div class="stream-dot" style="background: var(--phase-solutioning);"></div><div class="stream-info"><div class="stream-name">auth-refactoring</div><div class="stream-meta">Solutioning · 2h ago</div></div></div>
+          <div class="stream-item"><div class="stream-dot" style="background: var(--phase-planning);"></div><div class="stream-info"><div class="stream-name">payment-integration</div><div class="stream-meta">Planning · 1d ago</div></div></div>
+          <div class="stream-item"><div class="stream-dot" style="background: var(--phase-analysis);"></div><div class="stream-info"><div class="stream-name">dashboard-widget</div><div class="stream-meta">Analysis · 3d ago</div></div></div>
+          <div class="stream-item"><div class="stream-dot" style="background: var(--phase-qf-spec);"></div><div class="stream-info"><div class="stream-name">fix-nav-bug</div><div class="stream-meta">Quick Flow · 5h ago</div></div></div>
+        </div>
+      </div>
+      <div class="main">
+        <div class="dashboard">
+          <div class="dash-section">
+            <div class="dash-title">bmad-studio — 4 active streams</div>
+            <div class="stream-card"><div class="sc-phase-dots"><div class="sc-dot" style="background: var(--status-complete);"></div><div class="sc-dot" style="background: var(--status-complete);"></div><div class="sc-dot" style="background: var(--status-active);"></div><div class="sc-dot" style="background: var(--status-pending);"></div></div><div class="sc-info"><div class="sc-name">auth-refactoring</div><div class="sc-detail">Architecture complete · Epics next with <span style="color: var(--agent-john);">John</span></div></div><span class="sc-badge" style="background: var(--phase-solutioning-bg); color: var(--phase-solutioning);">Solutioning</span><span class="sc-time">2h ago</span></div>
+            <div class="stream-card"><div class="sc-phase-dots"><div class="sc-dot" style="background: var(--status-complete);"></div><div class="sc-dot" style="background: var(--status-active);"></div><div class="sc-dot" style="background: var(--status-pending);"></div><div class="sc-dot" style="background: var(--status-pending);"></div></div><div class="sc-info"><div class="sc-name">payment-integration</div><div class="sc-detail">PRD in progress with <span style="color: var(--agent-john);">John</span></div></div><span class="sc-badge" style="background: var(--phase-planning-bg); color: var(--phase-planning);">Planning</span><span class="sc-time">1d ago</span></div>
+            <div class="stream-card"><div class="sc-phase-dots"><div class="sc-dot" style="background: var(--status-active);"></div><div class="sc-dot" style="background: var(--status-pending);"></div><div class="sc-dot" style="background: var(--status-pending);"></div><div class="sc-dot" style="background: var(--status-pending);"></div></div><div class="sc-info"><div class="sc-name">dashboard-widget</div><div class="sc-detail">Research with <span style="color: var(--agent-mary);">Mary</span></div></div><span class="sc-badge" style="background: var(--phase-analysis-bg); color: var(--phase-analysis);">Analysis</span><span class="sc-time">3d ago</span></div>
+            <div class="stream-card"><div class="sc-phase-dots"><div class="sc-dot" style="background: var(--status-active);"></div><div class="sc-dot" style="background: var(--status-pending);"></div></div><div class="sc-info"><div class="sc-name">fix-nav-bug</div><div class="sc-detail">Quick spec with <span style="color: var(--agent-barry);">Barry</span></div></div><span class="sc-badge" style="background: var(--phase-qf-spec-bg); color: var(--phase-qf-spec);">Quick Flow</span><span class="sc-time">5h ago</span></div>
+          </div>
+          <div class="dash-section">
+            <div class="dash-title">acme-platform — 2 active streams</div>
+            <div class="stream-card"><div class="sc-phase-dots"><div class="sc-dot" style="background: var(--status-complete);"></div><div class="sc-dot" style="background: var(--status-complete);"></div><div class="sc-dot" style="background: var(--status-complete);"></div><div class="sc-dot" style="background: var(--status-active);"></div></div><div class="sc-info"><div class="sc-name">user-notifications</div><div class="sc-detail">Dev story with <span style="color: var(--agent-amelia);">Amelia</span></div></div><span class="sc-badge" style="background: var(--phase-implementation-bg); color: var(--phase-implementation);">Implementation</span><span class="sc-time">30m ago</span></div>
+            <div class="stream-card"><div class="sc-phase-dots"><div class="sc-dot" style="background: var(--status-complete);"></div><div class="sc-dot" style="background: var(--status-active);"></div><div class="sc-dot" style="background: var(--status-pending);"></div><div class="sc-dot" style="background: var(--status-pending);"></div></div><div class="sc-info"><div class="sc-name">api-rate-limiting</div><div class="sc-detail">UX design with <span style="color: var(--agent-sally);">Sally</span></div></div><span class="sc-badge" style="background: var(--phase-planning-bg); color: var(--phase-planning);">Planning</span><span class="sc-time">2d ago</span></div>
+          </div>
+        </div>
+        <div class="status-bar"><span>bmad-studio</span><span>4 active streams</span><span style="margin-left: auto;">⌘K to navigate</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="notes"><div class="note-box"><h3>Design Notes</h3><ul><li>Phase dot indicators (4 for Full Flow, 2 for Quick Flow) — instant visual of stream progress</li><li>Agent names colored with agent color — "who's at the controls" on dashboard</li><li>Quick Flow visually distinct: 2 dots, violet badge</li><li>Projects grouped in main area, streams listed per project</li></ul></div></div>
+</div>
+
+<!-- B: Phase Graph -->
+<div id="dir2" class="section">
+  <div class="section-header">
+    <h2>Direction B — Per-Stream Phase Graph (The Signature Element)</h2>
+    <p>Two-level visualization: phase containers with workflow nodes inside. Horizontal swim lanes matching BMAD methodology topology.</p>
+  </div>
+  <div class="mockup">
+    <div class="mockup-title-bar">
+      <div class="traffic-light tl-red"></div><div class="traffic-light tl-yellow"></div><div class="traffic-light tl-green"></div>
+      <div class="mockup-title">BMAD Studio — auth-refactoring</div>
+    </div>
+    <div class="app-layout-tall">
+      <div class="sidebar">
+        <div class="sidebar-section"><div class="sidebar-label">Projects</div><div class="project-item active"><div class="project-icon">B</div><span class="project-name">bmad-studio</span></div></div>
+        <div class="sidebar-section" style="border-top: 1px solid var(--surface-border); padding-top: 12px;">
+          <div class="sidebar-label">Streams</div>
+          <div class="stream-item active"><div class="stream-dot" style="background: var(--phase-solutioning);"></div><div class="stream-info"><div class="stream-name">auth-refactoring</div><div class="stream-meta">Solutioning</div></div></div>
+          <div class="stream-item"><div class="stream-dot" style="background: var(--phase-planning);"></div><div class="stream-info"><div class="stream-name">payment-integration</div><div class="stream-meta">Planning</div></div></div>
+          <div class="stream-item"><div class="stream-dot" style="background: var(--phase-analysis);"></div><div class="stream-info"><div class="stream-name">dashboard-widget</div><div class="stream-meta">Analysis</div></div></div>
+        </div>
+      </div>
+      <div class="main">
+        <div class="phase-graph">
+          <div class="phase-container" style="background: var(--phase-analysis-bg);">
+            <div class="phase-header" style="background: rgba(124,172,240,0.06);"><div class="phase-number" style="background: var(--phase-analysis);">1</div><span class="phase-title" style="color: var(--phase-analysis);">Analysis</span><span class="phase-tag">Optional</span></div>
+            <div class="phase-body">
+              <div class="workflow-node complete"><div class="agent-badge" style="background: rgba(240,171,252,0.2); color: var(--agent-mary);">M</div><div class="node-info"><div class="node-name">brainstorm</div><div class="node-artifact">brainstorming-report.md</div></div><span class="node-check">✓</span></div>
+              <div class="workflow-node complete"><div class="agent-badge" style="background: rgba(240,171,252,0.2); color: var(--agent-mary);">M</div><div class="node-info"><div class="node-name">research</div><div class="node-artifact">findings.md</div></div><span class="node-check">✓</span></div>
+              <div class="workflow-node complete"><div class="agent-badge" style="background: rgba(240,171,252,0.2); color: var(--agent-mary);">M</div><div class="node-info"><div class="node-name">create-product-brief</div><div class="node-artifact">product-brief.md</div></div><span class="node-check">✓</span></div>
+            </div>
+          </div>
+          <div class="phase-container" style="background: var(--phase-planning-bg);">
+            <div class="phase-header" style="background: rgba(122,212,160,0.06);"><div class="phase-number" style="background: var(--phase-planning);">2</div><span class="phase-title" style="color: var(--phase-planning);">Planning</span></div>
+            <div class="phase-body">
+              <div class="workflow-node complete"><div class="agent-badge" style="background: rgba(134,239,172,0.2); color: var(--agent-john);">J</div><div class="node-info"><div class="node-name">create-prd</div><div class="node-artifact">PRD.md →</div></div><span class="node-check">✓</span></div>
+              <div class="gate-node">Has UI? → Yes</div>
+              <div class="workflow-node complete"><div class="agent-badge" style="background: rgba(196,181,253,0.2); color: var(--agent-sally);">S</div><div class="node-info"><div class="node-name">create-ux-design</div><div class="node-artifact">ux-spec.md →</div></div><span class="node-check">✓</span></div>
+            </div>
+          </div>
+          <div class="phase-container" style="background: var(--phase-solutioning-bg);">
+            <div class="phase-header" style="background: rgba(228,184,116,0.06);"><div class="phase-number" style="background: var(--phase-solutioning);">3</div><span class="phase-title" style="color: var(--phase-solutioning);">Solutioning</span></div>
+            <div class="phase-body">
+              <div class="workflow-node complete"><div class="agent-badge" style="background: rgba(251,191,36,0.2); color: var(--agent-winston);">W</div><div class="node-info"><div class="node-name">create-architecture</div><div class="node-artifact">architecture.md →</div></div><span class="node-check">✓</span></div>
+              <div class="workflow-node active-node"><div class="agent-badge" style="background: rgba(134,239,172,0.2); color: var(--agent-john);">J</div><div class="node-info"><div class="node-name">create-epics-and-stories</div><div class="node-artifact">epics.md →</div></div><span class="node-arrow">▶</span></div>
+              <div class="workflow-node" style="opacity: 0.5;"><div class="agent-badge" style="background: rgba(134,239,172,0.15); color: var(--agent-john);">J</div><div class="node-info"><div class="node-name">check-implementation-readiness</div><div class="node-artifact">gate check</div></div></div>
+            </div>
+          </div>
+          <div class="phase-container" style="background: var(--phase-implementation-bg); opacity: 0.4;">
+            <div class="phase-header" style="background: rgba(232,138,138,0.06);"><div class="phase-number" style="background: var(--phase-implementation);">4</div><span class="phase-title" style="color: var(--phase-implementation);">Implementation</span></div>
+            <div class="phase-body">
+              <div class="workflow-node" style="opacity: 0.5;"><div class="agent-badge" style="background: rgba(103,232,249,0.15); color: var(--agent-bob);">B</div><div class="node-info"><div class="node-name">sprint-planning</div><div class="node-artifact">sprint-status.yaml</div></div></div>
+              <div class="workflow-node" style="opacity: 0.5;"><div class="agent-badge" style="background: rgba(103,232,249,0.15); color: var(--agent-bob);">B</div><div class="node-info"><div class="node-name">create-story</div><div class="node-artifact">story-[slug].md</div></div></div>
+              <div class="workflow-node" style="opacity: 0.5;"><div class="agent-badge" style="background: rgba(252,165,165,0.15); color: var(--agent-amelia);">A</div><div class="node-info"><div class="node-name">dev-story</div><div class="node-artifact">code</div></div></div>
+              <div class="workflow-node" style="opacity: 0.5;"><div class="agent-badge" style="background: rgba(252,165,165,0.15); color: var(--agent-amelia);">A</div><div class="node-info"><div class="node-name">code-review</div><div class="node-artifact">approve</div></div></div>
+            </div>
+          </div>
+        </div>
+        <div class="status-bar"><span>bmad-studio / auth-refactoring</span><span style="color: var(--phase-solutioning);">Solutioning</span><span>5/11 workflows complete</span><span style="margin-left: auto;">Click a node to launch or view artifact</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="notes"><div class="note-box"><h3>Design Notes</h3><ul><li>Phase containers with pastel background tints — subtle, distinct, scannable</li><li>Completed nodes: green border + check. Active node: blue border + play. Future: dimmed</li><li>Agent badges (colored circle + initial) on every node</li><li>Conditional gate ("Has UI?") as distinct inline element</li><li>Artifact names in monospace — what each workflow produces</li><li>Implementation phase dimmed — prerequisites not met</li></ul></div></div>
+</div>
+
+<!-- C: Active Session -->
+<div id="dir3" class="section">
+  <div class="section-header">
+    <h2>Direction C — Active Session (Conversation-Dominant + Breadcrumb Strip)</h2>
+    <p>Phase graph collapsed to breadcrumb strip during a 45-minute OpenCode session. Conversation fills the workspace.</p>
+  </div>
+  <div class="mockup">
+    <div class="mockup-title-bar">
+      <div class="traffic-light tl-red"></div><div class="traffic-light tl-yellow"></div><div class="traffic-light tl-green"></div>
+      <div class="mockup-title">BMAD Studio — auth-refactoring / create-epics-and-stories</div>
+    </div>
+    <div class="app-layout">
+      <div class="sidebar">
+        <div class="sidebar-section"><div class="sidebar-label">Projects</div><div class="project-item active"><div class="project-icon">B</div><span class="project-name">bmad-studio</span></div></div>
+        <div class="sidebar-section" style="border-top: 1px solid var(--surface-border); padding-top: 12px;">
+          <div class="sidebar-label">Streams</div>
+          <div class="stream-item active"><div class="stream-dot" style="background: var(--status-active); animation: pulse-dot 2s infinite;"></div><div class="stream-info"><div class="stream-name">auth-refactoring</div><div class="stream-meta" style="color: var(--status-active);">Session active</div></div></div>
+          <div class="stream-item"><div class="stream-dot" style="background: var(--phase-planning);"></div><div class="stream-info"><div class="stream-name">payment-integration</div><div class="stream-meta">Planning</div></div></div>
+        </div>
+      </div>
+      <div class="main">
+        <div class="breadcrumb-strip">
+          <div class="bc-phase" style="color: var(--phase-analysis);"><span style="color: var(--status-complete);">✓</span> Analysis</div>
+          <span class="bc-arrow">→</span>
+          <div class="bc-phase" style="color: var(--phase-planning);"><span style="color: var(--status-complete);">✓</span> Planning</div>
+          <span class="bc-arrow">→</span>
+          <div class="bc-phase bc-active" style="color: var(--phase-solutioning);">🔵 Solutioning: create-epics-and-stories</div>
+          <span class="bc-arrow">→</span>
+          <div class="bc-phase" style="color: var(--interactive-muted);">Implementation</div>
+          <span style="margin-left: auto; font-size: 11px; color: var(--interactive-muted); cursor: pointer;">↕ Expand graph</span>
+        </div>
+        <div class="conversation-panel">
+          <div class="conv-msg"><div class="conv-role agent">John (PM) — create-epics-and-stories</div><div class="conv-text">I've loaded the following context for this session:<br><br><span style="color: var(--interactive-muted);">• architecture.md (from create-architecture)</span><br><span style="color: var(--interactive-muted);">• PRD.md (from create-prd)</span><br><span style="color: var(--interactive-muted);">• ux-spec.md (from create-ux-design)</span><br><br>Let's create the epics and stories for the auth-refactoring stream. Based on the architecture document, I can see three main areas:<br><br>1. <strong style="color: var(--interactive-hover);">Token Management Overhaul</strong> — Replace session-based auth with JWT tokens<br>2. <strong style="color: var(--interactive-hover);">OAuth2 Provider Integration</strong> — Support Google, GitHub, and email/password<br>3. <strong style="color: var(--interactive-hover);">Permission System</strong> — Role-based access control<br><br>Shall I start with the token management epic?</div></div>
+          <div class="conv-msg"><div class="conv-role user">You</div><div class="conv-text">Start with token management. Keep the stories small — each should be implementable in a single dev-story session.</div></div>
+          <div class="conv-msg"><div class="conv-role agent">John (PM) — create-epics-and-stories</div><div class="conv-text"><strong style="color: var(--interactive-hover);">Epic 1: Token Management Overhaul</strong><br><br><strong>Story 1.1: JWT Token Generation Service</strong><br><span style="color: var(--interactive-muted);">Create the core token service — generate, validate, and refresh JWTs.</span><br><br><strong>Story 1.2: Token Storage Migration</strong><br><span style="color: var(--interactive-muted);">Migrate session store to Redis-backed JWT blacklist.</span><br><br><strong>Story 1.3: Auth Middleware Replacement</strong><br><span style="color: var(--interactive-muted);">Replace session middleware with JWT verification.</span><span class="conv-cursor"></span></div></div>
+        </div>
+        <div class="status-bar"><span>bmad-studio / auth-refactoring</span><span style="color: var(--agent-john);">John (PM)</span><span>Session: 12m</span><span style="margin-left: auto;">~2.4k tokens</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="notes"><div class="note-box"><h3>Design Notes</h3><ul><li>Breadcrumb strip (36px) — phase progress with active workflow highlighted</li><li>"Expand graph" at right edge to return to full phase graph</li><li>Conversation panel fills remaining space — maximum room for agent output</li><li>Agent lists loaded context at session start — confidence building</li><li>Pulsing dot on active stream in sidebar</li><li>Status bar: agent, session duration, token count</li></ul></div></div>
+</div>
+
+<!-- D: Stream Creation -->
+<div id="dir4" class="section">
+  <div class="section-header">
+    <h2>Direction D — Stream Creation Modal</h2>
+    <p>Fast but structured. Name → flow template → confirm. Linear-style modal overlay.</p>
+  </div>
+  <div class="mockup">
+    <div class="mockup-title-bar">
+      <div class="traffic-light tl-red"></div><div class="traffic-light tl-yellow"></div><div class="traffic-light tl-green"></div>
+      <div class="mockup-title">BMAD Studio</div>
+    </div>
+    <div class="app-layout" style="filter: brightness(0.4);"><div class="sidebar"></div><div class="main"></div></div>
+    <div class="modal-overlay">
+      <div class="modal">
+        <h3>New Stream</h3>
+        <div class="modal-field"><label class="modal-label">Stream name</label><input class="modal-input" value="search-optimization"></div>
+        <div class="modal-field">
+          <label class="modal-label">Flow template</label>
+          <div class="template-options">
+            <div class="template-opt selected">
+              <div class="t-name" style="color: var(--phase-analysis);">Full Flow</div>
+              <div class="t-desc">Research through implementation</div>
+              <div style="display: flex; gap: 3px; justify-content: center; margin-top: 6px;"><div style="width: 5px; height: 5px; border-radius: 50%; background: var(--phase-analysis);"></div><div style="width: 5px; height: 5px; border-radius: 50%; background: var(--phase-planning);"></div><div style="width: 5px; height: 5px; border-radius: 50%; background: var(--phase-solutioning);"></div><div style="width: 5px; height: 5px; border-radius: 50%; background: var(--phase-implementation);"></div></div>
+            </div>
+            <div class="template-opt">
+              <div class="t-name" style="color: var(--phase-qf-spec);">Quick Flow</div>
+              <div class="t-desc">Spec and ship</div>
+              <div style="display: flex; gap: 3px; justify-content: center; margin-top: 6px;"><div style="width: 5px; height: 5px; border-radius: 50%; background: var(--phase-qf-spec);"></div><div style="width: 5px; height: 5px; border-radius: 50%; background: var(--phase-qf-dev);"></div></div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-field"><label class="modal-label" style="display: flex; align-items: center; gap: 6px;"><input type="checkbox" checked> Create git worktree <span style="color: var(--interactive-muted); font-size: 10px;">(branch: search-optimization)</span></label></div>
+        <div class="modal-actions"><button class="btn-secondary">Cancel</button><button class="btn-primary">Create Stream</button></div>
+      </div>
+    </div>
+  </div>
+  <div class="notes"><div class="note-box"><h3>Design Notes</h3><ul><li>Modal overlay — no page navigation</li><li>Stream name auto-suggests branch name</li><li>Template cards with phase dots — visual preview of what you get</li><li>Full Flow: 4 pastel dots. Quick Flow: 2 violet dots</li><li>Worktree checkbox default-on (FR-W1)</li></ul></div></div>
+</div>
+
+<!-- E: Command Palette -->
+<div id="dir5" class="section">
+  <div class="section-header">
+    <h2>Direction E — Command Palette (⌘K)</h2>
+    <p>Keyboard-first navigation. Fuzzy-matched across streams, artifacts, and actions.</p>
+  </div>
+  <div class="mockup">
+    <div class="mockup-title-bar">
+      <div class="traffic-light tl-red"></div><div class="traffic-light tl-yellow"></div><div class="traffic-light tl-green"></div>
+      <div class="mockup-title">BMAD Studio</div>
+    </div>
+    <div class="app-layout" style="filter: brightness(0.3);"><div class="sidebar"></div><div class="main"></div></div>
+    <div class="cmd-palette">
+      <input class="cmd-input-field" value="auth">
+      <div class="cmd-results">
+        <div class="cmd-item selected"><span class="cmd-icon" style="color: var(--phase-solutioning);">●</span><span class="cmd-label">auth-refactoring</span><span class="cmd-hint">bmad-studio · Solutioning</span></div>
+        <div class="cmd-item"><span class="cmd-icon">📄</span><span class="cmd-label">architecture.md</span><span class="cmd-hint">auth-refactoring · artifact</span></div>
+        <div class="cmd-item"><span class="cmd-icon">📄</span><span class="cmd-label">PRD.md</span><span class="cmd-hint">auth-refactoring · artifact</span></div>
+        <div class="cmd-item"><span class="cmd-icon" style="color: var(--agent-john);">J</span><span class="cmd-label">Launch create-epics-and-stories</span><span class="cmd-hint">auth-refactoring · next workflow</span></div>
+      </div>
+      <div style="padding: 8px 16px; border-top: 1px solid var(--surface-border); display: flex; gap: 16px;">
+        <span style="font-size: 10px; color: var(--interactive-muted);">↑↓ Navigate</span>
+        <span style="font-size: 10px; color: var(--interactive-muted);">↵ Open</span>
+        <span style="font-size: 10px; color: var(--interactive-muted);">esc Close</span>
+      </div>
+    </div>
+  </div>
+  <div class="notes"><div class="note-box"><h3>Design Notes</h3><ul><li>Fuzzy matching across streams, artifacts, actions</li><li>Phase color dot on stream results</li><li>Agent initial on action results</li><li>Results: streams first, artifacts, then actions</li><li>Keyboard nav hints at bottom</li></ul></div></div>
+</div>
+
+<!-- F: Artifact Viewer -->
+<div id="dir6" class="section">
+  <div class="section-header">
+    <h2>Direction F — Artifact Viewer (Read-Only Markdown)</h2>
+    <p>Stream artifacts list in sidebar → rendered markdown with section navigation. Max-width content for readability.</p>
+  </div>
+  <div class="mockup">
+    <div class="mockup-title-bar">
+      <div class="traffic-light tl-red"></div><div class="traffic-light tl-yellow"></div><div class="traffic-light tl-green"></div>
+      <div class="mockup-title">BMAD Studio — auth-refactoring / architecture.md</div>
+    </div>
+    <div class="app-layout">
+      <div class="sidebar">
+        <div class="sidebar-section"><div class="sidebar-label">Projects</div><div class="project-item active"><div class="project-icon">B</div><span class="project-name">bmad-studio</span></div></div>
+        <div class="sidebar-section" style="border-top: 1px solid var(--surface-border); padding-top: 12px;">
+          <div class="sidebar-label">Streams</div>
+          <div class="stream-item active"><div class="stream-dot" style="background: var(--phase-solutioning);"></div><div class="stream-info"><div class="stream-name">auth-refactoring</div></div></div>
+        </div>
+        <div class="sidebar-section" style="border-top: 1px solid var(--surface-border); padding-top: 12px;">
+          <div class="sidebar-label">Artifacts</div>
+          <div class="stream-item" style="padding: 6px 8px;"><span style="font-size: 12px; color: var(--phase-analysis);">●</span><span style="font-size: 12px; color: var(--interactive-default); margin-left: 4px;">brainstorming-report.md</span></div>
+          <div class="stream-item" style="padding: 6px 8px;"><span style="font-size: 12px; color: var(--phase-analysis);">●</span><span style="font-size: 12px; color: var(--interactive-default); margin-left: 4px;">product-brief.md</span></div>
+          <div class="stream-item" style="padding: 6px 8px;"><span style="font-size: 12px; color: var(--phase-planning);">●</span><span style="font-size: 12px; color: var(--interactive-default); margin-left: 4px;">PRD.md</span></div>
+          <div class="stream-item" style="padding: 6px 8px;"><span style="font-size: 12px; color: var(--phase-planning);">●</span><span style="font-size: 12px; color: var(--interactive-default); margin-left: 4px;">ux-spec.md</span></div>
+          <div class="stream-item active" style="padding: 6px 8px;"><span style="font-size: 12px; color: var(--phase-solutioning);">●</span><span style="font-size: 12px; color: var(--interactive-hover); font-weight: 500; margin-left: 4px;">architecture.md</span></div>
+        </div>
+      </div>
+      <div class="main">
+        <div style="padding: 8px 16px; border-bottom: 1px solid var(--surface-border); display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 12px; color: var(--interactive-muted); cursor: pointer;">← Back to phase graph</span>
+          <span style="font-size: 11px; color: var(--interactive-muted); margin-left: auto;"><span style="color: var(--agent-winston);">W</span> Winston · create-architecture · 2h ago</span>
+        </div>
+        <div class="artifact-panel">
+          <div class="artifact-content">
+            <h1>Architecture — Auth Refactoring</h1>
+            <h2>Overview</h2>
+            <p>This document describes the architecture for migrating from session-based authentication to JWT tokens with OAuth2 provider support. The design prioritizes backward compatibility during migration and zero-downtime deployment.</p>
+            <h2>Token Architecture</h2>
+            <p>The token service uses asymmetric key pairs (RS256) for JWT signing. Access tokens are short-lived (15 minutes) with refresh tokens stored in HTTP-only cookies.</p>
+            <h2>OAuth2 Flow</h2>
+            <p>We use the authorization code flow with PKCE for all OAuth2 providers.</p>
+            <p style="font-family: var(--font-mono); background: var(--surface-raised); padding: 12px; border-radius: 6px; font-size: 12px; color: var(--interactive-default); border: 1px solid var(--surface-border);">type AuthProvider interface {<br>&nbsp;&nbsp;AuthURL(state string) string<br>&nbsp;&nbsp;Exchange(code string) (*TokenPair, error)<br>&nbsp;&nbsp;UserInfo(token string) (*UserProfile, error)<br>}</p>
+          </div>
+        </div>
+        <div class="status-bar"><span>bmad-studio / auth-refactoring / architecture.md</span><span style="margin-left: auto;">Read-only</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="notes"><div class="note-box"><h3>Design Notes</h3><ul><li>Artifact list in sidebar grouped by phase color dots</li><li>Back to phase graph navigation at top</li><li>Artifact metadata: agent, workflow, timestamp</li><li>720px max-width for readability</li><li>"Read-only" in status bar</li></ul></div></div>
+</div>
+
+<!-- G: Quick Flow -->
+<div id="dir7" class="section">
+  <div class="section-header">
+    <h2>Direction G — Quick Flow Stream (Parallel Track)</h2>
+    <p>Two intense violet nodes, Barry at the controls. Visually distinct from Full Flow's pastel palette.</p>
+  </div>
+  <div class="mockup">
+    <div class="mockup-title-bar">
+      <div class="traffic-light tl-red"></div><div class="traffic-light tl-yellow"></div><div class="traffic-light tl-green"></div>
+      <div class="mockup-title">BMAD Studio — fix-nav-bug (Quick Flow)</div>
+    </div>
+    <div class="app-layout">
+      <div class="sidebar">
+        <div class="sidebar-section"><div class="sidebar-label">Projects</div><div class="project-item active"><div class="project-icon">B</div><span class="project-name">bmad-studio</span></div></div>
+        <div class="sidebar-section" style="border-top: 1px solid var(--surface-border); padding-top: 12px;">
+          <div class="sidebar-label">Streams</div>
+          <div class="stream-item"><div class="stream-dot" style="background: var(--phase-solutioning);"></div><div class="stream-info"><div class="stream-name">auth-refactoring</div><div class="stream-meta">Solutioning</div></div></div>
+          <div class="stream-item active"><div class="stream-dot" style="background: var(--phase-qf-spec);"></div><div class="stream-info"><div class="stream-name">fix-nav-bug</div><div class="stream-meta" style="color: var(--phase-qf-spec);">Quick Flow</div></div></div>
+        </div>
+      </div>
+      <div class="main">
+        <div style="flex: 1; display: flex; align-items: center; justify-content: center; padding: 40px;">
+          <div style="width: 100%; max-width: 600px;">
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 20px;">
+              <span style="font-size: 16px;">⚡</span>
+              <span style="font-size: 16px; font-weight: 600; color: var(--phase-qf-spec);">Quick Flow</span>
+              <span style="font-size: 12px; color: var(--interactive-muted);">— fix-nav-bug</span>
+            </div>
+            <div style="display: flex; gap: 16px; align-items: stretch;">
+              <div style="flex: 1; padding: 16px; border-radius: 8px; border: 1px solid rgba(167,139,250,0.3); background: var(--phase-qf-spec-bg);">
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                  <div class="agent-badge" style="background: rgba(167,139,250,0.2); color: var(--agent-barry);">B</div>
+                  <div><div style="font-size: 13px; font-weight: 500; color: var(--phase-qf-spec);">quick-spec</div><div style="font-size: 10px; color: var(--interactive-muted);">Barry</div></div>
+                </div>
+                <div style="font-size: 11px; color: var(--interactive-muted); font-family: var(--font-mono);">→ tech-spec.md</div>
+                <div style="margin-top: 8px; font-size: 10px; color: var(--status-complete);">✓ Complete</div>
+              </div>
+              <div style="display: flex; align-items: center; color: var(--interactive-muted);">→</div>
+              <div style="flex: 1; padding: 16px; border-radius: 8px; border: 1px solid var(--interactive-accent); background: var(--phase-qf-dev-bg); box-shadow: 0 0 0 1px var(--interactive-accent);">
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                  <div class="agent-badge" style="background: rgba(192,132,252,0.2); color: var(--phase-qf-dev);">B</div>
+                  <div><div style="font-size: 13px; font-weight: 500; color: var(--phase-qf-dev);">quick-dev</div><div style="font-size: 10px; color: var(--interactive-muted);">Barry</div></div>
+                </div>
+                <div style="font-size: 11px; color: var(--interactive-muted); font-family: var(--font-mono);">→ working code</div>
+                <div style="margin-top: 8px; font-size: 10px; color: var(--interactive-accent);">▶ Ready to launch</div>
+              </div>
+            </div>
+            <div style="margin-top: 16px; padding: 10px; background: var(--surface-raised); border-radius: 6px; border: 1px solid var(--surface-border);">
+              <div style="font-size: 11px; color: var(--interactive-muted);">Context: quick-dev loads tech-spec.md</div>
+            </div>
+          </div>
+        </div>
+        <div class="status-bar"><span>bmad-studio / fix-nav-bug</span><span style="color: var(--phase-qf-spec);">Quick Flow</span><span>1/2 workflows complete</span><span style="margin-left: auto;">Click quick-dev to launch</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="notes"><div class="note-box"><h3>Design Notes</h3><ul><li>Quick Flow centered with larger nodes — only 2, so they get more space</li><li>Violet palette noticeably more saturated than Full Flow pastels</li><li>Lightning bolt + "Quick Flow" label — immediately identifiable</li><li>Same interaction: click to launch or view artifact</li><li>Context dependency shown below graph</li></ul></div></div>
+</div>
+
+<script>
+function show(id) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  event.target.classList.add('active');
+}
+</script>
+</body>
+</html>

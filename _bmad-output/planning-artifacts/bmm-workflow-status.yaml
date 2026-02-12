@@ -1,0 +1,41 @@
+# Workflow Status - BMad Method Greenfield
+# This tracks progress through BMM methodology phases.
+# Implementation phase is tracked separately in sprint-status.yaml
+
+# STATUS DEFINITIONS:
+# ==================
+# Initial Status (before completion):
+#   - required: Must be completed to progress
+#   - optional: Can be completed but not required
+#   - recommended: Strongly suggested but not required
+#   - conditional: Required only if certain conditions met (e.g., if_has_ui)
+#
+# Completion Status:
+#   - {file-path}: File created/found (e.g., "docs/product-brief.md")
+#   - skipped: Optional/conditional workflow that was skipped
+
+generated: "2026-01-27"
+project: "bmad-studio"
+project_type: "software"
+selected_track: "bmad-method"
+field_type: "greenfield"
+workflow_path: "method-greenfield.yaml"
+
+workflow_status:
+  # Phase 1: Analysis (Optional)
+  brainstorm-project: "_bmad-output/planning-artifacts/brainstorming/brainstorming-session-2026-01-22.md"
+  research: skipped
+  product-brief: "_bmad-output/planning-artifacts/product-brief-bmad-studio-2026-02-12.md"
+
+  # Phase 2: Planning
+  prd: "_bmad-output/planning-artifacts/prd.md"
+  create-ux-design: "_bmad-output/planning-artifacts/ux-design-specification/index.md"
+
+  # Phase 3: Solutioning
+  create-architecture: "_bmad-output/planning-artifacts/architecture/index.md"
+  create-epics-and-stories: required
+  test-design: optional
+  implementation-readiness: required
+
+  # Phase 4: Implementation
+  sprint-planning: required
