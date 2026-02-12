@@ -48,6 +48,7 @@ func DefaultSettings() types.Settings {
 			"claude": {Enabled: true},
 			"openai": {Enabled: false},
 			"ollama": {Enabled: false, Endpoint: "http://localhost:11434"},
+			"gemini": {Enabled: false},
 		},
 	}
 }

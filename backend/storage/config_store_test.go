@@ -22,8 +22,8 @@ func TestDefaultSettings(t *testing.T) {
 	if s.OllamaEndpoint != "http://localhost:11434" {
 		t.Errorf("expected ollama endpoint, got %q", s.OllamaEndpoint)
 	}
-	if len(s.Providers) != 3 {
-		t.Errorf("expected 3 providers, got %d", len(s.Providers))
+	if len(s.Providers) != 4 {
+		t.Errorf("expected 4 providers, got %d", len(s.Providers))
 	}
 }
 

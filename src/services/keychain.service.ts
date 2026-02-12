@@ -1,4 +1,4 @@
-import type { ProviderType } from '../types/provider.js';
+import type { ProviderType } from '../types/provider';
 
 const SERVICE_NAME = 'bmad-studio';
 
@@ -6,65 +6,107 @@ function keyNameFor(provider: ProviderType): string {
   return `${provider}-api-key`;
 }
 
-function isTauriAvailable(): boolean {
-  return typeof window !== 'undefined' && '__TAURI__' in window;
+function localStorageKeyFor(provider: ProviderType): string {
+  return `${SERVICE_NAME}-${provider}-api-key`;
 }
 
-// In-memory fallback for dev mode (no Tauri context)
+interface ElectronAPI {
+  getApiKey: (provider: string) => Promise<string | null>;
+  setApiKey: (provider: string, key: string) => Promise<void>;
+  deleteApiKey: (provider: string) => Promise<void>;
+}
+
+function getElectronAPI(): ElectronAPI | null {
+  if (typeof window !== 'undefined' && 'electronAPI' in window) {
+    return (window as unknown as { electronAPI: ElectronAPI }).electronAPI;
+  }
+  return null;
+}
+
+function isLocalStorageAvailable(): boolean {
+  try {
+    const testKey = '__storage_test__';
+    localStorage.setItem(testKey, testKey);
+    localStorage.removeItem(testKey);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 const memoryStore = new Map<string, string>();
 let warnedAboutFallback = false;
+let warnedAboutLocalStorage = false;
 
 function warnFallback(): void {
   if (!warnedAboutFallback) {
-    console.warn('[keychain] Tauri keyring not available — using in-memory storage (keys will not persist)');
+    console.warn('[keychain] Electron API not available — using in-memory storage (keys will not persist)');
     warnedAboutFallback = true;
   }
 }
 
+function warnLocalStorage(): void {
+  if (!warnedAboutLocalStorage) {
+    console.info('[keychain] Electron API not available — using localStorage (keys persist across refreshes)');
+    warnedAboutLocalStorage = true;
+  }
+}
+
 export async function getApiKey(provider: ProviderType): Promise<string | null> {
-  if (isTauriAvailable()) {
+  const electronAPI = getElectronAPI();
+  if (electronAPI) {
     try {
-      const { getPassword } = await import('tauri-plugin-keyring-api');
-      return await getPassword(SERVICE_NAME, keyNameFor(provider));
+      return await electronAPI.getApiKey(provider);
     } catch (err) {
       console.error(`[keychain] Failed to read key for ${provider}:`, err);
-      return null;
     }
+  }
+  if (isLocalStorageAvailable()) {
+    warnLocalStorage();
+    return localStorage.getItem(localStorageKeyFor(provider));
   }
   warnFallback();
   return memoryStore.get(keyNameFor(provider)) ?? null;
 }
 
 export async function setApiKey(provider: ProviderType, key: string): Promise<void> {
-  if (isTauriAvailable()) {
+  const electronAPI = getElectronAPI();
+  if (electronAPI) {
     try {
-      const { setPassword } = await import('tauri-plugin-keyring-api');
-      await setPassword(SERVICE_NAME, keyNameFor(provider), key);
+      await electronAPI.setApiKey(provider, key);
       return;
     } catch {
-      throw new Error('Could not save API key to system keychain. Please check your OS keychain settings.');
+      console.warn('[keychain] Electron save failed, falling back to localStorage');
     }
+  }
+  if (isLocalStorageAvailable()) {
+    warnLocalStorage();
+    localStorage.setItem(localStorageKeyFor(provider), key);
+    return;
   }
   warnFallback();
   memoryStore.set(keyNameFor(provider), key);
 }
 
 export async function deleteApiKey(provider: ProviderType): Promise<void> {
-  if (isTauriAvailable()) {
+  const electronAPI = getElectronAPI();
+  if (electronAPI) {
     try {
-      const { deletePassword } = await import('tauri-plugin-keyring-api');
-      await deletePassword(SERVICE_NAME, keyNameFor(provider));
+      await electronAPI.deleteApiKey(provider);
       return;
     } catch (err) {
       console.error(`[keychain] Failed to delete key for ${provider}:`, err);
-      return;
     }
+  }
+  if (isLocalStorageAvailable()) {
+    warnLocalStorage();
+    localStorage.removeItem(localStorageKeyFor(provider));
+    return;
   }
   warnFallback();
   memoryStore.delete(keyNameFor(provider));
 }
 
-/** Check if a key exists without returning the key value */
 export async function hasApiKey(provider: ProviderType): Promise<boolean> {
   const key = await getApiKey(provider);
   return key !== null && key.length > 0;
