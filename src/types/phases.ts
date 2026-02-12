@@ -1,4 +1,4 @@
-import type { WorkflowStatusValue } from './workflow.js';
+import type { WorkflowStatusValue } from './workflow';
 
 export interface WorkflowResponse {
   id: string;

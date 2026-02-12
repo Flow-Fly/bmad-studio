@@ -1,4 +1,4 @@
-import { connectionState } from '../state/connection.state.js';
+import { useConnectionStore } from '../stores/connection.store';
 
 export interface WebSocketEvent {
   type: string;
@@ -19,6 +19,10 @@ let intentionalClose = false;
 
 const handlers = new Map<string, Set<EventHandler>>();
 
+function setStatus(status: import('../stores/connection.store').ConnectionStatus) {
+  useConnectionStore.getState().setStatus(status);
+}
+
 function getWsUrl(): string {
   const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
   return `${protocol}//${location.host}/ws`;
@@ -35,12 +39,12 @@ export function connect(): void {
   }
 
   intentionalClose = false;
-  connectionState.set('connecting');
+  setStatus('connecting');
 
   ws = new WebSocket(getWsUrl());
 
   ws.onopen = () => {
-    connectionState.set('connected');
+    setStatus('connected');
     backoff = INITIAL_BACKOFF;
   };
 
@@ -60,14 +64,14 @@ export function connect(): void {
 
   ws.onclose = () => {
     ws = null;
-    connectionState.set('disconnected');
+    setStatus('disconnected');
     if (!intentionalClose) {
       scheduleReconnect();
     }
   };
 
   ws.onerror = () => {
-    connectionState.set('error');
+    setStatus('error');
   };
 }
 
@@ -91,7 +95,7 @@ export function disconnect(): void {
     ws.close();
     ws = null;
   }
-  connectionState.set('disconnected');
+  setStatus('disconnected');
 }
 
 export function send(event: WebSocketEvent): void {

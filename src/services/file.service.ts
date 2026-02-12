@@ -1,4 +1,4 @@
-import type { FileEntry } from '../types/file.js';
+import type { FileEntry } from '../types/file';
 
 const API_BASE = 'http://localhost:3008/api/v1';
 

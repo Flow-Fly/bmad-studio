@@ -1,6 +1,9 @@
 import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+import tailwindcss from '@tailwindcss/vite';
 
 export default defineConfig({
+  plugins: [react(), tailwindcss()],
   server: {
     port: 3007,
     strictPort: true,
@@ -17,12 +20,5 @@ export default defineConfig({
   },
   build: {
     target: 'esnext',
-  },
-  // Pre-bundle Tauri plugins for dynamic imports to work in WebView
-  optimizeDeps: {
-    include: [
-      '@tauri-apps/plugin-dialog',
-      'tauri-plugin-keyring-api',
-    ],
   },
 });

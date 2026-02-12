@@ -1,4 +1,4 @@
-import { send as wsSend, on as wsOn } from './websocket.service.js';
+import { send as wsSend, on as wsOn } from './websocket.service';
 import {
   CHAT_SEND,
   CHAT_CANCEL,
@@ -12,7 +12,7 @@ import {
   CHAT_TOOL_RESULT,
   CHAT_TOOL_CONFIRM,
   CHAT_TOOL_APPROVE,
-} from '../types/conversation.js';
+} from '../types/conversation';
 import type {
   ChatStreamStartPayload,
   ChatTextDeltaPayload,
@@ -26,20 +26,16 @@ import type {
   Message,
   TextBlock,
   ThinkingBlock,
-} from '../types/conversation.js';
-import type { ToolCallBlock } from '../types/tool.js';
-import { isDangerousTool } from '../types/tool.js';
-import {
-  chatConnectionState,
-  streamingConversationId,
-  getConversation,
-  setConversation,
-  pendingToolConfirm,
-  isToolDismissedForSession,
-  clearPendingConfirm,
-} from '../state/chat.state.js';
-import { trustLevelState } from '../state/provider.state.js';
-import type { WebSocketEvent } from './websocket.service.js';
+} from '../types/conversation';
+import type { ToolCallBlock } from '../types/tool';
+import { isDangerousTool } from '../types/tool';
+import { useChatStore } from '../stores/chat.store';
+import { useProviderStore } from '../stores/provider.store';
+import type { WebSocketEvent } from './websocket.service';
+
+function chatState() {
+  return useChatStore.getState();
+}
 
 export function sendMessage(
   conversationId: string,
@@ -49,8 +45,8 @@ export function sendMessage(
   apiKey: string,
   systemPrompt?: string,
 ): void {
-  // Ensure conversation exists in state
-  let conversation = getConversation(conversationId);
+  const state = chatState();
+  let conversation = state.getConversation(conversationId);
   if (!conversation) {
     conversation = {
       id: conversationId,
@@ -62,22 +58,20 @@ export function sendMessage(
     };
   }
 
-  // Add user message to conversation
   const userMessage: Message = {
     id: `msg-user-${crypto.randomUUID()}`,
-    role: 'user' as const,
+    role: 'user',
     content,
     timestamp: Date.now(),
   };
 
-  setConversation({
+  state.setConversation({
     ...conversation,
     messages: [...conversation.messages, userMessage],
   });
 
-  // Set streaming state (also recovers from previous error state)
-  chatConnectionState.set('streaming');
-  streamingConversationId.set(conversationId);
+  state.setConnectionState('streaming');
+  state.setStreamingConversationId(conversationId);
 
   const event: WebSocketEvent = {
     type: CHAT_SEND,
@@ -94,8 +88,8 @@ export function sendMessage(
   try {
     wsSend(event);
   } catch (err) {
-    chatConnectionState.set('idle');
-    streamingConversationId.set(null);
+    state.setConnectionState('idle');
+    state.setStreamingConversationId(null);
     throw err;
   }
 }
@@ -103,9 +97,7 @@ export function sendMessage(
 export function cancelStream(conversationId: string): void {
   const event: WebSocketEvent = {
     type: CHAT_CANCEL,
-    payload: {
-      conversation_id: conversationId,
-    },
+    payload: { conversation_id: conversationId },
     timestamp: new Date().toISOString(),
   };
   wsSend(event);
@@ -113,11 +105,9 @@ export function cancelStream(conversationId: string): void {
 
 function handleStreamStart(event: WebSocketEvent): void {
   const payload = event.payload as ChatStreamStartPayload;
-  const conversation = getConversation(payload.conversation_id);
-  if (!conversation) {
-    console.warn(`Chat: received chat:stream-start for unknown conversation ${payload.conversation_id}`);
-    return;
-  }
+  const state = chatState();
+  const conversation = state.getConversation(payload.conversation_id);
+  if (!conversation) return;
 
   const assistantMessage: Message = {
     id: payload.message_id,
@@ -125,43 +115,37 @@ function handleStreamStart(event: WebSocketEvent): void {
     content: '',
     timestamp: Date.now(),
     isStreaming: true,
-    blocks: [], // Initialize empty blocks array
+    blocks: [],
   };
 
-  const updated = {
+  state.setConversation({
     ...conversation,
     messages: [...conversation.messages, assistantMessage],
-  };
-  setConversation(updated);
-  chatConnectionState.set('streaming');
-  streamingConversationId.set(payload.conversation_id);
+  });
+  state.setConnectionState('streaming');
+  state.setStreamingConversationId(payload.conversation_id);
 }
 
 function handleTextDelta(event: WebSocketEvent): void {
   const payload = event.payload as ChatTextDeltaPayload;
-  const conversation = getConversation(payload.conversation_id);
-  if (!conversation) {
-    console.warn(`Chat: received chat:text-delta for unknown conversation ${payload.conversation_id}`);
-    return;
-  }
+  const state = chatState();
+  const conversation = state.getConversation(payload.conversation_id);
+  if (!conversation) return;
 
   const messages = conversation.messages.map(msg => {
     if (msg.id !== payload.message_id) return msg;
 
-    // Update blocks array
     const blocks = msg.blocks ?? [];
     const lastBlock = blocks[blocks.length - 1];
 
     let updatedBlocks;
     if (lastBlock?.type === 'text') {
-      // Append to existing text block
       updatedBlocks = blocks.map((b, i) =>
         i === blocks.length - 1 && b.type === 'text'
           ? { ...b, content: b.content + payload.content }
           : b,
       );
     } else {
-      // Create new text block
       const newBlock: TextBlock = {
         type: 'text',
         id: `text-${payload.index}`,
@@ -172,38 +156,33 @@ function handleTextDelta(event: WebSocketEvent): void {
 
     return {
       ...msg,
-      content: msg.content + payload.content, // Also update legacy content for backward compat
+      content: msg.content + payload.content,
       blocks: updatedBlocks,
     };
   });
-  setConversation({ ...conversation, messages });
+  state.setConversation({ ...conversation, messages });
 }
 
 function handleThinkingDelta(event: WebSocketEvent): void {
   const payload = event.payload as ChatThinkingDeltaPayload;
-  const conversation = getConversation(payload.conversation_id);
-  if (!conversation) {
-    console.warn(`Chat: received chat:thinking-delta for unknown conversation ${payload.conversation_id}`);
-    return;
-  }
+  const state = chatState();
+  const conversation = state.getConversation(payload.conversation_id);
+  if (!conversation) return;
 
   const messages = conversation.messages.map(msg => {
     if (msg.id !== payload.message_id) return msg;
 
-    // Update blocks array
     const blocks = msg.blocks ?? [];
     const lastBlock = blocks[blocks.length - 1];
 
     let updatedBlocks;
     if (lastBlock?.type === 'thinking') {
-      // Append to existing thinking block
       updatedBlocks = blocks.map((b, i) =>
         i === blocks.length - 1 && b.type === 'thinking'
           ? { ...b, content: b.content + payload.content }
           : b,
       );
     } else {
-      // Create new thinking block
       const newBlock: ThinkingBlock = {
         type: 'thinking',
         id: `thinking-${payload.index}`,
@@ -214,20 +193,18 @@ function handleThinkingDelta(event: WebSocketEvent): void {
 
     return {
       ...msg,
-      thinkingContent: (msg.thinkingContent ?? '') + payload.content, // Also update legacy field
+      thinkingContent: (msg.thinkingContent ?? '') + payload.content,
       blocks: updatedBlocks,
     };
   });
-  setConversation({ ...conversation, messages });
+  state.setConversation({ ...conversation, messages });
 }
 
 function handleStreamEnd(event: WebSocketEvent): void {
   const payload = event.payload as ChatStreamEndPayload;
-  const conversation = getConversation(payload.conversation_id);
-  if (!conversation) {
-    console.warn(`Chat: received chat:stream-end for unknown conversation ${payload.conversation_id}`);
-    return;
-  }
+  const state = chatState();
+  const conversation = state.getConversation(payload.conversation_id);
+  if (!conversation) return;
 
   const messages = conversation.messages.map(msg =>
     msg.id === payload.message_id
@@ -239,17 +216,17 @@ function handleStreamEnd(event: WebSocketEvent): void {
         }
       : msg,
   );
-  setConversation({ ...conversation, messages });
-  // Preserve error state — backend sends stream-end after error events
-  if (chatConnectionState.get() !== 'error') {
-    chatConnectionState.set('idle');
+  state.setConversation({ ...conversation, messages });
+  if (state.connectionState !== 'error') {
+    state.setConnectionState('idle');
   }
-  streamingConversationId.set(null);
+  state.setStreamingConversationId(null);
 }
 
 function handleError(event: WebSocketEvent): void {
   const payload = event.payload as ChatErrorPayload;
-  const conversation = getConversation(payload.conversation_id);
+  const state = chatState();
+  const conversation = state.getConversation(payload.conversation_id);
 
   if (conversation) {
     const messages = conversation.messages.map(msg =>
@@ -257,23 +234,18 @@ function handleError(event: WebSocketEvent): void {
         ? { ...msg, isStreaming: false, content: msg.content || `Error: ${payload.message}` }
         : msg,
     );
-    setConversation({ ...conversation, messages });
-  } else {
-    console.warn(`Chat: received chat:error for unknown conversation ${payload.conversation_id}`);
+    state.setConversation({ ...conversation, messages });
   }
 
-  chatConnectionState.set('error');
-  streamingConversationId.set(null);
+  state.setConnectionState('error');
+  state.setStreamingConversationId(null);
 }
 
-// Tool event handlers
 function handleToolStart(event: WebSocketEvent): void {
   const payload = event.payload as ChatToolStartPayload;
-  const conversation = getConversation(payload.conversation_id);
-  if (!conversation) {
-    console.warn(`Chat: received chat:tool-start for unknown conversation ${payload.conversation_id}`);
-    return;
-  }
+  const state = chatState();
+  const conversation = state.getConversation(payload.conversation_id);
+  if (!conversation) return;
 
   const toolBlock: ToolCallBlock = {
     type: 'tool',
@@ -288,40 +260,36 @@ function handleToolStart(event: WebSocketEvent): void {
 
   const messages = conversation.messages.map(msg => {
     if (msg.id !== payload.message_id) return msg;
-    return {
-      ...msg,
-      blocks: [...(msg.blocks ?? []), toolBlock],
-    };
+    return { ...msg, blocks: [...(msg.blocks ?? []), toolBlock] };
   });
-  setConversation({ ...conversation, messages });
+  state.setConversation({ ...conversation, messages });
 }
 
 function handleToolDelta(event: WebSocketEvent): void {
   const payload = event.payload as ChatToolDeltaPayload;
-  const conversation = getConversation(payload.conversation_id);
+  const state = chatState();
+  const conversation = state.getConversation(payload.conversation_id);
   if (!conversation) return;
 
   const messages = conversation.messages.map(msg => {
     if (msg.id !== payload.message_id || !msg.blocks) return msg;
-
     const blocks = msg.blocks.map(block => {
       if (block.type !== 'tool' || block.toolId !== payload.tool_id) return block;
       return { ...block, inputRaw: block.inputRaw + payload.chunk };
     });
-
     return { ...msg, blocks };
   });
-  setConversation({ ...conversation, messages });
+  state.setConversation({ ...conversation, messages });
 }
 
 function handleToolResult(event: WebSocketEvent): void {
   const payload = event.payload as ChatToolResultPayload;
-  const conversation = getConversation(payload.conversation_id);
+  const state = chatState();
+  const conversation = state.getConversation(payload.conversation_id);
   if (!conversation) return;
 
   const messages = conversation.messages.map(msg => {
     if (msg.id !== payload.message_id || !msg.blocks) return msg;
-
     const blocks = msg.blocks.map(block => {
       if (block.type !== 'tool' || block.toolId !== payload.tool_id) return block;
       return {
@@ -332,37 +300,31 @@ function handleToolResult(event: WebSocketEvent): void {
         completedAt: Date.now(),
       } as ToolCallBlock;
     });
-
     return { ...msg, blocks };
   });
-  setConversation({ ...conversation, messages });
+  state.setConversation({ ...conversation, messages });
 }
 
 function handleToolConfirm(event: WebSocketEvent): void {
   const payload = event.payload as ChatToolConfirmPayload;
+  const trustLevel = useProviderStore.getState().trustLevel;
 
-  const trustLevel = trustLevelState.get();
-
-  // Autonomous mode: auto-approve everything
   if (trustLevel === 'autonomous') {
     sendToolApprove(payload.tool_id, true);
     return;
   }
 
-  // Check if this tool is dismissed for session
-  if (isToolDismissedForSession(payload.tool_name)) {
+  if (chatState().isToolDismissedForSession(payload.tool_name)) {
     sendToolApprove(payload.tool_id, true);
     return;
   }
 
-  // Guided mode: only prompt for dangerous tools
   if (trustLevel === 'guided' && !isDangerousTool(payload.tool_name)) {
     sendToolApprove(payload.tool_id, true);
     return;
   }
 
-  // Set pending confirmation for UI (supervised mode, or dangerous tool in guided mode)
-  pendingToolConfirm.set({
+  chatState().setPendingToolConfirm({
     conversationId: payload.conversation_id,
     messageId: payload.message_id,
     toolId: payload.tool_id,
@@ -378,16 +340,12 @@ export function sendToolApprove(toolId: string, approved: boolean): void {
     timestamp: new Date().toISOString(),
   };
   wsSend(event);
-  clearPendingConfirm();
+  chatState().clearPendingConfirm();
 }
 
-/**
- * Inject context into a conversation as an invisible message.
- * The message uses role 'user' with isContext=true so it is included in LLM
- * history but not rendered in the chat UI.
- */
 export function injectContext(conversationId: string, content: string, label: string): void {
-  const conversation = getConversation(conversationId);
+  const state = chatState();
+  const conversation = state.getConversation(conversationId);
   if (!conversation) return;
 
   const contextMessage: Message = {
@@ -399,7 +357,7 @@ export function injectContext(conversationId: string, content: string, label: st
     contextLabel: label,
   };
 
-  setConversation({
+  state.setConversation({
     ...conversation,
     messages: [...conversation.messages, contextMessage],
   });
@@ -412,7 +370,6 @@ export function initChatService(): () => void {
     wsOn(CHAT_THINKING_DELTA, handleThinkingDelta),
     wsOn(CHAT_STREAM_END, handleStreamEnd),
     wsOn(CHAT_ERROR, handleError),
-    // Tool event handlers
     wsOn(CHAT_TOOL_START, handleToolStart),
     wsOn(CHAT_TOOL_DELTA, handleToolDelta),
     wsOn(CHAT_TOOL_RESULT, handleToolResult),
@@ -420,8 +377,6 @@ export function initChatService(): () => void {
   ];
 
   return () => {
-    for (const cleanup of cleanups) {
-      cleanup();
-    }
+    for (const cleanup of cleanups) cleanup();
   };
 }

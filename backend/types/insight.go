@@ -1,13 +1,21 @@
 package types
 
+// HighlightedSection represents a user-highlighted text span sent with compact requests.
+type HighlightedSection struct {
+	Color       string `json:"color"`
+	Text        string `json:"text"`
+	MessageRole string `json:"message_role"`
+}
+
 // CompactInsightRequest is the payload for POST /projects/{id}/insights/compact.
 type CompactInsightRequest struct {
-	Messages            []CompactMessage `json:"messages"`
-	Provider            string           `json:"provider"`
-	Model               string           `json:"model"`
-	APIKey              string           `json:"api_key"`
-	SourceAgent         string           `json:"source_agent"`
-	HighlightColorsUsed []string         `json:"highlight_colors_used"`
+	Messages            []CompactMessage    `json:"messages"`
+	Provider            string              `json:"provider"`
+	Model               string              `json:"model"`
+	APIKey              string              `json:"api_key"`
+	SourceAgent         string              `json:"source_agent"`
+	HighlightColorsUsed []string            `json:"highlight_colors_used"`
+	HighlightedSections []HighlightedSection `json:"highlighted_sections,omitempty"`
 }
 
 // CompactMessage is a simplified message for the compact endpoint (no tool fields).
