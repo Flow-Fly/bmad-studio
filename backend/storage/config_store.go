@@ -1,7 +1,6 @@
 package storage
 
 import (
-	"encoding/json"
 	"log"
 	"os"
 	"path/filepath"
@@ -16,21 +15,11 @@ type ConfigStore struct {
 	filePath string
 }
 
-// NewConfigStore creates a ConfigStore that persists to ~/bmad-studio/config.json.
-func NewConfigStore() (*ConfigStore, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return nil, err
-	}
-
-	dir := filepath.Join(home, "bmad-studio")
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		return nil, err
-	}
-
+// NewConfigStore creates a ConfigStore using the given CentralStore's config.json path.
+func NewConfigStore(store *CentralStore) *ConfigStore {
 	return &ConfigStore{
-		filePath: filepath.Join(dir, "config.json"),
-	}, nil
+		filePath: filepath.Join(store.rootDir, "config.json"),
+	}
 }
 
 // NewConfigStoreWithPath creates a ConfigStore with a custom file path (used for testing).
@@ -64,16 +53,15 @@ func (cs *ConfigStore) Load() (types.Settings, error) {
 
 // loadLocked reads settings without acquiring a lock (caller must hold mu).
 func (cs *ConfigStore) loadLocked() (types.Settings, error) {
-	data, err := os.ReadFile(cs.filePath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return DefaultSettings(), nil
-		}
-		return types.Settings{}, err
+	var s types.Settings
+	err := ReadJSON(cs.filePath, &s)
+
+	if os.IsNotExist(err) {
+		return DefaultSettings(), nil
 	}
 
-	var s types.Settings
-	if err := json.Unmarshal(data, &s); err != nil {
+	if err != nil {
+		// Corruption detected
 		log.Printf("Warning: config file %s is corrupted, using defaults: %v", cs.filePath, err)
 		return DefaultSettings(), nil
 	}
@@ -96,12 +84,7 @@ func (cs *ConfigStore) Save(s types.Settings) error {
 
 // saveLocked writes settings without acquiring a lock (caller must hold mu).
 func (cs *ConfigStore) saveLocked(s types.Settings) error {
-	data, err := json.MarshalIndent(s, "", "  ")
-	if err != nil {
-		return err
-	}
-
-	return os.WriteFile(cs.filePath, data, 0644)
+	return WriteJSON(cs.filePath, s)
 }
 
 // Update atomically loads, modifies, and saves settings under a single lock.

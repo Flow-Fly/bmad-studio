@@ -1,0 +1,136 @@
+# generated: 2026-02-12
+# project: bmad-studio
+# project_key: bmad-studio
+# tracking_system: file-system
+# story_location: _bmad-output/implementation-artifacts
+
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:
+#   - backlog: Epic not yet started
+#   - in-progress: Epic actively being worked on
+#   - done: All stories in epic completed
+#
+# Epic Status Transitions:
+#   - backlog → in-progress: Automatically when first story is created (via create-story)
+#   - in-progress → done: Manually when all stories reach 'done' status
+#
+# Story Status:
+#   - backlog: Story only exists in epic file
+#   - ready-for-dev: Story file created in stories folder
+#   - in-progress: Developer actively working on implementation
+#   - review: Ready for code review (via Dev's code-review workflow)
+#   - done: Story completed
+#
+# Retrospective Status:
+#   - optional: Can be completed but not required
+#   - done: Retrospective has been completed
+#
+# WORKFLOW NOTES:
+# ===============
+# - Epic transitions to 'in-progress' automatically when first story is created
+# - Stories can be worked in parallel if team capacity allows
+# - SM typically creates next story after previous one is 'done' to incorporate learnings
+# - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
+#
+# ARCHITECTURE NOTE:
+# ==================
+# This sprint status reflects the NEW architecture (Epics 1-11).
+# Previous architecture (old Epics 0-7) was deprecated — see:
+#   _bmad-output/planning-artifacts/epics/previous-epics-deprecation-summary.md
+# Old Epics 0-3 were completed, old Epics 4-7 were superseded by new epics.
+
+generated: 2026-02-12
+project: bmad-studio
+project_key: bmad-studio
+tracking_system: file-system
+story_location: _bmad-output/implementation-artifacts
+
+development_status:
+  # Epic 1: Central Store, Project Registry & Backend Foundation
+  epic-1: done
+  1-1-central-store-initialization-atomic-write-layer: done
+  1-2-project-registration-store-directory-setup: done
+  1-3-project-management-rest-api: done
+  1-4-websocket-event-hub: done
+  epic-1-retrospective: optional
+
+  # Epic 2: Stream Lifecycle Management
+  epic-2: backlog
+  2-1-create-stream: backlog
+  2-2-list-view-streams: backlog
+  2-3-archive-stream: backlog
+  2-4-stream-rest-endpoints: backlog
+  epic-2-retrospective: optional
+
+  # Epic 3: Artifact Detection & Phase State
+  epic-3: backlog
+  3-1-artifact-file-watcher: backlog
+  3-2-phase-derivation-logic: backlog
+  3-3-artifact-listing-content-reading: backlog
+  epic-3-retrospective: optional
+
+  # Epic 4: App Shell & Per-Stream Phase Graph
+  epic-4: backlog
+  4-1-design-tokens-tailwind-configuration: backlog
+  4-2-app-shell-layout: backlog
+  4-3-frontend-stores-service-layer: backlog
+  4-4-stream-navigation-ui: backlog
+  4-5-phase-graph-rendering: backlog
+  4-6-phase-graph-interaction-accessibility: backlog
+  4-7-session-orientation-components: backlog
+  4-8-electron-packaging-distribution: backlog
+  epic-4-retrospective: optional
+
+  # Epic 5: Worktree Operations
+  epic-5: backlog
+  5-1-create-worktree-for-stream: backlog
+  5-2-switch-to-stream-worktree: backlog
+  5-3-cleanup-worktree-on-archive: backlog
+  epic-5-retrospective: optional
+
+  # Epic 6: OpenCode Server Lifecycle
+  epic-6: backlog
+  6-1-go-sidecar-process-management: backlog
+  6-2-opencode-server-spawning-health-monitoring: backlog
+  6-3-opencode-detection-not-installed-handling: backlog
+  epic-6-retrospective: optional
+
+  # Epic 7: OpenCode Session Orchestration
+  epic-7: backlog
+  7-1-ipc-bridge-preload-setup: backlog
+  7-2-opencode-sdk-client: backlog
+  7-3-sse-event-subscription-forwarding: backlog
+  7-4-workflow-launch-from-phase-graph: backlog
+  epic-7-retrospective: optional
+
+  # Epic 8: Session Chat UI
+  epic-8: backlog
+  8-1-opencode-store-event-hook: backlog
+  8-2-chat-panel-message-rendering: backlog
+  8-3-chat-input-session-interaction: backlog
+  8-4-conversation-layout-auto-scroll: backlog
+  epic-8-retrospective: optional
+
+  # Epic 9: Permission & Interaction Handling
+  epic-9: backlog
+  9-1-permission-dialog: backlog
+  9-2-question-dialog: backlog
+  9-3-error-recovery-timeout-handling: backlog
+  epic-9-retrospective: optional
+
+  # Epic 10: Multi-Stream Dashboard
+  epic-10: backlog
+  10-1-dashboard-project-overview: backlog
+  10-2-stream-creation-modal: backlog
+  10-3-artifact-viewer: backlog
+  10-4-command-palette: backlog
+  epic-10-retrospective: optional
+
+  # Epic 11: Settings, Connectivity & Operational Awareness
+  epic-11: backlog
+  11-1-settings-panel: backlog
+  11-2-provider-configuration-sync: backlog
+  11-3-connectivity-detection-offline-mode: backlog
+  11-4-cost-tracking-display: backlog
+  epic-11-retrospective: optional

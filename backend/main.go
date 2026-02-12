@@ -28,7 +28,7 @@ func initToolLayer(projectRoot, projectName string, hub *websocket.Hub, configSt
 	}
 
 	homeDir, _ := os.UserHomeDir()
-	centralRoot := filepath.Join(homeDir, "bmad-studio", "projects", projectName)
+	centralRoot := filepath.Join(homeDir, ".bmad-studio", "projects", projectName)
 
 	sandbox := tools.NewSandbox(projectRoot, centralRoot)
 	registry := tools.NewRegistry()
@@ -82,10 +82,25 @@ func main() {
 
 	providerService := services.NewProviderService()
 
-	configStore, err := storage.NewConfigStore()
+	// Initialize central store first
+	centralStore, err := storage.NewCentralStore()
 	if err != nil {
-		log.Printf("Warning: Failed to initialize config store: %v", err)
+		log.Fatalf("Fatal: Failed to create central store: %v", err)
 	}
+	if err := centralStore.Init(); err != nil {
+		log.Fatalf("Fatal: Failed to initialize central store: %v", err)
+	}
+	log.Printf("Central store initialized at: %s", centralStore.RootDir())
+
+	// Create config store using central store
+	configStore := storage.NewConfigStore(centralStore)
+
+	// Create registry store and project store using central store
+	registryStore := storage.NewRegistryStore(centralStore)
+	projectStore := storage.NewProjectStore(centralStore)
+
+	// Create project service
+	projectService := services.NewProjectService(registryStore, projectStore)
 
 	// Create insight store and service
 	insightStore, err := storage.NewInsightStore()
@@ -222,6 +237,7 @@ func main() {
 		Hub:            hub,
 		ProjectManager: projectManager,
 		Insight:        insightService,
+		Project:        projectService, // Prepared for Story 1.3: REST API endpoints
 	})
 
 	stop := make(chan os.Signal, 1)
