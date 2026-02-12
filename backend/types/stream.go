@@ -15,15 +15,24 @@ const (
 	StreamTypeFull StreamType = "full"
 )
 
+// StreamOutcome represents the outcome when a stream is archived
+type StreamOutcome string
+
+const (
+	StreamOutcomeMerged    StreamOutcome = "merged"
+	StreamOutcomeAbandoned StreamOutcome = "abandoned"
+)
+
 // StreamMeta represents the metadata for a stream
 type StreamMeta struct {
-	Name      string       `json:"name"`
-	Project   string       `json:"project"`
-	Status    StreamStatus `json:"status"`
-	Type      StreamType   `json:"type"`
-	Phase     string       `json:"phase,omitempty"`
-	Branch    string       `json:"branch,omitempty"`
-	Worktree  string       `json:"worktree,omitempty"`
-	CreatedAt string       `json:"createdAt"`
-	UpdatedAt string       `json:"updatedAt"`
+	Name      string         `json:"name"`
+	Project   string         `json:"project"`
+	Status    StreamStatus   `json:"status"`
+	Type      StreamType     `json:"type"`
+	Phase     string         `json:"phase,omitempty"`
+	Branch    string         `json:"branch,omitempty"`
+	Worktree  string         `json:"worktree,omitempty"`
+	Outcome   StreamOutcome  `json:"outcome,omitempty"`
+	CreatedAt string         `json:"createdAt"`
+	UpdatedAt string         `json:"updatedAt"`
 }

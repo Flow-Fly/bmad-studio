@@ -426,3 +426,241 @@ func TestStreamService_Get_ErrorIfProjectNotFound(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "project not found")
 }
+
+func TestStreamService_Archive_SuccessWithMergedOutcome(t *testing.T) {
+	streamService, store, hub, rootDir := setupStreamService(t)
+
+	// Register a project
+	projectName := "test-project"
+	projectPath := filepath.Join(rootDir, "test-project-repo")
+	err := os.MkdirAll(projectPath, 0755)
+	require.NoError(t, err)
+
+	registryStore := storage.NewRegistryStore(store)
+	err = registryStore.AddProject(types.RegistryEntry{
+		Name:     projectName,
+		RepoPath: projectPath,
+	})
+	require.NoError(t, err)
+
+	// Create active stream
+	streamName := "payment-integration"
+	_, err = streamService.Create(projectName, streamName)
+	require.NoError(t, err)
+	hub.events = make([]*types.WebSocketEvent, 0) // Reset events after create
+
+	// Archive stream
+	meta, err := streamService.Archive(projectName, streamName, "merged")
+	require.NoError(t, err)
+	require.NotNil(t, meta)
+
+	// Verify metadata
+	assert.Equal(t, streamName, meta.Name)
+	assert.Equal(t, types.StreamStatusArchived, meta.Status)
+	assert.Equal(t, types.StreamOutcomeMerged, meta.Outcome)
+
+	// Verify WebSocket event was broadcast
+	require.Len(t, hub.events, 1)
+	event := hub.events[0]
+	assert.Equal(t, types.EventTypeStreamArchived, event.Type)
+
+	// Verify payload
+	payloadBytes, err := json.Marshal(event.Payload)
+	require.NoError(t, err)
+
+	var payload types.StreamArchivedPayload
+	err = json.Unmarshal(payloadBytes, &payload)
+	require.NoError(t, err)
+
+	assert.Equal(t, projectName, payload.ProjectID)
+	assert.Equal(t, projectName+"-"+streamName, payload.StreamID)
+	assert.Equal(t, "merged", payload.Outcome)
+}
+
+func TestStreamService_Archive_SuccessWithAbandonedOutcome(t *testing.T) {
+	streamService, store, hub, rootDir := setupStreamService(t)
+
+	// Register a project
+	projectName := "test-project"
+	projectPath := filepath.Join(rootDir, "test-project-repo")
+	err := os.MkdirAll(projectPath, 0755)
+	require.NoError(t, err)
+
+	registryStore := storage.NewRegistryStore(store)
+	err = registryStore.AddProject(types.RegistryEntry{
+		Name:     projectName,
+		RepoPath: projectPath,
+	})
+	require.NoError(t, err)
+
+	// Create active stream
+	streamName := "cancelled-feature"
+	_, err = streamService.Create(projectName, streamName)
+	require.NoError(t, err)
+	hub.events = make([]*types.WebSocketEvent, 0)
+
+	// Archive with abandoned outcome
+	meta, err := streamService.Archive(projectName, streamName, "abandoned")
+	require.NoError(t, err)
+	assert.Equal(t, types.StreamOutcomeAbandoned, meta.Outcome)
+
+	// Verify event payload
+	require.Len(t, hub.events, 1)
+	event := hub.events[0]
+	payloadBytes, _ := json.Marshal(event.Payload)
+	var payload types.StreamArchivedPayload
+	json.Unmarshal(payloadBytes, &payload)
+	assert.Equal(t, "abandoned", payload.Outcome)
+}
+
+func TestStreamService_Archive_InvalidOutcome(t *testing.T) {
+	streamService, store, _, rootDir := setupStreamService(t)
+
+	// Register a project
+	projectName := "test-project"
+	projectPath := filepath.Join(rootDir, "test-project-repo")
+	err := os.MkdirAll(projectPath, 0755)
+	require.NoError(t, err)
+
+	registryStore := storage.NewRegistryStore(store)
+	err = registryStore.AddProject(types.RegistryEntry{
+		Name:     projectName,
+		RepoPath: projectPath,
+	})
+	require.NoError(t, err)
+
+	// Create active stream
+	streamName := "feature-1"
+	_, err = streamService.Create(projectName, streamName)
+	require.NoError(t, err)
+
+	// Attempt to archive with invalid outcome
+	_, err = streamService.Archive(projectName, streamName, "cancelled")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid outcome")
+}
+
+func TestStreamService_Archive_ProjectNotFound(t *testing.T) {
+	streamService, _, _, _ := setupStreamService(t)
+
+	// Attempt to archive stream for non-existent project
+	_, err := streamService.Archive("nonexistent-project", "feature-1", "merged")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "project not found")
+}
+
+func TestStreamService_Archive_StreamNotFound(t *testing.T) {
+	streamService, store, _, rootDir := setupStreamService(t)
+
+	// Register a project
+	projectName := "test-project"
+	projectPath := filepath.Join(rootDir, "test-project-repo")
+	err := os.MkdirAll(projectPath, 0755)
+	require.NoError(t, err)
+
+	registryStore := storage.NewRegistryStore(store)
+	err = registryStore.AddProject(types.RegistryEntry{
+		Name:     projectName,
+		RepoPath: projectPath,
+	})
+	require.NoError(t, err)
+
+	// Attempt to archive non-existent stream
+	_, err = streamService.Archive(projectName, "nonexistent-stream", "merged")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "stream not found")
+}
+
+func TestStreamService_Archive_AlreadyArchivedError(t *testing.T) {
+	streamService, store, _, rootDir := setupStreamService(t)
+
+	// Register a project
+	projectName := "test-project"
+	projectPath := filepath.Join(rootDir, "test-project-repo")
+	err := os.MkdirAll(projectPath, 0755)
+	require.NoError(t, err)
+
+	registryStore := storage.NewRegistryStore(store)
+	err = registryStore.AddProject(types.RegistryEntry{
+		Name:     projectName,
+		RepoPath: projectPath,
+	})
+	require.NoError(t, err)
+
+	// Create and archive stream
+	streamName := "feature-1"
+	_, err = streamService.Create(projectName, streamName)
+	require.NoError(t, err)
+
+	_, err = streamService.Archive(projectName, streamName, "merged")
+	require.NoError(t, err)
+
+	// Attempt to archive again
+	_, err = streamService.Archive(projectName, streamName, "merged")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "stream not found")
+}
+
+func TestStreamService_Archive_BroadcastsEvent(t *testing.T) {
+	streamService, store, hub, rootDir := setupStreamService(t)
+
+	// Register a project
+	projectName := "test-project"
+	projectPath := filepath.Join(rootDir, "test-project-repo")
+	err := os.MkdirAll(projectPath, 0755)
+	require.NoError(t, err)
+
+	registryStore := storage.NewRegistryStore(store)
+	err = registryStore.AddProject(types.RegistryEntry{
+		Name:     projectName,
+		RepoPath: projectPath,
+	})
+	require.NoError(t, err)
+
+	// Create and archive stream
+	streamName := "feature-1"
+	_, err = streamService.Create(projectName, streamName)
+	require.NoError(t, err)
+	hub.events = make([]*types.WebSocketEvent, 0)
+
+	_, err = streamService.Archive(projectName, streamName, "merged")
+	require.NoError(t, err)
+
+	// Verify event
+	require.Len(t, hub.events, 1)
+	event := hub.events[0]
+	assert.Equal(t, types.EventTypeStreamArchived, event.Type)
+}
+
+func TestStreamService_Archive_ExcludedFromList(t *testing.T) {
+	streamService, store, _, rootDir := setupStreamService(t)
+
+	// Register a project
+	projectName := "test-project"
+	projectPath := filepath.Join(rootDir, "test-project-repo")
+	err := os.MkdirAll(projectPath, 0755)
+	require.NoError(t, err)
+
+	registryStore := storage.NewRegistryStore(store)
+	err = registryStore.AddProject(types.RegistryEntry{
+		Name:     projectName,
+		RepoPath: projectPath,
+	})
+	require.NoError(t, err)
+
+	// Create two streams
+	_, err = streamService.Create(projectName, "feature-1")
+	require.NoError(t, err)
+	_, err = streamService.Create(projectName, "feature-2")
+	require.NoError(t, err)
+
+	// Archive one stream
+	_, err = streamService.Archive(projectName, "feature-1", "merged")
+	require.NoError(t, err)
+
+	// List streams - archived should be excluded
+	streams, err := streamService.List(projectName)
+	require.NoError(t, err)
+	require.Len(t, streams, 1)
+	assert.Equal(t, "feature-2", streams[0].Name)
+}
