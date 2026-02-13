@@ -133,16 +133,17 @@ function buildTooltipContent(
   return parts.join('\n');
 }
 
+function getWorkflowTypeName(node: PhaseGraphNodeType): string {
+  if (node.is_required) return 'required';
+  if (node.is_optional) return 'optional';
+  return 'conditional';
+}
+
 function buildAriaLabel(
   node: PhaseGraphNodeType,
   visualState: NodeVisualState,
 ): string {
-  const typePart = node.is_required
-    ? 'required'
-    : node.is_optional
-      ? 'optional'
-      : 'conditional';
-  let label = `${node.label}, Phase ${node.phase_num}, ${typePart}, ${visualState}`;
+  let label = `${node.label}, Phase ${node.phase_num}, ${getWorkflowTypeName(node)}, ${visualState}`;
   if (visualState === 'locked' && node.unmet_dependencies.length > 0) {
     const depNames = node.unmet_dependencies.map(id => formatWorkflowLabel(id));
     label += ` — blocked by: ${depNames.join(', ')}`;

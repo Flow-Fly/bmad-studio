@@ -43,6 +43,7 @@ type debounceEntry struct {
 	hadDelete bool // tracks if a delete occurred in this debounce window
 }
 
+// Deprecated: FileWatcherService is replaced by WatcherService for central store (Story 3.1).
 // FileWatcherService watches the output folder for file changes
 type FileWatcherService struct {
 	mu                    sync.RWMutex

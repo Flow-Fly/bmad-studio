@@ -27,6 +27,11 @@ func (s *StreamStore) streamDir(projectName, streamName string) string {
 	return filepath.Join(s.store.rootDir, "projects", projectName+"-"+streamName)
 }
 
+// StreamDir returns the path to a stream directory (exported for use by other services)
+func (s *StreamStore) StreamDir(projectName, streamName string) string {
+	return s.streamDir(projectName, streamName)
+}
+
 // archivedStreamDir returns the path to an archived stream directory
 func (s *StreamStore) archivedStreamDir(projectName, streamName string) string {
 	return filepath.Join(s.store.rootDir, "projects", "archive", projectName+"-"+streamName)

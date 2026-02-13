@@ -53,20 +53,27 @@ export function formatWorkflowLabel(id: string): string {
     .join(' ');
 }
 
+const STATUS_TO_VISUAL_STATE: Partial<Record<WorkflowStatusValue, NodeVisualState>> = {
+  complete: 'complete',
+  skipped: 'skipped',
+  conditional: 'conditional',
+  required: 'required',
+  recommended: 'recommended',
+  optional: 'optional',
+};
+
 export function getNodeVisualState(
   status: WorkflowStatusValue,
   isCurrent: boolean,
   dependenciesMet: boolean = true,
 ): NodeVisualState {
   if (isCurrent) return 'current';
-  if (status === 'complete') return 'complete';
-  if (status === 'skipped') return 'skipped';
+  // Complete and skipped states take priority over dependency checks
+  if (status === 'complete' || status === 'skipped') {
+    return STATUS_TO_VISUAL_STATE[status]!;
+  }
   if (!dependenciesMet) return 'locked';
-  if (status === 'conditional') return 'conditional';
-  if (status === 'required') return 'required';
-  if (status === 'recommended') return 'recommended';
-  if (status === 'optional') return 'optional';
-  return 'not-started';
+  return STATUS_TO_VISUAL_STATE[status] ?? 'not-started';
 }
 
 /**

@@ -108,6 +108,20 @@ func main() {
 	// Create stream service
 	streamService := services.NewStreamService(streamStore, registryStore, hub)
 
+	// Create stream artifact service
+	streamArtifactService := services.NewStreamArtifactService(streamStore)
+
+	// Create and start watcher service for central store stream directories
+	watcherService := services.NewWatcherService(centralStore, streamStore, registryStore, hub)
+	if err := watcherService.Start(); err != nil {
+		log.Printf("Warning: Failed to start watcher service: %v", err)
+	} else {
+		// Wire watcher hook into stream service for dynamic stream create/archive notifications
+		streamService.SetWatcherHook(watcherService)
+		// Wire phase deriver into stream service for on-demand phase derivation
+		streamService.SetPhaseDeriver(watcherService)
+	}
+
 	// Create insight store and service
 	insightStore, err := storage.NewInsightStore()
 	if err != nil {
@@ -244,7 +258,8 @@ func main() {
 		ProjectManager: projectManager,
 		Insight:        insightService,
 		Project:        projectService,
-		Stream:         streamService,
+		Stream:          streamService,
+		StreamArtifact:  streamArtifactService,
 	})
 
 	stop := make(chan os.Signal, 1)
@@ -268,6 +283,7 @@ func main() {
 	}
 
 	serverCancel()
+	watcherService.Stop()
 	projectManager.Stop()
 	hub.Stop()
 
