@@ -1,6 +1,7 @@
-import { CircleCheck, CircleDot, Circle, Lock } from 'lucide-react';
+import { CircleCheck, CircleDot, Circle, Lock, FileText } from 'lucide-react';
 import type { PhaseGraphNode as PhaseGraphNodeType, NodeVisualState } from '../../types/phases';
 import { formatWorkflowLabel } from '../../lib/phase-utils';
+import { AgentBadge } from './AgentBadge';
 import {
   Tooltip,
   TooltipTrigger,
@@ -26,6 +27,8 @@ interface PhaseNodeProps {
   compact?: boolean;
   focused?: boolean;
   nodeIndex?: number;
+  artifactPath?: string | null;
+  isSuggested?: boolean;
   onFocus?: () => void;
 }
 
@@ -35,6 +38,8 @@ export function PhaseNode({
   compact = false,
   focused = false,
   nodeIndex,
+  artifactPath,
+  isSuggested = false,
   onFocus,
 }: PhaseNodeProps) {
   const Icon = STATE_ICONS[visualState];
@@ -43,8 +48,12 @@ export function PhaseNode({
       ? node.label.substring(0, 10)
       : node.label;
   const isLocked = visualState === 'locked';
+  const hasArtifact = !!artifactPath;
+  const showPulse =
+    isSuggested &&
+    (visualState === 'not-started' || visualState === 'required');
 
-  const tooltipContent = buildTooltipContent(node, visualState);
+  const tooltipContent = buildTooltipContent(node, visualState, hasArtifact);
   const ariaLabel = buildAriaLabel(node, visualState);
 
   return (
@@ -66,6 +75,8 @@ export function PhaseNode({
             visualState === 'recommended' && 'border-accent border-dashed',
             visualState === 'optional' && 'border-border-primary border-dashed',
             visualState === 'not-started' && 'border-border-primary',
+            // Pulse animation for suggested starting point
+            showPulse && 'animate-[node-pulse_2s_ease-in-out_infinite]',
           )}
           role="button"
           tabIndex={focused ? 0 : -1}
@@ -75,6 +86,9 @@ export function PhaseNode({
           data-workflow-id={node.workflow_id}
           onFocus={onFocus}
         >
+          {node.agent && (
+            <AgentBadge agent={node.agent} compact={compact} />
+          )}
           <Icon
             className={cn(
               'shrink-0',
@@ -105,6 +119,18 @@ export function PhaseNode({
           >
             {labelText}
           </span>
+          {hasArtifact && (
+            <FileText
+              className={cn(
+                'shrink-0',
+                compact ? 'h-2.5 w-2.5' : 'h-3 w-3',
+                visualState === 'complete'
+                  ? 'text-[var(--status-complete)]'
+                  : 'text-[var(--interactive-muted)]',
+              )}
+              aria-label="Has artifact"
+            />
+          )}
         </div>
       </TooltipTrigger>
       <TooltipContent className="whitespace-pre-line">
@@ -117,6 +143,7 @@ export function PhaseNode({
 function buildTooltipContent(
   node: PhaseGraphNodeType,
   visualState: NodeVisualState,
+  hasArtifact: boolean,
 ): string {
   const parts = [node.label];
   parts.push(`Status: ${visualState}`);
@@ -125,6 +152,9 @@ function buildTooltipContent(
   }
   if (node.purpose) {
     parts.push(`Purpose: ${node.purpose}`);
+  }
+  if (hasArtifact) {
+    parts.push('Artifact: available');
   }
   if (visualState === 'locked' && node.unmet_dependencies.length > 0) {
     const depNames = node.unmet_dependencies.map(id => formatWorkflowLabel(id));

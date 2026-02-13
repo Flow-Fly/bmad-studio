@@ -1,8 +1,11 @@
+import { useEffect } from 'react';
 import { GitBranch } from 'lucide-react';
 
 import { useStreamStore } from '@/stores/stream.store';
+import { usePhaseStore } from '@/stores/phase.store';
 import { Badge } from '@/components/ui/badge';
 import { PhaseDotIndicator } from '@/components/streams/PhaseDotIndicator';
+import { PhaseGraphContainer } from '@/components/phase-graph/PhaseGraphContainer';
 import { formatRelativeTime } from '@/lib/format-utils';
 
 function capitalize(s: string): string {
@@ -13,6 +16,17 @@ export function StreamDetail() {
   const activeStreamId = useStreamStore((s) => s.activeStreamId);
   const streams = useStreamStore((s) => s.streams);
   const stream = streams.find((s) => s.name === activeStreamId);
+  const fetchPhaseData = usePhaseStore((s) => s.fetchPhaseData);
+  const clearPhaseState = usePhaseStore((s) => s.clearPhaseState);
+
+  // Fetch phase data when active stream changes
+  useEffect(() => {
+    if (activeStreamId) {
+      fetchPhaseData();
+    } else {
+      clearPhaseState();
+    }
+  }, [activeStreamId, fetchPhaseData, clearPhaseState]);
 
   if (!stream) {
     return (
@@ -54,12 +68,9 @@ export function StreamDetail() {
         </div>
       </div>
 
-      {/* Phase graph placeholder — Story 4.5 will replace this */}
-      <div className="flex flex-1 flex-col items-center justify-center">
-        <GitBranch className="mb-4 h-12 w-12 text-interactive-muted" />
-        <p className="text-[length:var(--text-md)] text-interactive-muted">
-          Phase graph coming soon
-        </p>
+      {/* Phase graph */}
+      <div className="flex-1 overflow-auto">
+        <PhaseGraphContainer />
       </div>
     </div>
   );
