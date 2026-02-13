@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Repeat } from 'lucide-react';
 import { computePhaseGraphNodes, computePhaseGraphEdges, getNodeVisualState } from '../../lib/phase-utils';
 import type { PhasesResponse, PhaseGraphNode } from '../../types/phases';
+import { usePhaseStore } from '../../stores/phase.store';
 import { PhaseNode } from './PhaseNode';
 import { TooltipProvider } from '../ui/tooltip';
 import { cn } from '../../lib/utils';
@@ -21,10 +22,6 @@ interface PhaseColumn {
   nodes: PhaseGraphNode[];
 }
 
-// NOTE: Phase graph data sources (phases + workflow status) will be wired
-// in Story 4-5 (Phase Graph Rendering). Until then, this component renders
-// a skeleton placeholder since there is no data provider.
-
 export function PhaseGraphContainer() {
   const [compact, setCompact] = useState(false);
   const [focusedIndex, setFocusedIndex] = useState(-1);
@@ -33,9 +30,11 @@ export function PhaseGraphContainer() {
   const graphRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
 
-  // Placeholder: phases and workflow status will be provided in Story 4-5
-  const phases: PhasesResponse | null = null;
-  const workflowStatus = null;
+  const phases = usePhaseStore((s) => s.phases);
+  const workflowStatus = usePhaseStore((s) => s.workflowStatus);
+  const loading = usePhaseStore((s) => s.loading);
+  const error = usePhaseStore((s) => s.error);
+  const fetchPhaseData = usePhaseStore((s) => s.fetchPhaseData);
 
   const nodes = useMemo(
     () => computePhaseGraphNodes(phases, workflowStatus),
@@ -191,9 +190,33 @@ export function PhaseGraphContainer() {
     [nodes, focusedIndex],
   );
 
-  // Loading / no-data skeleton (always shown until Story 4-5 wires data)
-  if (!phases || !workflowStatus || !nodes.length) {
+  // Error state
+  if (error) {
+    return (
+      <div className="flex w-full flex-col items-center justify-center gap-3 p-6">
+        <p className="text-[length:var(--text-sm)] text-[var(--status-blocked)]">
+          {error}
+        </p>
+        <button
+          className="rounded-[var(--radius-md)] border border-border-primary bg-bg-tertiary px-3 py-1.5 text-[length:var(--text-sm)] text-text-primary transition-colors hover:bg-bg-secondary"
+          onClick={() => fetchPhaseData()}
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
+
+  // Loading / no-data skeleton
+  if (loading || !phases || !workflowStatus || !nodes.length) {
     return renderSkeleton();
+  }
+
+  // Quick Flow detection
+  const isQuickFlow = phases.track === 'quick' || phases.phases.length <= 2;
+
+  if (isQuickFlow) {
+    return renderQuickFlow(phases, nodes, workflowStatus, compact, focusedIndex, setFocusedIndex);
   }
 
   const columns = buildColumns(phases, nodes);
@@ -254,6 +277,11 @@ export function PhaseGraphContainer() {
                       node.is_current,
                       node.dependencies_met,
                     );
+                    const artifactPath =
+                      workflowStatus.workflow_statuses[node.workflow_id]?.artifact_path;
+                    const isSuggested =
+                      node.workflow_id === workflowStatus.next_workflow_id;
+
                     return (
                       <PhaseNode
                         key={node.workflow_id}
@@ -262,6 +290,8 @@ export function PhaseGraphContainer() {
                         compact={compact}
                         focused={nodeIndex === focusedIndex}
                         nodeIndex={nodeIndex}
+                        artifactPath={artifactPath}
+                        isSuggested={isSuggested}
                         onFocus={() => setFocusedIndex(nodeIndex)}
                       />
                     );
@@ -328,6 +358,69 @@ function buildColumns(
     name: phase.name,
     nodes: nodes.filter(n => n.phase_num === phase.phase),
   }));
+}
+
+function renderQuickFlow(
+  phases: PhasesResponse,
+  nodes: PhaseGraphNode[],
+  workflowStatus: import('../../types/workflow').WorkflowStatus,
+  compact: boolean,
+  focusedIndex: number,
+  setFocusedIndex: (idx: number) => void,
+) {
+  const nodeIndexMap = new Map(nodes.map((n, i) => [n.workflow_id, i]));
+
+  // Quick Flow color mapping
+  const quickFlowColors: Record<string, string> = {};
+  if (nodes.length >= 1) quickFlowColors[nodes[0].workflow_id] = 'border-[var(--phase-quickflow-spec)] bg-[var(--phase-quickflow-spec-bg)]';
+  if (nodes.length >= 2) quickFlowColors[nodes[1].workflow_id] = 'border-[var(--phase-quickflow-dev)] bg-[var(--phase-quickflow-dev-bg)]';
+
+  return (
+    <TooltipProvider delayDuration={300}>
+      <div className="flex w-full justify-center p-6">
+        <div
+          className="relative flex flex-col items-center gap-6 rounded-[var(--radius-lg)] border border-border-primary bg-bg-secondary p-6"
+          role="group"
+          aria-label="BMAD quick flow phase graph"
+        >
+          <span className="text-center text-[length:var(--text-xs)] font-semibold uppercase tracking-wide text-text-secondary">
+            Quick Flow
+          </span>
+          {nodes.map((node, idx) => {
+            const nodeIndex = nodeIndexMap.get(node.workflow_id) ?? -1;
+            const visualState = getNodeVisualState(
+              node.status,
+              node.is_current,
+              node.dependencies_met,
+            );
+            const artifactPath =
+              workflowStatus.workflow_statuses[node.workflow_id]?.artifact_path;
+            const isSuggested =
+              node.workflow_id === workflowStatus.next_workflow_id;
+
+            return (
+              <div key={node.workflow_id} className="flex flex-col items-center gap-6">
+                <PhaseNode
+                  node={node}
+                  visualState={visualState}
+                  compact={compact}
+                  focused={nodeIndex === focusedIndex}
+                  nodeIndex={nodeIndex}
+                  artifactPath={artifactPath}
+                  isSuggested={isSuggested}
+                  onFocus={() => setFocusedIndex(nodeIndex)}
+                />
+                {/* Vertical edge between nodes */}
+                {idx < nodes.length - 1 && (
+                  <div className="h-6 w-px bg-border-primary" aria-hidden="true" />
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </TooltipProvider>
+  );
 }
 
 function renderSkeleton() {
