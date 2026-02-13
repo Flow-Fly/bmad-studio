@@ -42,6 +42,8 @@ contextBridge.exposeInMainWorld('sidecar', {
 });
 
 contextBridge.exposeInMainWorld('opencode', {
+  // --- Server lifecycle (from Epic 6) ---
+
   onServerReady: (callback: (data: { port: number }) => void) =>
     onIpcEvent('opencode:server-ready', callback),
 
@@ -91,4 +93,66 @@ contextBridge.exposeInMainWorld('opencode', {
     version?: string;
     path?: string;
   }> => ipcRenderer.invoke('opencode:get-status'),
+
+  // --- Session operations (from Story 7.1) ---
+
+  createSession: (opts: { title: string; workingDir: string }) =>
+    ipcRenderer.invoke('opencode:create-session', opts),
+
+  sendPrompt: (opts: {
+    sessionId: string;
+    model?: { providerID: string; modelID: string };
+    parts: Array<{ type: string; [key: string]: unknown }>;
+  }) => ipcRenderer.invoke('opencode:send-prompt', opts),
+
+  approvePermission: (permissionId: string, approved: boolean) =>
+    ipcRenderer.invoke('opencode:approve-permission', { permissionId, approved }),
+
+  answerQuestion: (questionId: string, answer: string) =>
+    ipcRenderer.invoke('opencode:answer-question', { questionId, answer }),
+
+  // --- Generic event listener ---
+
+  onEvent: <T>(channel: string, callback: (data: T) => void): (() => void) =>
+    onIpcEvent<T>(channel, callback),
+
+  // --- Typed session event listeners ---
+
+  onSessionCreated: (callback: (data: { sessionId: string; title: string }) => void) =>
+    onIpcEvent('opencode:session-created', callback),
+
+  onSessionStatus: (callback: (data: { sessionId: string; status: string }) => void) =>
+    onIpcEvent('opencode:session-status', callback),
+
+  onMessageUpdated: (
+    callback: (data: {
+      sessionId: string;
+      messageId: string;
+      parts: Array<{ type: string; [key: string]: unknown }>;
+    }) => void
+  ) => onIpcEvent('opencode:message-updated', callback),
+
+  onPartUpdated: (
+    callback: (data: {
+      sessionId: string;
+      messageId: string;
+      partId: string;
+      content: string;
+    }) => void
+  ) => onIpcEvent('opencode:part-updated', callback),
+
+  onPermissionAsked: (
+    callback: (data: {
+      permissionId: string;
+      tool: string;
+      params: Record<string, unknown>;
+    }) => void
+  ) => onIpcEvent('opencode:permission-asked', callback),
+
+  onQuestionAsked: (
+    callback: (data: { questionId: string; question: string }) => void
+  ) => onIpcEvent('opencode:question-asked', callback),
+
+  onError: (callback: (data: { code: string; message: string }) => void) =>
+    onIpcEvent('opencode:error', callback),
 });

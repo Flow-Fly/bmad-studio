@@ -302,6 +302,30 @@ function registerIPC(): void {
     };
   });
 
+  // OpenCode Session: create session (placeholder until Story 7.2)
+  ipcMain.handle('opencode:create-session', async (_event, opts: { title: string; workingDir: string }) => {
+    console.log('[electron] opencode:create-session called (placeholder)', opts);
+    return { code: 'not_implemented', message: 'Session creation requires OpenCode SDK client (Story 7.2)' };
+  });
+
+  // OpenCode Session: send prompt (placeholder until Story 7.2)
+  ipcMain.handle('opencode:send-prompt', async (_event, opts: { sessionId: string }) => {
+    console.log('[electron] opencode:send-prompt called (placeholder)', opts);
+    return { code: 'not_implemented', message: 'Prompt sending requires OpenCode SDK client (Story 7.2)' };
+  });
+
+  // OpenCode Session: approve permission (placeholder until Story 7.2)
+  ipcMain.handle('opencode:approve-permission', async (_event, opts: { permissionId: string; approved: boolean }) => {
+    console.log('[electron] opencode:approve-permission called (placeholder)', opts);
+    return { code: 'not_implemented', message: 'Permission approval requires OpenCode SDK client (Story 7.2)' };
+  });
+
+  // OpenCode Session: answer question (placeholder until Story 7.2)
+  ipcMain.handle('opencode:answer-question', async (_event, opts: { questionId: string; answer: string }) => {
+    console.log('[electron] opencode:answer-question called (placeholder)', opts);
+    return { code: 'not_implemented', message: 'Question answering requires OpenCode SDK client (Story 7.2)' };
+  });
+
   // OpenCode: manual re-detection
   ipcMain.handle('opencode:redetect', async () => {
     if (!opencodeManager) {
