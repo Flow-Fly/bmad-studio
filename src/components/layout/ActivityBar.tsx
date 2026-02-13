@@ -1,66 +1,66 @@
 import { useCallback, useRef } from 'react';
 import {
+  LayoutDashboard,
   GitBranch,
-  MessageSquare,
-  Lightbulb,
-  FileText,
+  Settings,
   type LucideIcon,
 } from 'lucide-react';
-import { cn } from '../../lib/utils';
+import { cn } from '@/lib/utils';
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
   TooltipProvider,
-} from '../ui/tooltip';
-import { useConnectionStore } from '../../stores/connection.store';
+} from '@/components/ui/tooltip';
+import { useConnectionStore } from '@/stores/connection.store';
 
-interface SectionConfig {
-  id: string;
+export type AppMode = 'dashboard' | 'stream' | 'settings';
+
+interface ModeConfig {
+  id: AppMode;
   label: string;
   icon: LucideIcon;
 }
 
-const SECTIONS: SectionConfig[] = [
-  { id: 'graph', label: 'Phase Graph', icon: GitBranch },
-  { id: 'chat', label: 'Chat', icon: MessageSquare },
-  { id: 'insights', label: 'Insights', icon: Lightbulb },
-  { id: 'artifacts', label: 'Artifacts', icon: FileText },
+const MODES: ModeConfig[] = [
+  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { id: 'stream', label: 'Stream Detail', icon: GitBranch },
+  { id: 'settings', label: 'Settings', icon: Settings },
 ];
 
 interface ActivityBarProps {
-  activeSection: string;
-  onSectionChange: (section: string) => void;
+  activeMode: AppMode;
+  onModeChange: (mode: AppMode) => void;
 }
 
-export function ActivityBar({ activeSection, onSectionChange }: ActivityBarProps) {
+export function ActivityBar({ activeMode, onModeChange }: ActivityBarProps) {
   const navRef = useRef<HTMLElement>(null);
   const connectionStatus = useConnectionStore(s => s.status);
 
   const handleKeydown = useCallback(
     (e: React.KeyboardEvent) => {
-      const currentIndex = SECTIONS.findIndex(s => s.id === activeSection);
+      const currentIndex = MODES.findIndex(m => m.id === activeMode);
       let nextIndex: number | null = null;
 
       switch (e.key) {
         case 'ArrowDown':
-          nextIndex = (currentIndex + 1) % SECTIONS.length;
+          nextIndex = (currentIndex + 1) % MODES.length;
           break;
         case 'ArrowUp':
-          nextIndex = (currentIndex - 1 + SECTIONS.length) % SECTIONS.length;
+          nextIndex = (currentIndex - 1 + MODES.length) % MODES.length;
           break;
         case 'Home':
           nextIndex = 0;
           break;
         case 'End':
-          nextIndex = SECTIONS.length - 1;
+          nextIndex = MODES.length - 1;
           break;
         default:
           return;
       }
 
       e.preventDefault();
-      onSectionChange(SECTIONS[nextIndex].id);
+      onModeChange(MODES[nextIndex].id);
 
       // Focus the new button
       requestAnimationFrame(() => {
@@ -68,7 +68,7 @@ export function ActivityBar({ activeSection, onSectionChange }: ActivityBarProps
         buttons?.[nextIndex!]?.focus();
       });
     },
-    [activeSection, onSectionChange],
+    [activeMode, onModeChange],
   );
 
   const statusColor =
@@ -82,7 +82,7 @@ export function ActivityBar({ activeSection, onSectionChange }: ActivityBarProps
 
   return (
     <TooltipProvider delayDuration={300}>
-      <div className="flex w-12 min-w-12 flex-col border-r border-border-primary bg-bg-secondary">
+      <div className="flex w-12 min-w-12 flex-col border-r border-surface-border bg-surface-raised">
         <nav
           ref={navRef}
           role="tablist"
@@ -90,27 +90,27 @@ export function ActivityBar({ activeSection, onSectionChange }: ActivityBarProps
           onKeyDown={handleKeydown}
           className="flex flex-col gap-1 py-1"
         >
-          {SECTIONS.map(section => {
-            const isActive = section.id === activeSection;
-            const Icon = section.icon;
+          {MODES.map(mode => {
+            const isActive = mode.id === activeMode;
+            const Icon = mode.icon;
             return (
-              <Tooltip key={section.id}>
+              <Tooltip key={mode.id}>
                 <TooltipTrigger asChild>
                   <button
                     role="tab"
                     tabIndex={isActive ? 0 : -1}
                     aria-selected={isActive}
-                    aria-label={section.label}
-                    onClick={() => onSectionChange(section.id)}
+                    aria-label={mode.label}
+                    onClick={() => onModeChange(mode.id)}
                     className={cn(
-                      'flex h-10 w-12 items-center justify-center border-l-2 border-transparent bg-transparent text-text-secondary hover:bg-bg-tertiary focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-accent cursor-pointer',
-                      isActive && 'border-l-accent text-accent',
+                      'flex h-10 w-12 cursor-pointer items-center justify-center border-l-2 border-transparent bg-transparent text-interactive-default transition-colors duration-150 hover:text-interactive-hover focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-interactive-accent',
+                      isActive && 'border-l-interactive-accent text-interactive-active',
                     )}
                   >
                     <Icon className="h-5 w-5" />
                   </button>
                 </TooltipTrigger>
-                <TooltipContent side="right">{section.label}</TooltipContent>
+                <TooltipContent side="right">{mode.label}</TooltipContent>
               </Tooltip>
             );
           })}
