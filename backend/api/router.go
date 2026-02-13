@@ -25,7 +25,8 @@ type RouterServices struct {
 	ProjectManager *services.ProjectManager
 	Insight        *services.InsightService
 	Project        *services.ProjectService // Prepared for Story 1.3: REST API endpoints
-	Stream         *services.StreamService
+	Stream          *services.StreamService
+	StreamArtifact  *services.StreamArtifactService
 }
 
 // NewRouter creates and configures the main router with all routes and middleware
@@ -106,6 +107,15 @@ func NewRouterWithServices(svc RouterServices) *chi.Mux {
 							r.Get("/", streamsHandler.GetStream)
 							r.Put("/", streamsHandler.UpdateStream)
 							r.Post("/archive", streamsHandler.ArchiveStream)
+
+							// Artifact routes nested under stream
+							if svc.StreamArtifact != nil {
+								artifactsHandler := handlers.NewStreamArtifactsHandler(svc.StreamArtifact)
+								r.Route("/artifacts", func(r chi.Router) {
+									r.Get("/", artifactsHandler.ListArtifacts)
+									r.Get("/*", artifactsHandler.ReadArtifact)
+								})
+							}
 						})
 					})
 				}
