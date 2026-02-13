@@ -49,6 +49,14 @@ export interface OpenCodeAPI {
   onNotInstalled: (callback: () => void) => () => void;
   onNotConfigured: (callback: (data: { path: string }) => void) => () => void;
   redetect: () => Promise<OpenCodeRedetectResult>;
+  getStatus: () => Promise<{
+    installed: boolean;
+    configured: boolean;
+    serverStatus: string;
+    port: number | null;
+    version?: string;
+    path?: string;
+  }>;
 }
 
 declare global {

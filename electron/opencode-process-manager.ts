@@ -71,6 +71,8 @@ export class OpenCodeProcessManager {
     };
   }
 
+  private detectionResult: OpenCodeDetectionResult | null = null;
+
   /**
    * Detects if OpenCode CLI is installed on PATH and returns detection details
    */
@@ -78,25 +80,32 @@ export class OpenCodeProcessManager {
     try {
       const command =
         process.platform === 'win32' ? 'where opencode' : 'which opencode';
-      const pathResult = execSync(command, { encoding: 'utf-8' }).trim();
+      const pathResult = execSync(command, { encoding: 'utf-8', timeout: 5000 })
+        .trim()
+        .split('\n')[0]
+        .trim();
 
       // Try to get version (optional)
       let version: string | undefined;
       try {
-        version = execSync('opencode --version', { encoding: 'utf-8' }).trim();
+        version = execSync('opencode --version', { encoding: 'utf-8', timeout: 5000 }).trim();
       } catch {
         // Version command failed — not critical
         version = undefined;
       }
 
-      return {
+      const result = {
         installed: true,
         path: pathResult,
         version,
       };
+
+      this.detectionResult = result;
+      return result;
     } catch {
-      this.updateStatus('not-installed');
-      return { installed: false };
+      const result = { installed: false };
+      this.detectionResult = result;
+      return result;
     }
   }
 
@@ -448,5 +457,26 @@ export class OpenCodeProcessManager {
    */
   getPort(): number | null {
     return this.currentPort;
+  }
+
+  /**
+   * Gets the complete current state for renderer initialization
+   */
+  getState(): {
+    installed: boolean;
+    configured: boolean;
+    serverStatus: string;
+    port: number | null;
+    version?: string;
+    path?: string;
+  } {
+    return {
+      installed: this.detectionResult?.installed ?? false,
+      configured: this.detectionResult?.installed && this.detectionResult.path !== undefined,
+      serverStatus: this.status,
+      port: this.currentPort ?? null,
+      version: this.detectionResult?.version,
+      path: this.detectionResult?.path,
+    };
   }
 }

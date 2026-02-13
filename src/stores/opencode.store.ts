@@ -173,6 +173,28 @@ if (typeof window !== 'undefined' && window.opencode) {
     console.log('[OpenCode Store] OpenCode not configured at', data.path);
     useOpenCodeStore.getState().setNotConfigured(data.path);
   });
+
+  // Fetch initial status on mount
+  if (window.opencode.getStatus) {
+    window.opencode.getStatus().then((state) => {
+      if (state) {
+        console.log('[OpenCode Store] Initial status:', state);
+
+        useOpenCodeStore.getState().setDetectionResult({
+          installed: state.installed,
+          config: state.configured ? { providers: [], models: [] } : undefined,
+          version: state.version,
+          path: state.path,
+        });
+
+        if (state.serverStatus === 'running' && state.port) {
+          useOpenCodeStore.getState().setServerReady(state.port);
+        }
+      }
+    }).catch((error) => {
+      console.error('[OpenCode Store] Failed to fetch initial status:', error);
+    });
+  }
 }
 
 // Selectors

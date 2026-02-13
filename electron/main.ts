@@ -62,6 +62,7 @@ let processManager: ProcessManager | null = null;
 // ---------------------------------------------------------------------------
 
 let opencodeManager: OpenCodeProcessManager | null = null;
+let opencodeConfigured = false; // Track whether config was found
 
 function handleSidecarStatusChange(event: ProcessStatusEvent): void {
   console.log('[electron] Sidecar status changed:', event);
@@ -209,6 +210,7 @@ async function startOpenCodeServer(): Promise<void> {
 
   // Try to read config
   const config = await opencodeManager.readOpenCodeConfig();
+  opencodeConfigured = !!config;
 
   if (!config) {
     console.log('[electron] OpenCode detected but not configured');
@@ -294,6 +296,24 @@ function registerIPC(): void {
     writeStore(store);
   });
 
+  // OpenCode: get current status
+  ipcMain.handle('opencode:get-status', () => {
+    if (!opencodeManager) {
+      return {
+        installed: false,
+        configured: false,
+        serverStatus: 'not-installed',
+        port: null,
+      };
+    }
+
+    const state = opencodeManager.getState();
+    return {
+      ...state,
+      configured: opencodeConfigured,
+    };
+  });
+
   // OpenCode: manual re-detection
   ipcMain.handle('opencode:redetect', async () => {
     if (!opencodeManager) {
@@ -321,6 +341,7 @@ function registerIPC(): void {
 
       // Read config
       const config = await opencodeManager.readOpenCodeConfig();
+      opencodeConfigured = !!config;
 
       if (!config) {
         // Send not-configured event

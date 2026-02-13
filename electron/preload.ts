@@ -117,4 +117,13 @@ contextBridge.exposeInMainWorld('opencode', {
     };
     error?: string;
   }> => ipcRenderer.invoke('opencode:redetect'),
+
+  getStatus: (): Promise<{
+    installed: boolean;
+    configured: boolean;
+    serverStatus: string;
+    port: number | null;
+    version?: string;
+    path?: string;
+  }> => ipcRenderer.invoke('opencode:get-status'),
 });
