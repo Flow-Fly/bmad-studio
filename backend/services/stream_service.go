@@ -20,12 +20,18 @@ type StreamWatcherHook interface {
 	RemoveStreamWatch(projectName, streamName string)
 }
 
+// PhaseDeriver is the interface for deriving and updating stream phase from filesystem state
+type PhaseDeriver interface {
+	DeriveAndUpdatePhase(projectName, streamName string) (string, error)
+}
+
 // StreamService manages stream lifecycle operations
 type StreamService struct {
 	streamStore   *storage.StreamStore
 	registryStore *storage.RegistryStore
 	hub           Broadcaster
 	watcherHook   StreamWatcherHook
+	phaseDeriver  PhaseDeriver
 }
 
 // NewStreamService creates a new StreamService
@@ -41,6 +47,12 @@ func NewStreamService(streamStore *storage.StreamStore, registryStore *storage.R
 // Called after WatcherService is initialized.
 func (s *StreamService) SetWatcherHook(hook StreamWatcherHook) {
 	s.watcherHook = hook
+}
+
+// SetPhaseDeriver sets the phase deriver for on-demand phase derivation.
+// Called after WatcherService is initialized.
+func (s *StreamService) SetPhaseDeriver(deriver PhaseDeriver) {
+	s.phaseDeriver = deriver
 }
 
 // streamNameRegex validates stream names: alphanumeric, hyphens, underscores; must start with alphanumeric
@@ -119,6 +131,17 @@ func (s *StreamService) List(projectName string) ([]*types.StreamMeta, error) {
 		return nil, fmt.Errorf("failed to list streams for project %s: %w", projectName, err)
 	}
 
+	// Derive fresh phase for each active stream
+	if s.phaseDeriver != nil {
+		for _, stream := range streams {
+			if stream.Status == types.StreamStatusActive {
+				if phase, err := s.phaseDeriver.DeriveAndUpdatePhase(projectName, stream.Name); err == nil {
+					stream.Phase = phase
+				}
+			}
+		}
+	}
+
 	return streams, nil
 }
 
@@ -134,6 +157,13 @@ func (s *StreamService) Get(projectName, streamName string) (*types.StreamMeta, 
 	meta, err := s.streamStore.ReadStreamMeta(projectName, streamName)
 	if err != nil {
 		return nil, fmt.Errorf("stream not found: %s-%s", projectName, streamName)
+	}
+
+	// Derive fresh phase from filesystem for active streams
+	if s.phaseDeriver != nil && meta.Status == types.StreamStatusActive {
+		if phase, err := s.phaseDeriver.DeriveAndUpdatePhase(projectName, streamName); err == nil {
+			meta.Phase = phase
+		}
 	}
 
 	return meta, nil

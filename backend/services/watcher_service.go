@@ -1,6 +1,7 @@
 package services
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -419,6 +420,26 @@ func (w *WatcherService) handleEvent(event fsnotify.Event) {
 				w.broadcastArtifactEvent(types.EventTypeArtifactUpdated, currentInfo.projectName, currentInfo.streamName, currentRelFilename, phase)
 			}
 
+			// Re-derive full stream phase and broadcast if changed
+			streamDir := w.streamDir(currentInfo.projectName, currentInfo.streamName)
+			newPhase, artifacts := DeriveStreamPhase(streamDir)
+
+			// Read cached phase from stream.json
+			meta, err := w.streamStore.ReadStreamMeta(currentInfo.projectName, currentInfo.streamName)
+			if err == nil && meta.Phase != newPhase {
+				// Phase changed — update stream.json and broadcast
+				meta.Phase = newPhase
+				meta.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+				if writeErr := w.streamStore.WriteStreamMeta(currentInfo.projectName, currentInfo.streamName, *meta); writeErr != nil {
+					log.Printf("Warning: Failed to update stream phase in stream.json: %v", writeErr)
+				}
+
+				streamID := currentInfo.projectName + "-" + currentInfo.streamName
+				phaseEvent := types.NewStreamPhaseChangedEvent(currentInfo.projectName, streamID, newPhase, artifacts)
+				w.hub.BroadcastEvent(phaseEvent)
+				log.Printf("Broadcast stream:phase-changed for %s/%s: %s", currentInfo.projectName, currentInfo.streamName, newPhase)
+			}
+
 			w.debounceMu.Lock()
 			delete(w.debounceMap, currentPath)
 			w.debounceMu.Unlock()
@@ -521,4 +542,135 @@ func DerivePhase(filename string) string {
 	}
 
 	return ""
+}
+
+// phaseOrder defines the ordered list of BMAD phases from lowest to highest.
+var phaseOrder = []string{"analysis", "planning", "solutioning", "implementation"}
+
+// phaseRank maps phase names to their ordinal rank for comparison.
+var phaseRank = map[string]int{
+	"analysis":       0,
+	"planning":       1,
+	"solutioning":    2,
+	"implementation": 3,
+}
+
+// DeriveStreamPhase scans a stream directory and determines the highest completed
+// BMAD phase based on artifact presence. It returns the phase name and a list of
+// all matched artifact filenames. Returns ("", nil) when no artifacts match.
+func DeriveStreamPhase(streamDirPath string) (string, []string) {
+	entries, err := os.ReadDir(streamDirPath)
+	if err != nil {
+		return "", nil
+	}
+
+	// Track which phases have at least one artifact and collect artifact names
+	phaseArtifacts := make(map[string][]string)
+
+	for _, entry := range entries {
+		name := entry.Name()
+		nameLower := strings.ToLower(name)
+
+		if entry.IsDir() {
+			// Check sharded folders
+			switch {
+			case nameLower == "prd":
+				// Planning: prd/index.md
+				indexPath := filepath.Join(streamDirPath, name, "index.md")
+				if _, err := os.Stat(indexPath); err == nil {
+					phaseArtifacts["planning"] = append(phaseArtifacts["planning"], name+"/index.md")
+				}
+			case nameLower == "architecture":
+				// Solutioning: architecture/index.md
+				indexPath := filepath.Join(streamDirPath, name, "index.md")
+				if _, err := os.Stat(indexPath); err == nil {
+					phaseArtifacts["solutioning"] = append(phaseArtifacts["solutioning"], name+"/index.md")
+				}
+			case nameLower == "epics":
+				// Implementation: epics/ with at least one .md file
+				subEntries, err := os.ReadDir(filepath.Join(streamDirPath, name))
+				if err == nil {
+					for _, sub := range subEntries {
+						if !sub.IsDir() && strings.HasSuffix(strings.ToLower(sub.Name()), ".md") {
+							phaseArtifacts["implementation"] = append(phaseArtifacts["implementation"], name+"/"+sub.Name())
+						}
+					}
+				}
+			}
+			continue
+		}
+
+		// Skip non-artifact files
+		if name == "stream.json" || strings.HasPrefix(name, ".") ||
+			strings.HasSuffix(name, ".tmp") || strings.HasSuffix(name, ".swp") || strings.HasSuffix(name, "~") {
+			continue
+		}
+
+		// Flat file pattern matching
+		switch {
+		case strings.HasPrefix(nameLower, "brainstorm") || strings.HasPrefix(nameLower, "research"):
+			phaseArtifacts["analysis"] = append(phaseArtifacts["analysis"], name)
+		case strings.HasPrefix(nameLower, "prd"):
+			phaseArtifacts["planning"] = append(phaseArtifacts["planning"], name)
+		case strings.HasPrefix(nameLower, "architecture"):
+			phaseArtifacts["solutioning"] = append(phaseArtifacts["solutioning"], name)
+		}
+	}
+
+	// Find the highest completed phase
+	highestPhase := ""
+	var allArtifacts []string
+
+	for _, phase := range phaseOrder {
+		if artifacts, ok := phaseArtifacts[phase]; ok && len(artifacts) > 0 {
+			highestPhase = phase
+		}
+	}
+
+	// Collect all artifacts from all completed phases (not just the highest)
+	if highestPhase != "" {
+		for _, phase := range phaseOrder {
+			if artifacts, ok := phaseArtifacts[phase]; ok {
+				allArtifacts = append(allArtifacts, artifacts...)
+			}
+			if phase == highestPhase {
+				break
+			}
+		}
+		// Also include artifacts from phases above the highest that happen to exist
+		// Actually, collect ALL matched artifacts regardless of phase ordering
+		allArtifacts = nil
+		for _, phase := range phaseOrder {
+			if artifacts, ok := phaseArtifacts[phase]; ok {
+				allArtifacts = append(allArtifacts, artifacts...)
+			}
+		}
+	}
+
+	return highestPhase, allArtifacts
+}
+
+// DeriveAndUpdatePhase derives the current phase for a stream from the filesystem
+// and updates stream.json if the phase has changed. Returns the derived phase.
+func (w *WatcherService) DeriveAndUpdatePhase(projectName, streamName string) (string, error) {
+	streamDir := w.streamDir(projectName, streamName)
+
+	phase, _ := DeriveStreamPhase(streamDir)
+
+	// Read current cached phase
+	meta, err := w.streamStore.ReadStreamMeta(projectName, streamName)
+	if err != nil {
+		return phase, fmt.Errorf("failed to read stream metadata: %w", err)
+	}
+
+	// Update if changed
+	if meta.Phase != phase {
+		meta.Phase = phase
+		meta.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+		if err := w.streamStore.WriteStreamMeta(projectName, streamName, *meta); err != nil {
+			return phase, fmt.Errorf("failed to write stream metadata: %w", err)
+		}
+	}
+
+	return phase, nil
 }
