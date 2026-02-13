@@ -14,9 +14,16 @@ export interface SidecarAPI {
   onError: (callback: (data: { code: string; message: string }) => void) => () => void;
 }
 
+export interface OpenCodeAPI {
+  onServerReady: (callback: (data: { port: number }) => void) => () => void;
+  onServerRestarting: (callback: (data: { retryCount: number }) => void) => () => void;
+  onServerError: (callback: (data: { code: string; message: string }) => void) => () => void;
+}
+
 declare global {
   interface Window {
     electronAPI: ElectronAPI;
     sidecar: SidecarAPI;
+    opencode: OpenCodeAPI;
   }
 }

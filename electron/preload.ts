@@ -40,3 +40,25 @@ contextBridge.exposeInMainWorld('sidecar', {
     return () => ipcRenderer.removeListener('sidecar:error', listener);
   },
 });
+
+contextBridge.exposeInMainWorld('opencode', {
+  onServerReady: (callback: (data: { port: number }) => void) => {
+    const listener = (_event: unknown, data: { port: number }) => callback(data);
+    ipcRenderer.on('opencode:server-ready', listener);
+    return () => ipcRenderer.removeListener('opencode:server-ready', listener);
+  },
+
+  onServerRestarting: (callback: (data: { retryCount: number }) => void) => {
+    const listener = (_event: unknown, data: { retryCount: number }) =>
+      callback(data);
+    ipcRenderer.on('opencode:server-restarting', listener);
+    return () => ipcRenderer.removeListener('opencode:server-restarting', listener);
+  },
+
+  onServerError: (callback: (data: { code: string; message: string }) => void) => {
+    const listener = (_event: unknown, data: { code: string; message: string }) =>
+      callback(data);
+    ipcRenderer.on('opencode:server-error', listener);
+    return () => ipcRenderer.removeListener('opencode:server-error', listener);
+  },
+});

@@ -8,6 +8,10 @@ import {
 import path from 'node:path';
 import fs from 'node:fs';
 import { ProcessManager, type ProcessStatusEvent } from './process-manager';
+import {
+  OpenCodeProcessManager,
+  type OpenCodeStatusEvent,
+} from './opencode-process-manager';
 
 // ---------------------------------------------------------------------------
 // Paths & Constants
@@ -52,6 +56,12 @@ function writeStore(data: Record<string, string>): void {
 // ---------------------------------------------------------------------------
 
 let processManager: ProcessManager | null = null;
+
+// ---------------------------------------------------------------------------
+// OpenCode Server
+// ---------------------------------------------------------------------------
+
+let opencodeManager: OpenCodeProcessManager | null = null;
 
 function handleSidecarStatusChange(event: ProcessStatusEvent): void {
   console.log('[electron] Sidecar status changed:', event);
@@ -131,6 +141,78 @@ async function stopGoBackend(): Promise<void> {
     console.log('[electron] Stopping Go backend...');
     await processManager.shutdown();
     processManager = null;
+  }
+}
+
+function handleOpenCodeStatusChange(event: OpenCodeStatusEvent): void {
+  console.log('[electron] OpenCode status changed:', event);
+
+  // Forward status changes to renderer
+  if (mainWindow) {
+    switch (event.status) {
+      case 'not-installed':
+        // Don't send event — renderer assumes not-installed by default
+        console.log('[electron] OpenCode not detected on PATH');
+        break;
+      case 'starting':
+        // No event needed — renderer shows "connecting" until ready/error
+        break;
+      case 'running':
+        mainWindow.webContents.send('opencode:server-ready', {
+          port: event.port,
+        });
+        break;
+      case 'restarting':
+        mainWindow.webContents.send('opencode:server-restarting', {
+          retryCount: event.retryCount,
+        });
+        break;
+      case 'failed':
+        mainWindow.webContents.send('opencode:server-error', {
+          code: 'server_start_failed',
+          message: event.error || 'Unknown error',
+        });
+        break;
+    }
+  }
+}
+
+async function startOpenCodeServer(): Promise<void> {
+  opencodeManager = new OpenCodeProcessManager(
+    {
+      maxRetries: 3,
+      retryDelayMs: 1000,
+      portRangeMin: 49152,
+      portRangeMax: 65535,
+      healthCheckPath: '/health',
+      healthCheckTimeoutMs: 15000,
+      shutdownTimeoutMs: 5000,
+    },
+    handleOpenCodeStatusChange
+  );
+
+  // Detect if OpenCode is installed
+  const isInstalled = await opencodeManager.detectOpenCode();
+  if (!isInstalled) {
+    console.log('[electron] OpenCode not detected — skipping spawn');
+    return;
+  }
+
+  try {
+    await opencodeManager.spawn();
+    console.log('[electron] OpenCode server is ready');
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error('[electron] OpenCode server failed to start:', errorMessage);
+    // No dialog — app stays functional, workflows just disabled
+  }
+}
+
+async function stopOpenCodeServer(): Promise<void> {
+  if (opencodeManager) {
+    console.log('[electron] Stopping OpenCode server...');
+    await opencodeManager.shutdown();
+    opencodeManager = null;
   }
 }
 
@@ -220,6 +302,9 @@ app.whenReady().then(async () => {
   // Start Go backend and wait for it to be ready
   await startGoBackend();
 
+  // Start OpenCode server (non-blocking — app works without it)
+  await startOpenCodeServer();
+
   createWindow();
 
   app.on('activate', () => {
@@ -236,9 +321,10 @@ app.on('window-all-closed', () => {
 });
 
 app.on('before-quit', async (event) => {
-  if (processManager) {
+  if (processManager || opencodeManager) {
     event.preventDefault();
     await stopGoBackend();
+    await stopOpenCodeServer();
     app.quit();
   }
 });
