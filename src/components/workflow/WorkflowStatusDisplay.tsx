@@ -1,4 +1,3 @@
-import { useWorkflowStore } from '../../stores/workflow.store';
 import type {
   PhaseCompletionStatus,
   WorkflowCompletionStatus,
@@ -36,91 +35,17 @@ const STATUS_LABELS: Record<WorkflowStatusValue, string> = {
   conditional: 'Conditional',
 };
 
+// NOTE: Workflow status data sources will be wired in Story 4-5 (Phase Graph Rendering).
+// Until then, this component renders a placeholder message.
+
 export function WorkflowStatusDisplay() {
-  const workflowStatus = useWorkflowStore(s => s.workflowStatus);
-  const loadingState = useWorkflowStore(s => s.loadingState);
-  const currentPhase = useWorkflowStore(s => s.currentPhase);
-  const phaseCompletions = useWorkflowStore(s => s.phaseCompletions);
-  const nextWorkflow = useWorkflowStore(s => s.nextWorkflow);
-
-  if (loadingState.status === 'loading') {
-    return renderSkeleton();
-  }
-
-  if (loadingState.status === 'error') {
-    return (
-      <div className="flex flex-col items-center justify-center p-12 text-center">
-        <p className="text-[length:var(--text-md)] text-error">
-          {loadingState.error ?? 'Unknown error'}
-        </p>
-      </div>
-    );
-  }
-
-  if (!workflowStatus) {
-    return (
-      <div className="flex flex-col items-center justify-center p-12 text-center">
-        <p className="text-[length:var(--text-md)] leading-relaxed text-text-secondary">
-          No workflow status available — run a BMAD workflow to begin tracking
-          progress
-        </p>
-      </div>
-    );
-  }
-
-  const phase = currentPhase();
-  const phases = phaseCompletions();
-  const next = nextWorkflow();
-  const workflows = Object.values(workflowStatus.workflow_statuses);
-
   return (
-    <TooltipProvider delayDuration={300}>
-      <div className="mx-auto w-full max-w-[720px] p-8">
-        {/* Summary card */}
-        <div className="mb-8 rounded-[var(--radius-md)] border border-border-primary bg-bg-secondary p-6">
-          <p className="mb-2 text-[length:var(--text-lg)] font-semibold text-accent">
-            Phase {phase?.num ?? '?'} of {phases.length} —{' '}
-            {phase?.name ?? 'Unknown'}
-          </p>
-          {next ? (
-            <p className="text-[length:var(--text-md)] leading-normal text-text-secondary">
-              Next:{' '}
-              <span className="font-medium text-text-primary">{next.id}</span> (
-              {next.agent})
-            </p>
-          ) : (
-            <p className="text-[length:var(--text-md)] leading-normal text-text-secondary">
-              All workflows complete
-            </p>
-          )}
-        </div>
-
-        {/* Phase rows */}
-        <div className="flex flex-col gap-4">
-          {phases.map(p => (
-            <PhaseRow
-              key={p.phase_num}
-              phase={p}
-              isCurrent={p.phase_num === phase?.num}
-            />
-          ))}
-        </div>
-
-        {/* Workflows list */}
-        {workflows.length > 0 && (
-          <div className="mt-6 rounded-[var(--radius-md)] border border-border-primary bg-bg-secondary px-6 py-4">
-            <p className="mb-2 text-[length:var(--text-md)] font-medium text-text-primary">
-              Workflows
-            </p>
-            <div className="flex flex-col gap-1">
-              {workflows.map(w => (
-                <WorkflowItem key={w.workflow_id} workflow={w} />
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-    </TooltipProvider>
+    <div className="flex flex-col items-center justify-center p-12 text-center">
+      <p className="text-[length:var(--text-md)] leading-relaxed text-text-secondary">
+        No workflow status available — run a BMAD workflow to begin tracking
+        progress
+      </p>
+    </div>
   );
 }
 

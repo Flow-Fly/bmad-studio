@@ -1,6 +1,6 @@
 import { CircleCheck, CircleDot, Circle, Lock } from 'lucide-react';
 import type { PhaseGraphNode as PhaseGraphNodeType, NodeVisualState } from '../../types/phases';
-import { formatWorkflowLabel } from '../../stores/phases.store';
+import { formatWorkflowLabel } from '../../lib/phase-utils';
 import {
   Tooltip,
   TooltipTrigger,
