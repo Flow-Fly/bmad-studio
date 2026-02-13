@@ -211,7 +211,7 @@ func (s *StreamService) Archive(projectName, streamName, outcome string, force b
 			}
 		}
 
-		if status != nil && status.Merged || force {
+		if (status != nil && status.Merged) || force {
 			// Branch is merged or force=true — remove worktree
 			if removeErr := s.worktreeService.Remove(projectName, streamName, force); removeErr != nil {
 				return nil, fmt.Errorf("failed to cleanup worktree: %w", removeErr)
