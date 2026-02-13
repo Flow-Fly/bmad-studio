@@ -1,46 +1,36 @@
 /**
  * Message structure for OpenCode chat sessions.
  *
- * These types represent the conversation history managed by the opencode.store.
- * They align with the OpenCode SDK's message format and are updated via IPC
- * events from the Electron main process.
+ * Reuses part types from ipc.ts (the canonical source) and extends
+ * with renderer-only additions like ThinkingPart.
  */
 
-// Message role (user or assistant)
-export type MessageRole = 'user' | 'assistant';
+import type {
+  TextPart,
+  ToolCallPart,
+  ToolResultPart,
+} from './ipc';
 
-// Individual part types within a message
-export interface TextPart {
-  type: 'text';
-  text: string;
-}
+export type { TextPart, ToolCallPart, ToolResultPart };
+
+export type MessageRole = 'user' | 'assistant';
 
 export interface ThinkingPart {
   type: 'thinking';
   thinking: string;
 }
 
-export interface ToolCallPart {
-  type: 'tool-call';
-  toolCallId: string;
-  toolName: string;
-  args: Record<string, unknown>;
-}
-
-export interface ToolResultPart {
-  type: 'tool-result';
-  toolCallId: string;
-  result: unknown;
-  isError?: boolean;
-}
-
-// Union of all message part types
 export type MessagePart = TextPart | ThinkingPart | ToolCallPart | ToolResultPart;
 
-// Full message structure
+/** A part with its stable SDK identifier for upsert operations. */
+export interface IdentifiedPart {
+  partId: string;
+  data: MessagePart;
+}
+
 export interface Message {
   messageId: string;
   role: MessageRole;
-  parts: MessagePart[];
+  parts: IdentifiedPart[];
   timestamp?: string;
 }

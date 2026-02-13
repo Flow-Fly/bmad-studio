@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { OpenCodeProviderConfig, OpenCodeConfigData } from '../types/window';
-import type { Message, MessagePart } from '../types/message';
+import type { Message, MessagePart, IdentifiedPart } from '../types/message';
 
 export type OpenCodeServerStatus =
   | 'not-installed'
@@ -58,7 +58,7 @@ interface OpenCodeState {
 
   // Message management actions (Story 8.1)
   upsertMessage: (message: Message) => void;
-  updatePart: (messageId: string, partIndex: number, partData: Partial<MessagePart>) => void;
+  upsertPart: (messageId: string, partId: string, partData: MessagePart) => void;
   setSessionStatus: (status: SessionStatus) => void;
   clearMessages: () => void;
 }
@@ -218,43 +218,41 @@ export const useOpenCodeStore = create<OpenCodeState>((set) => ({
       }
     }),
 
-  updatePart: (messageId: string, partIndex: number, partData: Partial<MessagePart>) =>
+  upsertPart: (messageId: string, partId: string, partData: MessagePart) =>
     set((state) => {
       const messageIndex = state.messages.findIndex(
         (m) => m.messageId === messageId
       );
 
+      const newPart: IdentifiedPart = { partId, data: partData };
+
       if (messageIndex < 0) {
-        // Message doesn't exist - create placeholder
+        // Message doesn't exist yet — create a placeholder
         const newMessage: Message = {
           messageId,
           role: 'assistant',
-          parts: [partData as MessagePart],
+          parts: [newPart],
         };
         return { messages: [...state.messages, newMessage] };
       }
 
       const message = state.messages[messageIndex];
+      const existingPartIndex = message.parts.findIndex(
+        (p) => p.partId === partId
+      );
 
-      // Ensure parts array has enough elements
-      while (message.parts.length <= partIndex) {
-        message.parts.push({ type: 'text', text: '' } as MessagePart);
+      let newParts: IdentifiedPart[];
+      if (existingPartIndex >= 0) {
+        // Replace existing part (immutable)
+        newParts = [...message.parts];
+        newParts[existingPartIndex] = newPart;
+      } else {
+        // Append new part
+        newParts = [...message.parts, newPart];
       }
 
-      // Merge partial data into existing part
-      const existingPart = message.parts[partIndex];
-      const updatedPart = { ...existingPart, ...partData };
-
       const newMessages = [...state.messages];
-      newMessages[messageIndex] = {
-        ...message,
-        parts: [
-          ...message.parts.slice(0, partIndex),
-          updatedPart,
-          ...message.parts.slice(partIndex + 1),
-        ],
-      };
-
+      newMessages[messageIndex] = { ...message, parts: newParts };
       return { messages: newMessages };
     }),
 
