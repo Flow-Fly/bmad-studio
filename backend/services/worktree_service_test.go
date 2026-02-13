@@ -475,7 +475,7 @@ func TestWorktreeService_Remove_NoWorktree(t *testing.T) {
 // --- CheckMergeStatus tests ---
 
 func TestWorktreeService_CheckMergeStatus_Merged(t *testing.T) {
-	svc, _, _, repoPath := setupWorktreeTest(t)
+	svc, _, _, _ := setupWorktreeTest(t)
 
 	projectName := "my-project"
 	streamName := "payment-integration"
@@ -490,12 +490,10 @@ func TestWorktreeService_CheckMergeStatus_Merged(t *testing.T) {
 	require.NotNil(t, status)
 	assert.True(t, status.Merged)
 	assert.Equal(t, "stream/"+streamName, status.Branch)
-
-	_ = repoPath // repoPath used by test setup
 }
 
 func TestWorktreeService_CheckMergeStatus_Unmerged(t *testing.T) {
-	svc, _, _, repoPath := setupWorktreeTest(t)
+	svc, _, _, _ := setupWorktreeTest(t)
 
 	projectName := "my-project"
 	streamName := "payment-integration"
@@ -511,15 +509,12 @@ func TestWorktreeService_CheckMergeStatus_Unmerged(t *testing.T) {
 	runGit(t, result.WorktreePath, "add", ".")
 	runGit(t, result.WorktreePath, "commit", "-m", "add feature")
 
-	// Now check merge status — the branch has commits not in main HEAD
-	// We need to check from the main repo's perspective
+	// Check merge status from the main repo's perspective
 	status, err := svc.CheckMergeStatus(projectName, streamName)
 	require.NoError(t, err)
 	require.NotNil(t, status)
 	assert.False(t, status.Merged)
 	assert.Equal(t, "stream/"+streamName, status.Branch)
-
-	_ = repoPath
 }
 
 // --- Archive integration tests ---

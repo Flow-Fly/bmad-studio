@@ -23,16 +23,15 @@ func NewWorktreesHandler(worktreeService *services.WorktreeService) *WorktreesHa
 func writeWorktreeServiceError(w http.ResponseWriter, err error) {
 	errMsg := err.Error()
 	switch {
-	case strings.Contains(errMsg, "unmerged changes"):
-		response.WriteError(w, "conflict", errMsg, http.StatusConflict)
 	case strings.Contains(errMsg, "no longer exists"):
 		response.WriteError(w, "gone", errMsg, http.StatusGone)
 	case strings.Contains(errMsg, "not found"), strings.Contains(errMsg, "no worktree"):
 		response.WriteNotFound(w, errMsg)
-	case strings.Contains(errMsg, "already exists"), strings.Contains(errMsg, "already has worktree"), strings.Contains(errMsg, "not active"):
+	case strings.Contains(errMsg, "unmerged changes"),
+		strings.Contains(errMsg, "already exists"),
+		strings.Contains(errMsg, "already has worktree"),
+		strings.Contains(errMsg, "not active"):
 		response.WriteError(w, "conflict", errMsg, http.StatusConflict)
-	case strings.Contains(errMsg, "git not available"):
-		response.WriteInternalError(w, errMsg)
 	default:
 		response.WriteInternalError(w, errMsg)
 	}

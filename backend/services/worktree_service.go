@@ -35,23 +35,28 @@ func (w *WorktreeService) GitAvailable() error {
 	return nil
 }
 
+// resolveRepoPath looks up a project's repository path from the registry.
+func (w *WorktreeService) resolveRepoPath(projectName string) (string, error) {
+	entry, found := w.registryStore.FindByName(projectName)
+	if !found || entry == nil {
+		return "", fmt.Errorf("project not found: %s", projectName)
+	}
+	return entry.RepoPath, nil
+}
+
 // Create creates a git worktree for a stream.
 // It derives the worktree path and branch name from the stream name,
 // runs `git worktree add`, and updates stream.json with the worktree info.
 func (w *WorktreeService) Create(projectName, streamName string) (*types.WorktreeResult, error) {
-	// Check git is available
 	if err := w.GitAvailable(); err != nil {
 		return nil, err
 	}
 
-	// Look up project repoPath from registry
-	entry, found := w.registryStore.FindByName(projectName)
-	if !found || entry == nil {
-		return nil, fmt.Errorf("project not found: %s", projectName)
+	repoPath, err := w.resolveRepoPath(projectName)
+	if err != nil {
+		return nil, err
 	}
-	repoPath := entry.RepoPath
 
-	// Verify stream exists and is active with no existing worktree
 	meta, err := w.streamStore.ReadStreamMeta(projectName, streamName)
 	if err != nil {
 		return nil, fmt.Errorf("stream not found: %s-%s", projectName, streamName)
@@ -63,29 +68,24 @@ func (w *WorktreeService) Create(projectName, streamName string) (*types.Worktre
 		return nil, fmt.Errorf("stream already has worktree: %s-%s", projectName, streamName)
 	}
 
-	// Derive worktree path and branch name
 	repoParent := filepath.Dir(repoPath)
 	worktreePath := filepath.Join(repoParent, "bmad-wt-"+streamName)
 	branchName := "stream/" + streamName
 
-	// Check if worktree path already exists on disk
 	if _, err := os.Stat(worktreePath); err == nil {
 		return nil, fmt.Errorf("worktree path already exists: %s", worktreePath)
 	}
 
-	// Run git worktree add
 	cmd := exec.Command("git", "-C", repoPath, "worktree", "add", worktreePath, "-b", branchName)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		outputStr := strings.TrimSpace(string(output))
-		// Check for branch-already-exists error
 		if strings.Contains(outputStr, "already exists") {
 			return nil, fmt.Errorf("branch already exists: %s", branchName)
 		}
 		return nil, fmt.Errorf("git worktree add failed: %s", outputStr)
 	}
 
-	// Update stream.json with worktree and branch fields
 	meta.Worktree = worktreePath
 	meta.Branch = branchName
 	meta.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
@@ -104,19 +104,15 @@ func (w *WorktreeService) Create(projectName, streamName string) (*types.Worktre
 // If force is false and the worktree has uncommitted changes, it returns an error.
 // If the worktree directory was already deleted, it prunes stale refs.
 func (w *WorktreeService) Remove(projectName, streamName string, force bool) error {
-	// Check git is available
 	if err := w.GitAvailable(); err != nil {
 		return err
 	}
 
-	// Look up project repoPath from registry
-	entry, found := w.registryStore.FindByName(projectName)
-	if !found || entry == nil {
-		return fmt.Errorf("project not found: %s", projectName)
+	repoPath, err := w.resolveRepoPath(projectName)
+	if err != nil {
+		return err
 	}
-	repoPath := entry.RepoPath
 
-	// Read stream metadata — verify stream exists and has a worktree
 	meta, err := w.streamStore.ReadStreamMeta(projectName, streamName)
 	if err != nil {
 		return fmt.Errorf("stream not found: %s-%s", projectName, streamName)
@@ -128,7 +124,6 @@ func (w *WorktreeService) Remove(projectName, streamName string, force bool) err
 	worktreePath := meta.Worktree
 	branchName := meta.Branch
 
-	// Check if worktree directory exists on disk
 	if _, statErr := os.Stat(worktreePath); os.IsNotExist(statErr) {
 		// Directory already deleted — prune stale worktree references
 		cmd := exec.Command("git", "-C", repoPath, "worktree", "prune")
@@ -137,10 +132,11 @@ func (w *WorktreeService) Remove(projectName, streamName string, force bool) err
 		}
 	} else {
 		// Directory exists — remove the worktree via git
-		args := []string{"-C", repoPath, "worktree", "remove", worktreePath}
+		args := []string{"-C", repoPath, "worktree", "remove"}
 		if force {
-			args = []string{"-C", repoPath, "worktree", "remove", "--force", worktreePath}
+			args = append(args, "--force")
 		}
+		args = append(args, worktreePath)
 		cmd := exec.Command("git", args...)
 		output, removeErr := cmd.CombinedOutput()
 		if removeErr != nil {
@@ -152,7 +148,6 @@ func (w *WorktreeService) Remove(projectName, streamName string, force bool) err
 		}
 	}
 
-	// Delete the branch
 	if branchName != "" {
 		deleteFlag := "-d"
 		if force {
@@ -169,7 +164,6 @@ func (w *WorktreeService) Remove(projectName, streamName string, force bool) err
 		}
 	}
 
-	// Clear worktree and branch fields in stream.json
 	meta.Worktree = ""
 	meta.Branch = ""
 	meta.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
@@ -184,14 +178,11 @@ func (w *WorktreeService) Remove(projectName, streamName string, force bool) err
 // CheckMergeStatus checks whether a stream's worktree branch has been merged
 // into the current HEAD of the project's repository.
 func (w *WorktreeService) CheckMergeStatus(projectName, streamName string) (*types.WorktreeStatus, error) {
-	// Look up project repoPath from registry
-	entry, found := w.registryStore.FindByName(projectName)
-	if !found || entry == nil {
-		return nil, fmt.Errorf("project not found: %s", projectName)
+	repoPath, err := w.resolveRepoPath(projectName)
+	if err != nil {
+		return nil, err
 	}
-	repoPath := entry.RepoPath
 
-	// Read stream metadata for branch name
 	meta, err := w.streamStore.ReadStreamMeta(projectName, streamName)
 	if err != nil {
 		return nil, fmt.Errorf("stream not found: %s-%s", projectName, streamName)
@@ -202,7 +193,6 @@ func (w *WorktreeService) CheckMergeStatus(projectName, streamName string) (*typ
 
 	branchName := meta.Branch
 
-	// Run git branch --merged to check if the branch appears in merged list
 	cmd := exec.Command("git", "-C", repoPath, "branch", "--merged")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -233,18 +223,15 @@ func (w *WorktreeService) CheckMergeStatus(projectName, streamName string) (*typ
 // the stream metadata and the worktree directory exist.
 // This is a read-only operation — it does not run any git commands.
 func (w *WorktreeService) Switch(projectName, streamName string) (*types.WorktreeResult, error) {
-	// Read stream metadata
 	meta, err := w.streamStore.ReadStreamMeta(projectName, streamName)
 	if err != nil {
 		return nil, fmt.Errorf("stream not found: %s-%s", projectName, streamName)
 	}
 
-	// Check if stream has a worktree
 	if meta.Worktree == "" {
 		return nil, fmt.Errorf("no worktree exists for this stream: %s-%s", projectName, streamName)
 	}
 
-	// Validate worktree directory still exists on disk
 	if _, err := os.Stat(meta.Worktree); os.IsNotExist(err) {
 		return nil, fmt.Errorf("worktree path no longer exists: %s — recreate the worktree to continue", meta.Worktree)
 	}
