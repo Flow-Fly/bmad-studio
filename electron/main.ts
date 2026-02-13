@@ -6,9 +6,8 @@ import {
   safeStorage,
 } from 'electron';
 import path from 'node:path';
-import { spawn, type ChildProcess } from 'node:child_process';
 import fs from 'node:fs';
-import net from 'node:net';
+import { ProcessManager, type ProcessStatusEvent } from './process-manager';
 
 // ---------------------------------------------------------------------------
 // Paths & Constants
@@ -52,11 +51,41 @@ function writeStore(data: Record<string, string>): void {
 // Go Backend Sidecar
 // ---------------------------------------------------------------------------
 
-let goProcess: ChildProcess | null = null;
+let processManager: ProcessManager | null = null;
 
-function spawnGoBackend(): void {
+function handleSidecarStatusChange(event: ProcessStatusEvent): void {
+  console.log('[electron] Sidecar status changed:', event);
+
+  // Forward status changes to renderer
+  if (mainWindow) {
+    switch (event.status) {
+      case 'starting':
+        mainWindow.webContents.send('sidecar:starting', {});
+        break;
+      case 'running':
+        mainWindow.webContents.send('sidecar:ready', { port: GO_PORT });
+        break;
+      case 'restarting':
+        mainWindow.webContents.send('sidecar:restarting', {
+          retryCount: event.retryCount,
+        });
+        break;
+      case 'failed':
+        mainWindow.webContents.send('sidecar:error', {
+          code: 'SIDECAR_FAILED',
+          message: event.error || 'Unknown error',
+        });
+        break;
+    }
+  }
+}
+
+async function startGoBackend(): Promise<void> {
   const binPath = goBackendPath();
-  if (!binPath) return; // Dev mode — backend started externally
+  if (!binPath) {
+    console.log('[electron] Dev mode — skipping Go backend spawn');
+    return; // Dev mode — backend started externally
+  }
 
   if (!fs.existsSync(binPath)) {
     const msg = `Go backend binary not found at: ${binPath}`;
@@ -69,51 +98,40 @@ function spawnGoBackend(): void {
     return;
   }
 
-  console.log(`[electron] Spawning Go backend: ${binPath}`);
-  goProcess = spawn(binPath, [], {
-    stdio: ['ignore', 'pipe', 'pipe'],
-    env: { ...process.env, PORT: String(GO_PORT) },
-  });
+  processManager = new ProcessManager(
+    {
+      binaryPath: binPath,
+      port: GO_PORT,
+      maxRetries: 3,
+      retryDelayMs: 1000,
+      healthCheckPath: '/health',
+      shutdownTimeoutMs: 5000,
+    },
+    handleSidecarStatusChange
+  );
 
-  goProcess.stdout?.on('data', (data: Buffer) => {
-    process.stdout.write(`[go] ${data.toString()}`);
-  });
-
-  goProcess.stderr?.on('data', (data: Buffer) => {
-    process.stderr.write(`[go:err] ${data.toString()}`);
-  });
-
-  goProcess.on('exit', (code) => {
-    console.log(`[electron] Go backend exited with code ${code}`);
-    goProcess = null;
-  });
-}
-
-function killGoBackend(): void {
-  if (goProcess) {
-    console.log('[electron] Killing Go backend...');
-    goProcess.kill('SIGTERM');
-    goProcess = null;
+  try {
+    await processManager.spawn();
+    console.log('[electron] Go backend is ready');
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error('[electron] Go backend failed to start:', errorMessage);
+    dialog.showMessageBox({
+      type: 'warning',
+      title: 'Backend Unavailable',
+      message: 'BMAD Studio Backend Failed to Start',
+      detail: `${errorMessage}\n\nThe app will continue running but backend-dependent features will be disabled.`,
+      buttons: ['Continue'],
+    });
   }
 }
 
-function waitForPort(port: number, timeoutMs = 15_000): Promise<void> {
-  const start = Date.now();
-  return new Promise((resolve, reject) => {
-    function attempt() {
-      if (Date.now() - start > timeoutMs) {
-        return reject(new Error(`Timed out waiting for port ${port}`));
-      }
-      const socket = net.createConnection({ port, host: '127.0.0.1' }, () => {
-        socket.destroy();
-        resolve();
-      });
-      socket.on('error', () => {
-        setTimeout(attempt, 200);
-      });
-    }
-    attempt();
-  });
+async function stopGoBackend(): Promise<void> {
+  if (processManager) {
+    console.log('[electron] Stopping Go backend...');
+    await processManager.shutdown();
+    processManager = null;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -198,17 +216,9 @@ function createWindow(): void {
 
 app.whenReady().then(async () => {
   registerIPC();
-  spawnGoBackend();
 
-  // Wait for Go backend to be ready (skip in dev if already running)
-  if (goBackendPath()) {
-    try {
-      await waitForPort(GO_PORT);
-      console.log('[electron] Go backend is ready');
-    } catch (err) {
-      console.error('[electron] Go backend failed to start:', err);
-    }
-  }
+  // Start Go backend and wait for it to be ready
+  await startGoBackend();
 
   createWindow();
 
@@ -225,6 +235,10 @@ app.on('window-all-closed', () => {
   }
 });
 
-app.on('will-quit', () => {
-  killGoBackend();
+app.on('before-quit', async (event) => {
+  if (processManager) {
+    event.preventDefault();
+    await stopGoBackend();
+    app.quit();
+  }
 });
