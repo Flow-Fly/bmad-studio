@@ -121,6 +121,108 @@ export function computePhaseGraphNodes(
   return nodes;
 }
 
+// --- Agent name to role mapping ---
+
+const AGENT_DESCRIPTIONS: Record<string, string> = {
+  mary: 'Product Manager',
+  john: 'Architect',
+  winston: 'UX Designer',
+  sally: 'Scrum Master',
+  bob: 'Developer',
+  amelia: 'QA Engineer',
+  barry: 'DevOps Engineer',
+};
+
+/**
+ * Map an agent name (e.g. "Mary") to a brief role description.
+ */
+export function getAgentDescription(agentName: string): string {
+  return AGENT_DESCRIPTIONS[agentName.toLowerCase()] ?? 'Agent';
+}
+
+/**
+ * Return the output artifact path for a given workflow.
+ */
+export function getWorkflowOutput(
+  workflowId: string,
+  phases: PhasesResponse,
+): string | null {
+  for (const phase of phases.phases) {
+    for (const wf of phase.workflows) {
+      if (wf.id === workflowId) {
+        return wf.output;
+      }
+    }
+  }
+  return null;
+}
+
+export interface WorkflowContextDependency {
+  workflowId: string;
+  outputPath: string;
+  label: string;
+}
+
+/**
+ * For a given workflow, walk the dependency chain backward through the PhasesResponse
+ * to find all upstream workflows that produce outputs consumed by this workflow.
+ *
+ * Logic: find all required workflows in earlier phases (and earlier in the same phase)
+ * that produce an output artifact. These are the "context" files the agent will load.
+ */
+export function getWorkflowContextDependencies(
+  workflowId: string,
+  phases: PhasesResponse,
+): WorkflowContextDependency[] {
+  const deps: WorkflowContextDependency[] = [];
+
+  // Find the target workflow and its phase
+  let targetPhaseNum = -1;
+  let targetIndexInPhase = -1;
+
+  const sortedPhases = [...phases.phases].sort((a, b) => a.phase - b.phase);
+
+  for (const phase of sortedPhases) {
+    const idx = phase.workflows.findIndex((wf) => wf.id === workflowId);
+    if (idx !== -1) {
+      targetPhaseNum = phase.phase;
+      targetIndexInPhase = idx;
+      break;
+    }
+  }
+
+  if (targetPhaseNum === -1) return deps;
+
+  // Walk all phases up to and including the target phase
+  for (const phase of sortedPhases) {
+    if (phase.phase > targetPhaseNum) break;
+
+    for (let i = 0; i < phase.workflows.length; i++) {
+      const wf = phase.workflows[i];
+
+      // Skip the workflow itself
+      if (wf.id === workflowId) continue;
+
+      // In the same phase, only include workflows before the target
+      if (phase.phase === targetPhaseNum && i >= targetIndexInPhase) continue;
+
+      // Only include workflows that produce an output
+      if (!wf.output) continue;
+
+      // Only include required workflows (not optional/conditional)
+      if (!wf.required) continue;
+
+      deps.push({
+        workflowId: wf.id,
+        outputPath: wf.output,
+        label: formatWorkflowLabel(wf.id),
+      });
+    }
+  }
+
+  return deps;
+}
+
 export function computePhaseGraphEdges(phases: PhasesResponse | null): PhaseGraphEdge[] {
   if (!phases) return [];
 

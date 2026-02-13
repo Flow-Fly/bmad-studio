@@ -1,7 +1,10 @@
 import { CircleCheck, CircleDot, Circle, Lock, FileText } from 'lucide-react';
 import type { PhaseGraphNode as PhaseGraphNodeType, NodeVisualState } from '../../types/phases';
+import type { PhasesResponse } from '../../types/phases';
+import type { WorkflowStatus } from '../../types/workflow';
 import { formatWorkflowLabel } from '../../lib/phase-utils';
 import { AgentBadge } from './AgentBadge';
+import { ContextDependencyTooltip } from './ContextDependencyTooltip';
 import {
   Tooltip,
   TooltipTrigger,
@@ -29,6 +32,8 @@ interface PhaseNodeProps {
   nodeIndex?: number;
   artifactPath?: string | null;
   isSuggested?: boolean;
+  phases?: PhasesResponse | null;
+  workflowStatus?: WorkflowStatus | null;
   onFocus?: () => void;
   onClick?: (workflowId: string, visualState: NodeVisualState) => void;
 }
@@ -41,6 +46,8 @@ export function PhaseNode({
   nodeIndex,
   artifactPath,
   isSuggested = false,
+  phases,
+  workflowStatus,
   onFocus,
   onClick,
 }: PhaseNodeProps) {
@@ -142,8 +149,16 @@ export function PhaseNode({
           )}
         </div>
       </TooltipTrigger>
-      <TooltipContent className="whitespace-pre-line">
-        {tooltipContent}
+      <TooltipContent className={phases && workflowStatus ? 'p-2' : 'whitespace-pre-line'}>
+        {phases && workflowStatus ? (
+          <ContextDependencyTooltip
+            node={node}
+            phases={phases}
+            workflowStatus={workflowStatus}
+          />
+        ) : (
+          tooltipContent
+        )}
       </TooltipContent>
     </Tooltip>
   );
