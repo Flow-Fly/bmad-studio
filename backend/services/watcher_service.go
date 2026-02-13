@@ -547,14 +547,6 @@ func DerivePhase(filename string) string {
 // phaseOrder defines the ordered list of BMAD phases from lowest to highest.
 var phaseOrder = []string{"analysis", "planning", "solutioning", "implementation"}
 
-// phaseRank maps phase names to their ordinal rank for comparison.
-var phaseRank = map[string]int{
-	"analysis":       0,
-	"planning":       1,
-	"solutioning":    2,
-	"implementation": 3,
-}
-
 // DeriveStreamPhase scans a stream directory and determines the highest completed
 // BMAD phase based on artifact presence. It returns the phase name and a list of
 // all matched artifact filenames. Returns ("", nil) when no artifacts match.
@@ -619,27 +611,15 @@ func DeriveStreamPhase(streamDirPath string) (string, []string) {
 
 	// Find the highest completed phase
 	highestPhase := ""
-	var allArtifacts []string
-
 	for _, phase := range phaseOrder {
 		if artifacts, ok := phaseArtifacts[phase]; ok && len(artifacts) > 0 {
 			highestPhase = phase
 		}
 	}
 
-	// Collect all artifacts from all completed phases (not just the highest)
+	// Collect all matched artifacts across all phases
+	var allArtifacts []string
 	if highestPhase != "" {
-		for _, phase := range phaseOrder {
-			if artifacts, ok := phaseArtifacts[phase]; ok {
-				allArtifacts = append(allArtifacts, artifacts...)
-			}
-			if phase == highestPhase {
-				break
-			}
-		}
-		// Also include artifacts from phases above the highest that happen to exist
-		// Actually, collect ALL matched artifacts regardless of phase ordering
-		allArtifacts = nil
 		for _, phase := range phaseOrder {
 			if artifacts, ok := phaseArtifacts[phase]; ok {
 				allArtifacts = append(allArtifacts, artifacts...)
