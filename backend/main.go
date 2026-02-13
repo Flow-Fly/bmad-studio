@@ -114,6 +114,9 @@ func main() {
 	// Create worktree service
 	worktreeService := services.NewWorktreeService(registryStore, streamStore)
 
+	// Wire worktree service into stream service for archive-time cleanup
+	streamService.SetWorktreeService(worktreeService)
+
 	// Create and start watcher service for central store stream directories
 	watcherService := services.NewWatcherService(centralStore, streamStore, registryStore, hub)
 	if err := watcherService.Start(); err != nil {

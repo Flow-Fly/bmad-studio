@@ -23,6 +23,8 @@ func NewWorktreesHandler(worktreeService *services.WorktreeService) *WorktreesHa
 func writeWorktreeServiceError(w http.ResponseWriter, err error) {
 	errMsg := err.Error()
 	switch {
+	case strings.Contains(errMsg, "unmerged changes"):
+		response.WriteError(w, "conflict", errMsg, http.StatusConflict)
 	case strings.Contains(errMsg, "no longer exists"):
 		response.WriteError(w, "gone", errMsg, http.StatusGone)
 	case strings.Contains(errMsg, "not found"), strings.Contains(errMsg, "no worktree"):
@@ -51,6 +53,25 @@ func (h *WorktreesHandler) CreateWorktree(w http.ResponseWriter, r *http.Request
 	}
 
 	response.WriteJSON(w, http.StatusCreated, result)
+}
+
+// RemoveWorktree handles DELETE /projects/:id/streams/:sid/worktree
+func (h *WorktreesHandler) RemoveWorktree(w http.ResponseWriter, r *http.Request) {
+	projectName := chi.URLParam(r, "id")
+	streamName := extractStreamName(w, projectName, chi.URLParam(r, "sid"))
+	if streamName == "" {
+		return
+	}
+
+	force := r.URL.Query().Get("force") == "true"
+
+	err := h.worktreeService.Remove(projectName, streamName, force)
+	if err != nil {
+		writeWorktreeServiceError(w, err)
+		return
+	}
+
+	response.WriteJSON(w, http.StatusOK, map[string]string{"status": "removed"})
 }
 
 // SwitchWorktree handles POST /projects/:id/streams/:sid/worktree/switch
