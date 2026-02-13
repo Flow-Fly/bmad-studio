@@ -43,14 +43,14 @@ export function MessageBlock({ message }: MessageBlockProps) {
                   part={part.data}
                 />
               );
-            case 'tool_call':
+            case 'tool-call':
               return (
                 <MessagePartToolCall
                   key={part.partId}
                   part={part.data}
                 />
               );
-            case 'tool_result':
+            case 'tool-result':
               return (
                 <MessagePartToolResult
                   key={part.partId}

@@ -9,15 +9,22 @@ interface MessagePartToolResultProps {
 export function MessagePartToolResult({ part }: MessagePartToolResultProps) {
   const isError = part.isError === true;
 
-  // Try to detect if result is JSON
-  let formattedResult = part.result;
+  // Format the result for display
+  let formattedResult: string;
   let isJson = false;
-  try {
-    const parsed = JSON.parse(part.result);
-    formattedResult = JSON.stringify(parsed, null, 2);
+  if (typeof part.result === 'string') {
+    try {
+      const parsed = JSON.parse(part.result);
+      formattedResult = JSON.stringify(parsed, null, 2);
+      isJson = true;
+    } catch {
+      formattedResult = part.result;
+    }
+  } else if (part.result != null) {
+    formattedResult = JSON.stringify(part.result, null, 2);
     isJson = true;
-  } catch {
-    // Not JSON, use as-is
+  } else {
+    formattedResult = '';
   }
 
   return (

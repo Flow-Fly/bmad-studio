@@ -32,7 +32,7 @@ export function MessagePartToolCall({ part }: MessagePartToolCallProps) {
 
       <Collapsible.Content className="border-t border-gray-300 p-3 dark:border-gray-700">
         <pre className="overflow-x-auto rounded bg-gray-50 p-2 font-mono text-xs text-gray-800 dark:bg-gray-900 dark:text-gray-200">
-          {JSON.stringify(part.input, null, 2)}
+          {JSON.stringify(part.args, null, 2)}
         </pre>
       </Collapsible.Content>
     </Collapsible.Root>
