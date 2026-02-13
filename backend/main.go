@@ -115,6 +115,8 @@ func main() {
 	} else {
 		// Wire watcher hook into stream service for dynamic stream create/archive notifications
 		streamService.SetWatcherHook(watcherService)
+		// Wire phase deriver into stream service for on-demand phase derivation
+		streamService.SetPhaseDeriver(watcherService)
 	}
 
 	// Create insight store and service

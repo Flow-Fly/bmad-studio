@@ -672,3 +672,315 @@ func TestWatcherService_RemoveStreamWatchWhenNotRunning(t *testing.T) {
 	// Should be a no-op, not panic
 	env.watcher.RemoveStreamWatch("myapp", "norun")
 }
+
+// --- DeriveStreamPhase Tests ---
+
+func TestDeriveStreamPhase(t *testing.T) {
+	tests := []struct {
+		name              string
+		files             []string // flat files to create
+		dirs              map[string][]string // dir -> files inside
+		expectedPhase     string
+		expectedArtifacts []string
+	}{
+		{
+			name:              "empty directory returns empty phase",
+			files:             nil,
+			expectedPhase:     "",
+			expectedArtifacts: nil,
+		},
+		{
+			name:              "brainstorm.md only returns analysis",
+			files:             []string{"brainstorm.md"},
+			expectedPhase:     "analysis",
+			expectedArtifacts: []string{"brainstorm.md"},
+		},
+		{
+			name:              "research.md only returns analysis",
+			files:             []string{"research.md"},
+			expectedPhase:     "analysis",
+			expectedArtifacts: []string{"research.md"},
+		},
+		{
+			name:              "multiple analysis artifacts",
+			files:             []string{"brainstorm.md", "research-deep-dive.md"},
+			expectedPhase:     "analysis",
+			expectedArtifacts: []string{"brainstorm.md", "research-deep-dive.md"},
+		},
+		{
+			name:              "prd.md returns planning with analysis artifacts",
+			files:             []string{"brainstorm.md", "prd.md"},
+			expectedPhase:     "planning",
+			expectedArtifacts: []string{"brainstorm.md", "prd.md"},
+		},
+		{
+			name:              "prd.md without analysis still returns planning",
+			files:             []string{"prd.md"},
+			expectedPhase:     "planning",
+			expectedArtifacts: []string{"prd.md"},
+		},
+		{
+			name:              "architecture.md returns solutioning",
+			files:             []string{"brainstorm.md", "prd.md", "architecture.md"},
+			expectedPhase:     "solutioning",
+			expectedArtifacts: []string{"brainstorm.md", "prd.md", "architecture.md"},
+		},
+		{
+			name:              "architecture without intermediate phases returns solutioning",
+			files:             []string{"architecture.md"},
+			expectedPhase:     "solutioning",
+			expectedArtifacts: []string{"architecture.md"},
+		},
+		{
+			name:  "epics with md file returns implementation",
+			files: []string{"brainstorm.md", "prd.md", "architecture.md"},
+			dirs: map[string][]string{
+				"epics": {"epic-1.md"},
+			},
+			expectedPhase:     "implementation",
+			expectedArtifacts: []string{"brainstorm.md", "prd.md", "architecture.md", "epics/epic-1.md"},
+		},
+		{
+			name: "epics without md files does not trigger implementation",
+			dirs: map[string][]string{
+				"epics": {"readme.txt"},
+			},
+			expectedPhase:     "",
+			expectedArtifacts: nil,
+		},
+		{
+			name: "sharded prd/index.md triggers planning",
+			dirs: map[string][]string{
+				"prd": {"index.md"},
+			},
+			expectedPhase:     "planning",
+			expectedArtifacts: []string{"prd/index.md"},
+		},
+		{
+			name: "sharded architecture/index.md triggers solutioning",
+			dirs: map[string][]string{
+				"architecture": {"index.md"},
+			},
+			expectedPhase:     "solutioning",
+			expectedArtifacts: []string{"architecture/index.md"},
+		},
+		{
+			name: "sharded prd without index.md does not trigger planning",
+			dirs: map[string][]string{
+				"prd": {"other.md"},
+			},
+			expectedPhase:     "",
+			expectedArtifacts: nil,
+		},
+		{
+			name:              "non-artifact files are ignored",
+			files:             []string{"readme.md", "notes.txt", "stream.json"},
+			expectedPhase:     "",
+			expectedArtifacts: nil,
+		},
+		{
+			name:              "case insensitive matching",
+			files:             []string{"Brainstorm.md", "PRD.md"},
+			expectedPhase:     "planning",
+			expectedArtifacts: []string{"Brainstorm.md", "PRD.md"},
+		},
+		{
+			name:  "full stack: all phases present returns implementation",
+			files: []string{"brainstorm.md", "research.md", "prd.md", "architecture.md"},
+			dirs: map[string][]string{
+				"epics": {"epic-1.md", "epic-2.md"},
+			},
+			expectedPhase:     "implementation",
+			expectedArtifacts: []string{"brainstorm.md", "research.md", "prd.md", "architecture.md", "epics/epic-1.md", "epics/epic-2.md"},
+		},
+		{
+			name:              "hidden files are ignored",
+			files:             []string{".gitignore", "brainstorm.md"},
+			expectedPhase:     "analysis",
+			expectedArtifacts: []string{"brainstorm.md"},
+		},
+		{
+			name:              "temp files are ignored",
+			files:             []string{"brainstorm.tmp", "prd.swp", "research~"},
+			expectedPhase:     "",
+			expectedArtifacts: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := resolveDir(t, t.TempDir())
+
+			// Create flat files
+			for _, f := range tt.files {
+				require.NoError(t, os.WriteFile(filepath.Join(dir, f), []byte("content"), 0644))
+			}
+
+			// Create directories with files
+			for dirName, files := range tt.dirs {
+				subDir := filepath.Join(dir, dirName)
+				require.NoError(t, os.MkdirAll(subDir, 0755))
+				for _, f := range files {
+					require.NoError(t, os.WriteFile(filepath.Join(subDir, f), []byte("content"), 0644))
+				}
+			}
+
+			phase, artifacts := DeriveStreamPhase(dir)
+			assert.Equal(t, tt.expectedPhase, phase, "phase mismatch")
+
+			if tt.expectedArtifacts == nil {
+				assert.Nil(t, artifacts, "expected nil artifacts")
+			} else {
+				assert.ElementsMatch(t, tt.expectedArtifacts, artifacts, "artifacts mismatch")
+			}
+		})
+	}
+}
+
+func TestDeriveStreamPhase_NonExistentDir(t *testing.T) {
+	phase, artifacts := DeriveStreamPhase("/nonexistent/path/that/does/not/exist")
+	assert.Equal(t, "", phase)
+	assert.Nil(t, artifacts)
+}
+
+func TestWatcherService_PhaseChangeUpdatesStreamJson(t *testing.T) {
+	env := setupWatcherTest(t)
+	defer env.hub.Stop()
+
+	streamDir := env.createProjectAndStream(t, "myapp", "phasetest")
+
+	err := env.watcher.Start()
+	require.NoError(t, err)
+	defer env.watcher.Stop()
+
+	time.Sleep(50 * time.Millisecond)
+
+	// Create a brainstorm file — should trigger phase change to "analysis"
+	require.NoError(t, os.WriteFile(filepath.Join(streamDir, "brainstorm.md"), []byte("# Brainstorm"), 0644))
+
+	// Wait for debounce + processing
+	time.Sleep(500 * time.Millisecond)
+
+	// Read stream.json and verify phase was updated
+	meta, err := env.streamStore.ReadStreamMeta("myapp", "phasetest")
+	require.NoError(t, err)
+	assert.Equal(t, "analysis", meta.Phase, "stream.json phase should be updated to analysis")
+}
+
+func TestWatcherService_PhaseChangeProgression(t *testing.T) {
+	env := setupWatcherTest(t)
+	defer env.hub.Stop()
+
+	streamDir := env.createProjectAndStream(t, "myapp", "progress")
+
+	err := env.watcher.Start()
+	require.NoError(t, err)
+	defer env.watcher.Stop()
+
+	time.Sleep(50 * time.Millisecond)
+
+	// Step 1: Create brainstorm -> analysis
+	require.NoError(t, os.WriteFile(filepath.Join(streamDir, "brainstorm.md"), []byte("# Brainstorm"), 0644))
+	time.Sleep(500 * time.Millisecond)
+
+	meta, err := env.streamStore.ReadStreamMeta("myapp", "progress")
+	require.NoError(t, err)
+	assert.Equal(t, "analysis", meta.Phase)
+
+	// Step 2: Create prd.md -> planning
+	require.NoError(t, os.WriteFile(filepath.Join(streamDir, "prd.md"), []byte("# PRD"), 0644))
+	time.Sleep(500 * time.Millisecond)
+
+	meta, err = env.streamStore.ReadStreamMeta("myapp", "progress")
+	require.NoError(t, err)
+	assert.Equal(t, "planning", meta.Phase)
+}
+
+func TestWatcherService_NoBroadcastWhenPhaseUnchanged(t *testing.T) {
+	env := setupWatcherTest(t)
+	defer env.hub.Stop()
+
+	streamDir := env.createProjectAndStream(t, "myapp", "nochange")
+
+	// Pre-create a brainstorm file so phase starts at "analysis"
+	require.NoError(t, os.WriteFile(filepath.Join(streamDir, "brainstorm.md"), []byte("# Brainstorm"), 0644))
+
+	// Manually set phase in stream.json so it's already "analysis"
+	meta, err := env.streamStore.ReadStreamMeta("myapp", "nochange")
+	require.NoError(t, err)
+	meta.Phase = "analysis"
+	require.NoError(t, env.streamStore.WriteStreamMeta("myapp", "nochange", *meta))
+
+	err = env.watcher.Start()
+	require.NoError(t, err)
+	defer env.watcher.Stop()
+
+	time.Sleep(50 * time.Millisecond)
+
+	// Modify the brainstorm file (same phase, should not change)
+	require.NoError(t, os.WriteFile(filepath.Join(streamDir, "brainstorm.md"), []byte("# Brainstorm v2"), 0644))
+	time.Sleep(500 * time.Millisecond)
+
+	// Phase should still be "analysis" (unchanged)
+	meta, err = env.streamStore.ReadStreamMeta("myapp", "nochange")
+	require.NoError(t, err)
+	assert.Equal(t, "analysis", meta.Phase)
+}
+
+func TestWatcherService_DeriveAndUpdatePhase(t *testing.T) {
+	env := setupWatcherTest(t)
+	defer env.hub.Stop()
+
+	streamDir := env.createProjectAndStream(t, "myapp", "derive")
+
+	// Create some artifacts
+	require.NoError(t, os.WriteFile(filepath.Join(streamDir, "brainstorm.md"), []byte("# Brainstorm"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(streamDir, "prd.md"), []byte("# PRD"), 0644))
+
+	// Call DeriveAndUpdatePhase
+	phase, err := env.watcher.DeriveAndUpdatePhase("myapp", "derive")
+	require.NoError(t, err)
+	assert.Equal(t, "planning", phase)
+
+	// Verify stream.json was updated
+	meta, err := env.streamStore.ReadStreamMeta("myapp", "derive")
+	require.NoError(t, err)
+	assert.Equal(t, "planning", meta.Phase)
+}
+
+func TestWatcherService_DeriveAndUpdatePhase_NoChange(t *testing.T) {
+	env := setupWatcherTest(t)
+	defer env.hub.Stop()
+
+	streamDir := env.createProjectAndStream(t, "myapp", "nochange2")
+
+	// Create artifact and pre-set phase
+	require.NoError(t, os.WriteFile(filepath.Join(streamDir, "brainstorm.md"), []byte("# Brainstorm"), 0644))
+
+	meta, err := env.streamStore.ReadStreamMeta("myapp", "nochange2")
+	require.NoError(t, err)
+	originalUpdatedAt := meta.UpdatedAt
+	meta.Phase = "analysis"
+	require.NoError(t, env.streamStore.WriteStreamMeta("myapp", "nochange2", *meta))
+
+	// Call DeriveAndUpdatePhase — phase matches, so no write should occur
+	phase, err := env.watcher.DeriveAndUpdatePhase("myapp", "nochange2")
+	require.NoError(t, err)
+	assert.Equal(t, "analysis", phase)
+
+	// UpdatedAt should not have changed (no write occurred)
+	meta, err = env.streamStore.ReadStreamMeta("myapp", "nochange2")
+	require.NoError(t, err)
+	assert.Equal(t, originalUpdatedAt, meta.UpdatedAt)
+}
+
+func TestWatcherService_DeriveAndUpdatePhase_EmptyDir(t *testing.T) {
+	env := setupWatcherTest(t)
+	defer env.hub.Stop()
+
+	env.createProjectAndStream(t, "myapp", "empty")
+
+	phase, err := env.watcher.DeriveAndUpdatePhase("myapp", "empty")
+	require.NoError(t, err)
+	assert.Equal(t, "", phase)
+}
