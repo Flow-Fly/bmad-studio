@@ -46,6 +46,7 @@ export function WorkflowActionPopover({
   const isServerReady = serverStatus === 'ready';
   const isServerUnavailable =
     serverStatus === 'not-installed' ||
+    serverStatus === 'not-configured' ||
     serverStatus === 'error';
   const isServerConnecting =
     serverStatus === 'connecting' ||
@@ -59,6 +60,9 @@ export function WorkflowActionPopover({
   const getButtonTooltip = () => {
     if (serverStatus === 'not-installed') {
       return 'OpenCode not detected — install to enable AI sessions';
+    }
+    if (serverStatus === 'not-configured') {
+      return 'Configure OpenCode to enable AI sessions';
     }
     if (serverStatus === 'error') {
       return `OpenCode unavailable: ${errorMessage}`;
@@ -136,6 +140,11 @@ export function WorkflowActionPopover({
           {serverStatus === 'not-installed' && (
             <p className="text-[length:var(--text-xs)] text-warning">
               OpenCode not detected — install to enable AI sessions
+            </p>
+          )}
+          {serverStatus === 'not-configured' && (
+            <p className="text-[length:var(--text-xs)] text-warning">
+              OpenCode detected but not configured — configure to enable AI sessions
             </p>
           )}
           {serverStatus === 'error' && (

@@ -1,29 +1,60 @@
 import { create } from 'zustand';
+import type { OpenCodeProviderConfig, OpenCodeConfigData } from '../types/window';
 
 export type OpenCodeServerStatus =
   | 'not-installed'
+  | 'not-configured'
   | 'connecting'
   | 'ready'
   | 'restarting'
   | 'error';
 
 interface OpenCodeState {
+  // Server connection status
   serverStatus: OpenCodeServerStatus;
   port: number | null;
   errorMessage: string | null;
   retryCount: number;
 
+  // Detection state
+  installed: boolean;
+  configured: boolean;
+  opencodePath: string | null;
+  opencodeVersion: string | null;
+  providers: OpenCodeProviderConfig[];
+  models: string[];
+  defaultProvider: string | null;
+
   // Actions
   setServerReady: (port: number) => void;
   setServerRestarting: (retryCount: number) => void;
   setServerError: (message: string) => void;
+  setDetectionResult: (data: {
+    installed: boolean;
+    path?: string;
+    version?: string;
+    config?: OpenCodeConfigData;
+  }) => void;
+  setNotInstalled: () => void;
+  setNotConfigured: (path: string) => void;
+  redetectOpenCode: () => Promise<void>;
 }
 
 export const useOpenCodeStore = create<OpenCodeState>((set) => ({
+  // Server connection status
   serverStatus: 'not-installed',
   port: null,
   errorMessage: null,
   retryCount: 0,
+
+  // Detection state
+  installed: false,
+  configured: false,
+  opencodePath: null,
+  opencodeVersion: null,
+  providers: [],
+  models: [],
+  defaultProvider: null,
 
   setServerReady: (port: number) =>
     set({
@@ -46,6 +77,69 @@ export const useOpenCodeStore = create<OpenCodeState>((set) => ({
       errorMessage: message,
       port: null,
     }),
+
+  setDetectionResult: (data) =>
+    set({
+      installed: data.installed,
+      configured: !!data.config,
+      opencodePath: data.path || null,
+      opencodeVersion: data.version || null,
+      providers: data.config?.providers || [],
+      models: data.config?.models || [],
+      defaultProvider: data.config?.defaultProvider || null,
+      serverStatus: data.installed
+        ? data.config
+          ? 'connecting'
+          : 'not-configured'
+        : 'not-installed',
+    }),
+
+  setNotInstalled: () =>
+    set({
+      installed: false,
+      configured: false,
+      serverStatus: 'not-installed',
+      opencodePath: null,
+      opencodeVersion: null,
+      providers: [],
+      models: [],
+      defaultProvider: null,
+      port: null,
+      errorMessage: null,
+    }),
+
+  setNotConfigured: (path: string) =>
+    set({
+      installed: true,
+      configured: false,
+      serverStatus: 'not-configured',
+      opencodePath: path,
+      providers: [],
+      models: [],
+      defaultProvider: null,
+    }),
+
+  redetectOpenCode: async () => {
+    try {
+      const result = await window.opencode.redetect();
+
+      if (!result.success) {
+        console.error('[OpenCode Store] Re-detection failed:', result.error);
+        set({
+          errorMessage: result.error || 'Re-detection failed',
+        });
+        return;
+      }
+
+      // Events will trigger state updates via IPC listeners
+    } catch (error) {
+      console.error('[OpenCode Store] Re-detection error:', error);
+      set({
+        errorMessage:
+          error instanceof Error ? error.message : 'Re-detection failed',
+      });
+    }
+  },
 }));
 
 // Initialize IPC listeners
@@ -64,6 +158,21 @@ if (typeof window !== 'undefined' && window.opencode) {
     console.error('[OpenCode Store] Server error:', data.message);
     useOpenCodeStore.getState().setServerError(data.message);
   });
+
+  window.opencode.onDetectionResult((data) => {
+    console.log('[OpenCode Store] Detection result:', data);
+    useOpenCodeStore.getState().setDetectionResult(data);
+  });
+
+  window.opencode.onNotInstalled(() => {
+    console.log('[OpenCode Store] OpenCode not installed');
+    useOpenCodeStore.getState().setNotInstalled();
+  });
+
+  window.opencode.onNotConfigured((data) => {
+    console.log('[OpenCode Store] OpenCode not configured at', data.path);
+    useOpenCodeStore.getState().setNotConfigured(data.path);
+  });
 }
 
 // Selectors
@@ -76,5 +185,13 @@ export const useServerError = () =>
     message: state.errorMessage,
   }));
 
-export const useOpenCodePort = () =>
-  useOpenCodeStore((state) => state.port);
+export const useOpenCodePort = () => useOpenCodeStore((state) => state.port);
+
+export const useOpenCodeInstalled = () =>
+  useOpenCodeStore((state) => state.installed);
+
+export const useOpenCodeConfigured = () =>
+  useOpenCodeStore((state) => state.configured);
+
+export const useOpenCodeProviders = () =>
+  useOpenCodeStore((state) => state.providers);
