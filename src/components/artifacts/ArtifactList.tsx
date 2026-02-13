@@ -32,7 +32,7 @@ export function ArtifactList({ onSelectArtifact }: ArtifactListProps) {
       setError(null);
 
       try {
-        const data = await listArtifacts(stream.projectId, activeStreamId);
+        const data = await listArtifacts(stream.project, activeStreamId);
         if (!cancelled) {
           setArtifacts(data);
           setLoading(false);

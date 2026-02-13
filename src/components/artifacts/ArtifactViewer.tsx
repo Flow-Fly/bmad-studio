@@ -38,7 +38,7 @@ export function ArtifactViewer({ artifactPath, phase, onBack }: ArtifactViewerPr
       setError(null);
 
       try {
-        const text = await readArtifact(stream.projectId, activeStreamId, artifactPath);
+        const text = await readArtifact(stream.project, activeStreamId, artifactPath);
         if (!cancelled) {
           setContent(text);
           setLoading(false);

@@ -473,7 +473,6 @@ export function PhaseGraphContainer({ onNodeClick }: PhaseGraphContainerProps) {
                         )}
                         {/* Conditional gates after this node */}
                         {gates?.map(gate => {
-                          const gateNode = nodes.find(n => n.workflow_id === gate.workflowId);
                           const parentComplete = workflowStatus.workflow_statuses[node.workflow_id]?.is_complete ?? false;
                           return (
                             <ConditionalGate
