@@ -32,30 +32,27 @@ export function MessagePartToolResult({ part }: MessagePartToolResultProps) {
       className={cn(
         'ml-4 rounded border p-3',
         isError
-          ? 'border-red-300 bg-red-50 dark:border-red-800 dark:bg-red-950'
-          : 'border-green-300 bg-green-50 dark:border-green-800 dark:bg-green-950'
+          ? 'border-status-blocked/30 bg-status-blocked/10'
+          : 'border-status-complete/30 bg-status-complete/10'
       )}
     >
-      <div className="mb-2 flex items-center gap-2 text-sm font-medium">
+      <div className="mb-2 flex items-center gap-2 text-[length:var(--text-sm)] font-medium">
         {isError ? (
           <>
-            <XCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
-            <span className="text-red-700 dark:text-red-300">Tool Error</span>
+            <XCircle className="h-4 w-4 text-status-blocked" />
+            <span className="text-status-blocked">Tool Error</span>
           </>
         ) : (
           <>
-            <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
-            <span className="text-green-700 dark:text-green-300">Result</span>
+            <CheckCircle className="h-4 w-4 text-status-complete" />
+            <span className="text-status-complete">Result</span>
           </>
         )}
       </div>
 
       <pre
         className={cn(
-          'overflow-x-auto rounded p-2 text-xs',
-          isError
-            ? 'bg-red-100 text-red-900 dark:bg-red-900 dark:text-red-100'
-            : 'bg-green-100 text-green-900 dark:bg-green-900 dark:text-green-100',
+          'overflow-x-auto rounded bg-surface-sunken p-2 text-[length:var(--text-xs)] text-interactive-default',
           isJson && 'font-mono'
         )}
       >

@@ -7,12 +7,12 @@ interface MessagePartThinkingProps {
 
 export function MessagePartThinking({ part }: MessagePartThinkingProps) {
   return (
-    <div className="rounded border border-purple-200 bg-purple-50 p-3 dark:border-purple-800 dark:bg-purple-950">
-      <div className="mb-2 flex items-center gap-2 text-sm font-medium text-purple-700 dark:text-purple-300">
+    <div className="rounded border border-surface-border bg-surface-overlay p-3">
+      <div className="mb-2 flex items-center gap-2 text-[length:var(--text-sm)] font-medium text-phase-quickflow-spec">
         <Brain className="h-4 w-4" />
         <span>Thinking...</span>
       </div>
-      <p className="text-sm italic text-purple-600 dark:text-purple-400">
+      <p className="text-[length:var(--text-sm)] italic text-interactive-default">
         {part.thinking}
       </p>
     </div>

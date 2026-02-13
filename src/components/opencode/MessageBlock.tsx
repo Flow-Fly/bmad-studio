@@ -9,21 +9,22 @@ import { StreamingIndicator } from './StreamingIndicator';
 
 interface MessageBlockProps {
   message: Message;
+  isLastAssistant: boolean;
 }
 
-export function MessageBlock({ message }: MessageBlockProps) {
+export function MessageBlock({ message, isLastAssistant }: MessageBlockProps) {
   const sessionStatus = useSessionStatus();
 
   const isUser = message.role === 'user';
-  const isStreaming = sessionStatus === 'busy' && !isUser;
+  const isStreaming = sessionStatus === 'busy' && isLastAssistant;
 
   return (
     <div
       className={cn(
         'rounded-lg p-4',
         isUser
-          ? 'ml-auto max-w-[80%] bg-blue-50 dark:bg-blue-950'
-          : 'mr-auto max-w-[95%] bg-gray-50 dark:bg-gray-900'
+          ? 'ml-auto max-w-[80%] bg-interactive-accent/10'
+          : 'mr-auto max-w-[95%] bg-surface-raised'
       )}
     >
       <div className="flex flex-col gap-3">

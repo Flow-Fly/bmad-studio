@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import * as Collapsible from '@radix-ui/react-collapsible';
 import type { ToolCallPart } from '../../types/message';
 import { Wrench, ChevronDown } from 'lucide-react';
 import { cn } from '../../lib/utils';
@@ -12,29 +11,31 @@ export function MessagePartToolCall({ part }: MessagePartToolCallProps) {
   const [open, setOpen] = useState(false);
 
   return (
-    <Collapsible.Root
-      open={open}
-      onOpenChange={setOpen}
-      className="rounded border border-gray-300 bg-gray-100 dark:border-gray-700 dark:bg-gray-800"
-    >
-      <Collapsible.Trigger className="flex w-full items-center gap-2 p-3 text-left hover:bg-gray-200 dark:hover:bg-gray-700">
-        <Wrench className="h-4 w-4 text-gray-600 dark:text-gray-400" />
-        <span className="font-medium text-gray-900 dark:text-gray-100">
+    <div className="rounded border border-surface-border bg-surface-overlay">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="flex w-full items-center gap-2 p-3 text-left hover:bg-surface-raised"
+      >
+        <Wrench className="h-4 w-4 text-interactive-default" />
+        <span className="font-medium text-interactive-active">
           {part.toolName}
         </span>
         <ChevronDown
           className={cn(
-            'ml-auto h-4 w-4 text-gray-600 transition-transform dark:text-gray-400',
+            'ml-auto h-4 w-4 text-interactive-default transition-transform',
             open && 'rotate-180'
           )}
         />
-      </Collapsible.Trigger>
+      </button>
 
-      <Collapsible.Content className="border-t border-gray-300 p-3 dark:border-gray-700">
-        <pre className="overflow-x-auto rounded bg-gray-50 p-2 font-mono text-xs text-gray-800 dark:bg-gray-900 dark:text-gray-200">
-          {JSON.stringify(part.args, null, 2)}
-        </pre>
-      </Collapsible.Content>
-    </Collapsible.Root>
+      {open && (
+        <div className="border-t border-surface-border p-3">
+          <pre className="overflow-x-auto rounded bg-surface-sunken p-2 font-mono text-[length:var(--text-xs)] text-interactive-default">
+            {JSON.stringify(part.args, null, 2)}
+          </pre>
+        </div>
+      )}
+    </div>
   );
 }
