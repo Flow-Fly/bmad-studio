@@ -42,6 +42,14 @@ export class OpenCodeClient {
   }
 
   /**
+   * Returns the raw SDK client for direct access (e.g., SSE event subscription).
+   * Returns null if not initialized.
+   */
+  getSdkClient(): OpencodeClient | null {
+    return this.client;
+  }
+
+  /**
    * Returns the raw SDK client. Throws if not initialized.
    */
   private getClient(): OpencodeClient {

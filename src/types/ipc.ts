@@ -136,6 +136,7 @@ export interface SessionStatusEvent {
 export interface MessageUpdatedEvent {
   sessionId: string;
   messageId: string;
+  role: 'user' | 'assistant';
   parts: MessagePart[];
 }
 
@@ -143,7 +144,9 @@ export interface PartUpdatedEvent {
   sessionId: string;
   messageId: string;
   partId: string;
+  type: string;
   content: string;
+  delta?: string;
 }
 
 export interface PermissionAskedEvent {
@@ -159,6 +162,7 @@ export interface QuestionAskedEvent {
 }
 
 export interface OpenCodeErrorEvent {
+  sessionId?: string;
   code: string;
   message: string;
 }
