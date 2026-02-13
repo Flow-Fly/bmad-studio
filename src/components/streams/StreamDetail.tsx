@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { GitBranch } from 'lucide-react';
 
 import { useStreamStore } from '@/stores/stream.store';
@@ -6,7 +6,9 @@ import { usePhaseStore } from '@/stores/phase.store';
 import { Badge } from '@/components/ui/badge';
 import { PhaseDotIndicator } from '@/components/streams/PhaseDotIndicator';
 import { PhaseGraphContainer } from '@/components/phase-graph/PhaseGraphContainer';
+import { ArtifactViewer } from '@/components/artifacts/ArtifactViewer';
 import { formatRelativeTime } from '@/lib/format-utils';
+import type { NodeVisualState } from '@/types/phases';
 
 function capitalize(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
@@ -19,6 +21,10 @@ export function StreamDetail() {
   const fetchPhaseData = usePhaseStore((s) => s.fetchPhaseData);
   const clearPhaseState = usePhaseStore((s) => s.clearPhaseState);
 
+  const [view, setView] = useState<'graph' | 'artifact'>('graph');
+  const [artifactPath, setArtifactPath] = useState<string | null>(null);
+  const [artifactPhase, setArtifactPhase] = useState<string | undefined>(undefined);
+
   // Fetch phase data when active stream changes
   useEffect(() => {
     if (activeStreamId) {
@@ -26,7 +32,27 @@ export function StreamDetail() {
     } else {
       clearPhaseState();
     }
+    // Reset view when switching streams
+    setView('graph');
+    setArtifactPath(null);
   }, [activeStreamId, fetchPhaseData, clearPhaseState]);
+
+  // Handle node click from phase graph
+  const handleNodeClick = useCallback(
+    (workflowId: string, visualState: NodeVisualState, path?: string | null) => {
+      if (visualState === 'complete' && path) {
+        setArtifactPath(path);
+        setArtifactPhase(stream?.phase);
+        setView('artifact');
+      }
+    },
+    [stream?.phase],
+  );
+
+  const handleBackToGraph = useCallback(() => {
+    setView('graph');
+    setArtifactPath(null);
+  }, []);
 
   if (!stream) {
     return (
@@ -68,9 +94,18 @@ export function StreamDetail() {
         </div>
       </div>
 
-      {/* Phase graph */}
+      {/* Content area — phase graph or artifact viewer */}
       <div className="flex-1 overflow-auto">
-        <PhaseGraphContainer />
+        {view === 'graph' && (
+          <PhaseGraphContainer onNodeClick={handleNodeClick} />
+        )}
+        {view === 'artifact' && artifactPath && (
+          <ArtifactViewer
+            artifactPath={artifactPath}
+            phase={artifactPhase}
+            onBack={handleBackToGraph}
+          />
+        )}
       </div>
     </div>
   );

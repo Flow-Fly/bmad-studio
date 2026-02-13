@@ -1,9 +1,11 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Repeat } from 'lucide-react';
 import { computePhaseGraphNodes, computePhaseGraphEdges, getNodeVisualState } from '../../lib/phase-utils';
-import type { PhasesResponse, PhaseGraphNode } from '../../types/phases';
+import type { PhasesResponse, PhaseGraphNode, NodeVisualState } from '../../types/phases';
 import { usePhaseStore } from '../../stores/phase.store';
 import { PhaseNode } from './PhaseNode';
+import { ConditionalGate } from './ConditionalGate';
+import { WorkflowActionPopover } from './WorkflowActionPopover';
 import { TooltipProvider } from '../ui/tooltip';
 import { cn } from '../../lib/utils';
 
@@ -16,19 +18,30 @@ const PHASE_ABBR: Record<string, string> = {
 
 const DEV_LOOP_IDS = new Set(['create-story', 'dev-story', 'code-review']);
 
+/** Visual states that allow clicking to open the workflow action popover */
+const ACTIONABLE_STATES = new Set<NodeVisualState>([
+  'current', 'required', 'recommended', 'conditional', 'optional', 'not-started',
+]);
+
 interface PhaseColumn {
   num: number;
   name: string;
   nodes: PhaseGraphNode[];
 }
 
-export function PhaseGraphContainer() {
+interface PhaseGraphContainerProps {
+  onNodeClick?: (workflowId: string, visualState: NodeVisualState, artifactPath?: string | null) => void;
+}
+
+export function PhaseGraphContainer({ onNodeClick }: PhaseGraphContainerProps) {
   const [compact, setCompact] = useState(false);
   const [focusedIndex, setFocusedIndex] = useState(-1);
+  const [popoverNodeId, setPopoverNodeId] = useState<string | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const graphRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
+  const announceRef = useRef<HTMLDivElement>(null);
 
   const phases = usePhaseStore((s) => s.phases);
   const workflowStatus = usePhaseStore((s) => s.workflowStatus);
@@ -45,6 +58,26 @@ export function PhaseGraphContainer() {
     () => computePhaseGraphEdges(phases),
     [phases],
   );
+
+  // Build a set of conditional workflows keyed by their included_by parent
+  const conditionalGates = useMemo(() => {
+    if (!phases) return new Map<string, { workflowId: string; label: string; conditionType: string }[]>();
+    const gates = new Map<string, { workflowId: string; label: string; conditionType: string }[]>();
+    for (const phase of phases.phases) {
+      for (const wf of phase.workflows) {
+        if (wf.conditional !== null && wf.included_by !== null) {
+          const existing = gates.get(wf.included_by) ?? [];
+          existing.push({
+            workflowId: wf.id,
+            label: wf.conditional,
+            conditionType: wf.condition_type ?? 'flag',
+          });
+          gates.set(wf.included_by, existing);
+        }
+      }
+    }
+    return gates;
+  }, [phases]);
 
   // ResizeObserver for compact mode
   useEffect(() => {
@@ -119,6 +152,92 @@ export function PhaseGraphContainer() {
     return () => cancelAnimationFrame(frame);
   }, [nodes, edges, compact, computeEdgePaths]);
 
+  // Announce focused node to screen readers
+  const announceNode = useCallback((node: PhaseGraphNode) => {
+    if (announceRef.current) {
+      const visualState = getNodeVisualState(node.status, node.is_current, node.dependencies_met);
+      const artifactPath = workflowStatus?.workflow_statuses[node.workflow_id]?.artifact_path;
+      let text = `${node.label}, Phase ${node.phase_num}, ${visualState}`;
+      if (node.agent) text += `, Agent: ${node.agent}`;
+      if (artifactPath) text += ', artifact available';
+      announceRef.current.textContent = text;
+    }
+  }, [workflowStatus]);
+
+  // Handle node click dispatch
+  const handleNodeClick = useCallback(
+    (workflowId: string, visualState: NodeVisualState) => {
+      if (!workflowStatus) return;
+      const artifactPath = workflowStatus.workflow_statuses[workflowId]?.artifact_path;
+
+      if (visualState === 'complete' && artifactPath) {
+        onNodeClick?.(workflowId, visualState, artifactPath);
+        return;
+      }
+
+      if (visualState === 'complete' && !artifactPath) {
+        // No artifact for this completed node — no action
+        return;
+      }
+
+      if (ACTIONABLE_STATES.has(visualState)) {
+        setPopoverNodeId(workflowId);
+      }
+    },
+    [workflowStatus, onNodeClick],
+  );
+
+  // Handle node activation from keyboard (Enter/Space)
+  const activateNode = useCallback(
+    (node: PhaseGraphNode, openArtifactDirectly: boolean = false) => {
+      if (!workflowStatus) return;
+      const visualState = getNodeVisualState(node.status, node.is_current, node.dependencies_met);
+      const artifactPath = workflowStatus.workflow_statuses[node.workflow_id]?.artifact_path;
+
+      if (visualState === 'locked') return;
+
+      if (openArtifactDirectly && visualState === 'complete' && artifactPath) {
+        onNodeClick?.(node.workflow_id, visualState, artifactPath);
+        return;
+      }
+
+      handleNodeClick(node.workflow_id, visualState);
+    },
+    [workflowStatus, handleNodeClick, onNodeClick],
+  );
+
+  // Focus management: Tab entering graph auto-focuses suggested/first node
+  const handleFocus = useCallback(
+    (e: React.FocusEvent<HTMLDivElement>) => {
+      // Only handle focus entering from outside (not from child elements)
+      if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+      if (!nodes.length) return;
+
+      const filteredNodes = nodes.filter(n => !DEV_LOOP_IDS.has(n.workflow_id));
+      if (!filteredNodes.length) return;
+
+      // Find the suggested node or first non-locked node
+      let targetNode = filteredNodes.find(
+        n => n.workflow_id === workflowStatus?.next_workflow_id,
+      );
+      if (!targetNode) {
+        targetNode = filteredNodes.find(n => {
+          const vs = getNodeVisualState(n.status, n.is_current, n.dependencies_met);
+          return vs !== 'locked';
+        });
+      }
+      if (!targetNode) targetNode = filteredNodes[0];
+
+      const targetIndex = nodes.indexOf(targetNode);
+      setFocusedIndex(targetIndex);
+      const el = graphRef.current?.querySelector<HTMLElement>(
+        `[data-node-index="${targetIndex}"]`,
+      );
+      el?.focus();
+    },
+    [nodes, workflowStatus],
+  );
+
   // Keyboard navigation
   const handleKeydown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -171,9 +290,30 @@ export function PhaseGraphContainer() {
           }
           break;
         }
-        case 'Enter':
+        case 'Enter': {
           e.preventDefault();
+          activateNode(currentNode, false);
           return;
+        }
+        case ' ': {
+          e.preventDefault();
+          // Space directly opens artifact for complete nodes
+          activateNode(currentNode, true);
+          return;
+        }
+        case 'i': {
+          // Show tooltip — trigger focus on the node to show its tooltip
+          e.preventDefault();
+          const el = graphRef.current?.querySelector<HTMLElement>(
+            `[data-node-index="${focusedIndex}"]`,
+          );
+          if (el) {
+            // Blur and refocus to retrigger tooltip
+            el.blur();
+            requestAnimationFrame(() => el.focus());
+          }
+          return;
+        }
         default:
           return;
       }
@@ -185,10 +325,19 @@ export function PhaseGraphContainer() {
           `[data-node-index="${nextIndex}"]`,
         );
         el?.focus();
+
+        // Announce focused node for screen readers
+        const nextNode = nodes[nextIndex];
+        if (nextNode) announceNode(nextNode);
       }
     },
-    [nodes, focusedIndex],
+    [nodes, focusedIndex, activateNode, announceNode],
   );
+
+  // Derive focused node id for aria-activedescendant
+  const focusedNodeId = focusedIndex >= 0 && nodes[focusedIndex]
+    ? `node-${nodes[focusedIndex].workflow_id}`
+    : undefined;
 
   // Error state
   if (error) {
@@ -216,7 +365,11 @@ export function PhaseGraphContainer() {
   const isQuickFlow = phases.track === 'quick' || phases.phases.length <= 2;
 
   if (isQuickFlow) {
-    return renderQuickFlow(nodes, workflowStatus, compact, focusedIndex, setFocusedIndex);
+    return renderQuickFlow(
+      nodes, workflowStatus, compact, focusedIndex, setFocusedIndex,
+      handleNodeClick, handleKeydown, handleFocus, focusedNodeId, announceRef,
+      popoverNodeId, setPopoverNodeId, onNodeClick,
+    );
   }
 
   const columns = buildColumns(phases, nodes);
@@ -234,7 +387,10 @@ export function PhaseGraphContainer() {
           )}
           role="group"
           aria-label="BMAD phase graph"
+          aria-activedescendant={focusedNodeId}
+          tabIndex={0}
           onKeyDown={handleKeydown}
+          onFocus={handleFocus}
         >
           {columns.map(col => {
             const isCurrent = col.num === currentPhaseNum;
@@ -281,8 +437,11 @@ export function PhaseGraphContainer() {
                       workflowStatus.workflow_statuses[node.workflow_id]?.artifact_path;
                     const isSuggested =
                       node.workflow_id === workflowStatus.next_workflow_id;
+                    const gates = conditionalGates.get(node.workflow_id);
+                    const isPopoverOpen = popoverNodeId === node.workflow_id;
+                    const isActionable = ACTIONABLE_STATES.has(visualState);
 
-                    return (
+                    const nodeElement = (
                       <PhaseNode
                         key={node.workflow_id}
                         node={node}
@@ -293,7 +452,38 @@ export function PhaseGraphContainer() {
                         artifactPath={artifactPath}
                         isSuggested={isSuggested}
                         onFocus={() => setFocusedIndex(nodeIndex)}
+                        onClick={handleNodeClick}
                       />
+                    );
+
+                    return (
+                      <div key={node.workflow_id} className="flex flex-col items-center gap-2">
+                        {isActionable ? (
+                          <WorkflowActionPopover
+                            node={node}
+                            open={isPopoverOpen}
+                            onOpenChange={(open) => setPopoverNodeId(open ? node.workflow_id : null)}
+                            onViewArtifact={(path) => onNodeClick?.(node.workflow_id, 'complete', path)}
+                            artifactPath={artifactPath}
+                          >
+                            {nodeElement}
+                          </WorkflowActionPopover>
+                        ) : (
+                          nodeElement
+                        )}
+                        {/* Conditional gates after this node */}
+                        {gates?.map(gate => {
+                          const parentComplete = workflowStatus.workflow_statuses[node.workflow_id]?.is_complete ?? false;
+                          return (
+                            <ConditionalGate
+                              key={gate.workflowId}
+                              label={gate.label}
+                              isOpen={parentComplete}
+                              compact={compact}
+                            />
+                          );
+                        })}
+                      </div>
                     );
                   })}
                   {hasDevLoop && (
@@ -343,7 +533,7 @@ export function PhaseGraphContainer() {
         </div>
 
         {/* Screen reader announcement */}
-        <div className="sr-only" aria-live="polite" />
+        <div ref={announceRef} className="sr-only" aria-live="polite" />
       </div>
     </TooltipProvider>
   );
@@ -371,6 +561,14 @@ function renderQuickFlow(
   compact: boolean,
   focusedIndex: number,
   setFocusedIndex: (idx: number) => void,
+  handleNodeClick: (workflowId: string, visualState: NodeVisualState) => void,
+  handleKeydown: (e: React.KeyboardEvent) => void,
+  handleFocus: (e: React.FocusEvent<HTMLDivElement>) => void,
+  focusedNodeId: string | undefined,
+  announceRef: React.RefObject<HTMLDivElement | null>,
+  popoverNodeId: string | null,
+  setPopoverNodeId: (id: string | null) => void,
+  onNodeClick?: (workflowId: string, visualState: NodeVisualState, artifactPath?: string | null) => void,
 ) {
   const nodeIndexMap = new Map(nodes.map((n, i) => [n.workflow_id, i]));
 
@@ -381,6 +579,10 @@ function renderQuickFlow(
           className="relative flex flex-col items-center gap-6 rounded-[var(--radius-lg)] border border-border-primary bg-bg-secondary p-6"
           role="group"
           aria-label="BMAD quick flow phase graph"
+          aria-activedescendant={focusedNodeId}
+          tabIndex={0}
+          onKeyDown={handleKeydown}
+          onFocus={handleFocus}
         >
           <span className="text-center text-[length:var(--text-xs)] font-semibold uppercase tracking-wide text-text-secondary">
             Quick Flow
@@ -396,20 +598,39 @@ function renderQuickFlow(
               workflowStatus.workflow_statuses[node.workflow_id]?.artifact_path;
             const isSuggested =
               node.workflow_id === workflowStatus.next_workflow_id;
+            const isPopoverOpen = popoverNodeId === node.workflow_id;
+            const isActionable = ACTIONABLE_STATES.has(visualState);
+
+            const nodeElement = (
+              <PhaseNode
+                node={node}
+                visualState={visualState}
+                compact={compact}
+                focused={nodeIndex === focusedIndex}
+                nodeIndex={nodeIndex}
+                artifactPath={artifactPath}
+                isSuggested={isSuggested}
+                onFocus={() => setFocusedIndex(nodeIndex)}
+                onClick={handleNodeClick}
+              />
+            );
 
             return (
               <div key={node.workflow_id} className="flex flex-col items-center gap-6">
                 <div className={cn('rounded-[var(--radius-md)]', QUICK_FLOW_NODE_COLORS[idx])}>
-                  <PhaseNode
-                    node={node}
-                    visualState={visualState}
-                    compact={compact}
-                    focused={nodeIndex === focusedIndex}
-                    nodeIndex={nodeIndex}
-                    artifactPath={artifactPath}
-                    isSuggested={isSuggested}
-                    onFocus={() => setFocusedIndex(nodeIndex)}
-                  />
+                  {isActionable ? (
+                    <WorkflowActionPopover
+                      node={node}
+                      open={isPopoverOpen}
+                      onOpenChange={(open) => setPopoverNodeId(open ? node.workflow_id : null)}
+                      onViewArtifact={(path) => onNodeClick?.(node.workflow_id, 'complete', path)}
+                      artifactPath={artifactPath}
+                    >
+                      {nodeElement}
+                    </WorkflowActionPopover>
+                  ) : (
+                    nodeElement
+                  )}
                 </div>
                 {/* Vertical edge between nodes */}
                 {idx < nodes.length - 1 && (
@@ -420,6 +641,8 @@ function renderQuickFlow(
           })}
         </div>
       </div>
+      {/* Screen reader announcement */}
+      <div ref={announceRef} className="sr-only" aria-live="polite" />
     </TooltipProvider>
   );
 }

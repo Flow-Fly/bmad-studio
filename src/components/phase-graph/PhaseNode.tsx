@@ -30,6 +30,7 @@ interface PhaseNodeProps {
   artifactPath?: string | null;
   isSuggested?: boolean;
   onFocus?: () => void;
+  onClick?: (workflowId: string, visualState: NodeVisualState) => void;
 }
 
 export function PhaseNode({
@@ -41,6 +42,7 @@ export function PhaseNode({
   artifactPath,
   isSuggested = false,
   onFocus,
+  onClick,
 }: PhaseNodeProps) {
   const Icon = STATE_ICONS[visualState];
   const labelText =
@@ -54,7 +56,12 @@ export function PhaseNode({
     (visualState === 'not-started' || visualState === 'required');
 
   const tooltipContent = buildTooltipContent(node, visualState, hasArtifact);
-  const ariaLabel = buildAriaLabel(node, visualState);
+  const ariaLabel = buildAriaLabel(node, visualState, hasArtifact);
+
+  const handleClick = () => {
+    if (isLocked) return;
+    onClick?.(node.workflow_id, visualState);
+  };
 
   return (
     <Tooltip>
@@ -69,7 +76,7 @@ export function PhaseNode({
             visualState === 'complete' && 'border-success bg-success',
             visualState === 'skipped' && 'border-border-primary bg-bg-tertiary',
             visualState === 'locked' &&
-              'cursor-not-allowed border-border-primary bg-bg-tertiary opacity-60 hover:border-border-primary',
+              'pointer-events-none cursor-not-allowed border-border-primary bg-bg-tertiary opacity-60 hover:border-border-primary',
             visualState === 'conditional' && 'border-warning',
             visualState === 'required' && 'border-accent',
             visualState === 'recommended' && 'border-accent border-dashed',
@@ -78,6 +85,7 @@ export function PhaseNode({
             // Pulse animation for suggested starting point
             showPulse && 'animate-[node-pulse_2s_ease-in-out_infinite]',
           )}
+          id={`node-${node.workflow_id}`}
           role="button"
           tabIndex={focused ? 0 : -1}
           aria-label={ariaLabel}
@@ -85,6 +93,7 @@ export function PhaseNode({
           data-node-index={nodeIndex}
           data-workflow-id={node.workflow_id}
           onFocus={onFocus}
+          onClick={handleClick}
         >
           {node.agent && (
             <AgentBadge agent={node.agent} compact={compact} />
@@ -172,8 +181,15 @@ function getWorkflowTypeName(node: PhaseGraphNodeType): string {
 function buildAriaLabel(
   node: PhaseGraphNodeType,
   visualState: NodeVisualState,
+  hasArtifact: boolean = false,
 ): string {
   let label = `${node.label}, Phase ${node.phase_num}, ${getWorkflowTypeName(node)}, ${visualState}`;
+  if (node.agent) {
+    label += `, Agent: ${node.agent}`;
+  }
+  if (hasArtifact) {
+    label += ', artifact available';
+  }
   if (visualState === 'locked' && node.unmet_dependencies.length > 0) {
     const depNames = node.unmet_dependencies.map(id => formatWorkflowLabel(id));
     label += ` — blocked by: ${depNames.join(', ')}`;
