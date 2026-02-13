@@ -4,6 +4,7 @@ import { AgentBadge } from './AgentBadge';
 import { formatWorkflowLabel } from '../../lib/phase-utils';
 import type { PhaseGraphNode } from '../../types/phases';
 import { cn } from '../../lib/utils';
+import { useOpenCodeStore } from '../../stores/opencode.store';
 
 interface WorkflowActionPopoverProps {
   node: PhaseGraphNode;
@@ -38,6 +39,33 @@ export function WorkflowActionPopover({
 }: WorkflowActionPopoverProps) {
   const skillCommand = WORKFLOW_SKILL_MAP[node.workflow_id] ?? node.workflow_id;
   const hasArtifact = !!artifactPath;
+
+  const serverStatus = useOpenCodeStore((state) => state.serverStatus);
+  const errorMessage = useOpenCodeStore((state) => state.errorMessage);
+
+  const isServerReady = serverStatus === 'ready';
+  const isServerConnecting =
+    serverStatus === 'connecting' || serverStatus === 'restarting';
+
+  const buttonText = isServerConnecting
+    ? 'Connecting to OpenCode...'
+    : 'Launch Workflow';
+
+  function getButtonTooltip(): string | undefined {
+    switch (serverStatus) {
+      case 'not-installed':
+        return 'OpenCode not detected — install to enable AI sessions';
+      case 'not-configured':
+        return 'Configure OpenCode to enable AI sessions';
+      case 'error':
+        return `OpenCode unavailable: ${errorMessage}`;
+      case 'connecting':
+      case 'restarting':
+        return 'OpenCode server is starting...';
+      default:
+        return undefined;
+    }
+  }
 
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
@@ -79,11 +107,14 @@ export function WorkflowActionPopover({
           {/* Actions */}
           <div className={cn('flex gap-2', hasArtifact ? 'flex-col' : '')}>
             <button
-              className="flex-1 rounded-[var(--radius-md)] bg-accent/20 px-3 py-1.5 text-[length:var(--text-sm)] font-medium text-accent opacity-50 cursor-not-allowed"
-              disabled
-              title="OpenCode integration coming in Epic 7"
+              className={cn(
+                'flex-1 rounded-[var(--radius-md)] px-3 py-1.5 text-[length:var(--text-sm)] font-medium transition-opacity',
+                'bg-accent/20 text-accent opacity-50 cursor-not-allowed'
+              )}
+              disabled={!isServerReady}
+              title={getButtonTooltip() || 'Workflow launch coming in Epic 7'}
             >
-              Launch Workflow
+              {buttonText}
             </button>
             {hasArtifact && (
               <button
@@ -99,10 +130,32 @@ export function WorkflowActionPopover({
             )}
           </div>
 
-          {/* Epic 7 notice */}
-          <p className="text-[length:var(--text-xs)] text-text-muted">
-            OpenCode integration coming in Epic 7
-          </p>
+          {/* Server status message */}
+          {serverStatus === 'not-installed' && (
+            <p className="text-[length:var(--text-xs)] text-warning">
+              OpenCode not detected — install to enable AI sessions
+            </p>
+          )}
+          {serverStatus === 'not-configured' && (
+            <p className="text-[length:var(--text-xs)] text-warning">
+              OpenCode detected but not configured — configure to enable AI sessions
+            </p>
+          )}
+          {serverStatus === 'error' && (
+            <p className="text-[length:var(--text-xs)] text-error">
+              OpenCode unavailable: {errorMessage}
+            </p>
+          )}
+          {serverStatus === 'restarting' && (
+            <p className="text-[length:var(--text-xs)] text-text-muted">
+              OpenCode server restarting...
+            </p>
+          )}
+          {serverStatus === 'ready' && (
+            <p className="text-[length:var(--text-xs)] text-text-muted">
+              Full workflow launch integration coming in Epic 7
+            </p>
+          )}
         </div>
       </PopoverContent>
     </Popover>
