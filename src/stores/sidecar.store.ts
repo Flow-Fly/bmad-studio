@@ -47,22 +47,35 @@ export const useSidecarStore = create<SidecarState>((set) => ({
 }));
 
 // Initialize IPC listeners
-if (typeof window !== 'undefined' && window.sidecar) {
-  window.sidecar.onStarting(() => {
-    useSidecarStore.getState().setStatus('connecting');
-  });
+let cleanups: (() => void)[] = [];
 
-  window.sidecar.onReady((data) => {
-    useSidecarStore.getState().setReady(data.port);
-  });
+function registerListeners() {
+  cleanups.forEach(fn => fn());
+  cleanups = [];
 
-  window.sidecar.onRestarting((data) => {
-    useSidecarStore.getState().setRestarting(data.retryCount);
-  });
+  if (typeof window !== 'undefined' && window.sidecar) {
+    cleanups.push(window.sidecar.onStarting(() => {
+      useSidecarStore.getState().setStatus('connecting');
+    }));
 
-  window.sidecar.onError((data) => {
-    useSidecarStore.getState().setError(data.message);
-  });
+    cleanups.push(window.sidecar.onReady((data) => {
+      useSidecarStore.getState().setReady(data.port);
+    }));
+
+    cleanups.push(window.sidecar.onRestarting((data) => {
+      useSidecarStore.getState().setRestarting(data.retryCount);
+    }));
+
+    cleanups.push(window.sidecar.onError((data) => {
+      useSidecarStore.getState().setError(data.message);
+    }));
+  }
+}
+
+registerListeners();
+
+if (import.meta.hot) {
+  import.meta.hot.dispose(() => cleanups.forEach(fn => fn()));
 }
 
 // Selectors

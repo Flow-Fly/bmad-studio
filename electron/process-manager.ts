@@ -22,6 +22,7 @@ export class ProcessManager {
   private retryCount = 0;
   private status: ProcessStatus = 'stopped';
   private isShuttingDown = false;
+  private isRestarting = false;
 
   private readonly maxRetries: number;
   private readonly retryDelayMs: number;
@@ -79,6 +80,7 @@ export class ProcessManager {
 
       // Clean up process if it exists
       if (this.process) {
+        this.isRestarting = true;
         this.process.kill('SIGKILL');
         this.process = null;
       }
@@ -98,9 +100,11 @@ export class ProcessManager {
         );
 
         await new Promise((resolve) => setTimeout(resolve, this.retryDelayMs));
+        this.isRestarting = false;
         return this.spawn();
       } else {
         // Max retries exceeded
+        this.isRestarting = false;
         this.status = 'failed';
         this.onStatusChange({
           status: 'failed',
@@ -118,16 +122,23 @@ export class ProcessManager {
     }
 
     console.log('[ProcessManager] Manual restart requested');
+    this.isRestarting = true;
     this.retryCount = 0; // Reset retry count for manual restart
     this.status = 'restarting';
     this.onStatusChange({ status: 'restarting', retryCount: 0 });
 
     if (this.process) {
       this.process.kill('SIGTERM');
+      // Wait for the process to actually exit
+      await new Promise<void>((resolve) => {
+        const onExit = () => resolve();
+        this.process?.once('exit', onExit);
+        setTimeout(() => resolve(), 5000); // safety timeout
+      });
       this.process = null;
     }
 
-    await new Promise((resolve) => setTimeout(resolve, this.retryDelayMs));
+    this.isRestarting = false;
     return this.spawn();
   }
 
@@ -160,8 +171,9 @@ export class ProcessManager {
       this.process?.once('exit', exitHandler);
     });
 
+    let timeoutId: NodeJS.Timeout;
     const timeoutPromise = new Promise<void>((resolve) => {
-      setTimeout(() => {
+      timeoutId = setTimeout(() => {
         console.log('[ProcessManager] Shutdown timeout, sending SIGKILL');
         if (this.process && this.process.pid) {
           this.process.kill('SIGKILL');
@@ -171,6 +183,7 @@ export class ProcessManager {
     });
 
     await Promise.race([shutdownPromise, timeoutPromise]);
+    clearTimeout(timeoutId!);
 
     this.process = null;
     this.status = 'stopped';
@@ -212,8 +225,8 @@ export class ProcessManager {
     console.log(`[ProcessManager] Process exited with code ${code}`);
     this.process = null;
 
-    // Don't restart if we're shutting down
-    if (this.isShuttingDown) {
+    // Don't restart if we're shutting down or another code path is handling restart
+    if (this.isShuttingDown || this.isRestarting) {
       return;
     }
 
