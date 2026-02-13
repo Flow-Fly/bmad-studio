@@ -39,6 +39,19 @@ const MODEL_CONTEXT_WINDOWS: Record<string, number> = {
 };
 const DEFAULT_CONTEXT_WINDOW = 200000;
 
+const CONNECTION_STATUS_COLORS: Record<string, string> = {
+  connected: 'bg-success',
+  connecting: 'bg-warning animate-pulse',
+  error: 'bg-error',
+};
+
+const CONNECTION_STATUS_LABELS: Record<string, string> = {
+  connected: 'Connected',
+  connecting: 'Connecting...',
+  error: 'Connection error',
+  disconnected: 'Disconnected',
+};
+
 export function ChatPanel() {
   const [conversationId, setConversationId] = useState('');
   const [userHasScrolled, setUserHasScrolled] = useState(false);
@@ -374,15 +387,7 @@ export function ChatPanel() {
     return () => window.removeEventListener('beforeunload', handler);
   }, []);
 
-  // Connection status dot
-  const statusColor =
-    connectionStatus === 'connected'
-      ? 'bg-success'
-      : connectionStatus === 'connecting'
-        ? 'bg-warning animate-pulse'
-        : connectionStatus === 'error'
-          ? 'bg-error'
-          : 'bg-warning';
+  const statusColor = CONNECTION_STATUS_COLORS[connectionStatus] ?? 'bg-warning';
 
   // --- Render ---
 
@@ -409,15 +414,7 @@ export function ChatPanel() {
         <AgentBadge />
         <span
           className={cn('h-2 w-2 shrink-0 rounded-full', statusColor)}
-          title={
-            connectionStatus === 'connected'
-              ? 'Connected'
-              : connectionStatus === 'connecting'
-                ? 'Connecting...'
-                : connectionStatus === 'error'
-                  ? 'Connection error'
-                  : 'Disconnected'
-          }
+          title={CONNECTION_STATUS_LABELS[connectionStatus] ?? 'Disconnected'}
         />
         {messages.length > 0 && (
           <div className="relative ml-auto flex items-center gap-1">

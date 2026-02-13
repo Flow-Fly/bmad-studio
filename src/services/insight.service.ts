@@ -1,42 +1,28 @@
+import { apiFetch, API_BASE } from './api.service';
 import type { Insight } from '../types/insight';
 import { useInsightStore } from '../stores/insight.store';
 
-const API_BASE = 'http://localhost:3008/api/v1';
-
 export async function createInsight(projectId: string, insight: Insight): Promise<void> {
-  const response = await fetch(`${API_BASE}/projects/${projectId}/insights`, {
+  await apiFetch<Insight>(`${API_BASE}/projects/${projectId}/insights`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(insight),
   });
-  if (!response.ok) {
-    const errorText = await response.text().catch(() => response.statusText);
-    throw new Error(`Failed to create insight: ${errorText}`);
-  }
   useInsightStore.getState().addInsight(insight);
 }
 
 export async function fetchInsights(projectId: string): Promise<Insight[]> {
-  const response = await fetch(`${API_BASE}/projects/${projectId}/insights`);
-  if (!response.ok) {
-    const errorText = await response.text().catch(() => response.statusText);
-    throw new Error(`Failed to fetch insights: ${errorText}`);
-  }
-  const insights: Insight[] = await response.json();
+  const insights = await apiFetch<Insight[]>(`${API_BASE}/projects/${projectId}/insights`);
   useInsightStore.getState().setInsights(insights);
   return insights;
 }
 
 export async function updateInsight(projectId: string, insight: Insight): Promise<void> {
-  const response = await fetch(`${API_BASE}/projects/${projectId}/insights/${insight.id}`, {
+  await apiFetch<Insight>(`${API_BASE}/projects/${projectId}/insights/${insight.id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(insight),
   });
-  if (!response.ok) {
-    const errorText = await response.text().catch(() => response.statusText);
-    throw new Error(`Failed to update insight: ${errorText}`);
-  }
   useInsightStore.getState().updateInsight(insight);
 }
 
@@ -63,16 +49,11 @@ export async function compactConversation(
   projectId: string,
   request: CompactConversationRequest,
 ): Promise<Insight> {
-  const response = await fetch(`${API_BASE}/projects/${projectId}/insights/compact`, {
+  const insight = await apiFetch<Insight>(`${API_BASE}/projects/${projectId}/insights/compact`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(request),
   });
-  if (!response.ok) {
-    const errorText = await response.text().catch(() => response.statusText);
-    throw new Error(`Failed to compact conversation: ${errorText}`);
-  }
-  const insight: Insight = await response.json();
   useInsightStore.getState().addInsight(insight);
   return insight;
 }
@@ -82,8 +63,7 @@ export async function deleteInsight(projectId: string, insightId: string): Promi
     method: 'DELETE',
   });
   if (!response.ok) {
-    const errorText = await response.text().catch(() => response.statusText);
-    throw new Error(`Failed to delete insight: ${errorText}`);
+    throw new Error(`Failed to delete insight (${response.status})`);
   }
   useInsightStore.getState().removeInsight(insightId);
 }

@@ -138,8 +138,8 @@ func (s *InsightService) CompactConversation(ctx context.Context, projectName st
 	return insight, nil
 }
 
-// CreateInsight validates and persists an Insight for the given project.
-func (s *InsightService) CreateInsight(projectName string, insight types.Insight) error {
+// validateInsight checks required fields on an Insight.
+func validateInsight(insight types.Insight) error {
 	if insight.ID == "" {
 		return fmt.Errorf("insight id is required")
 	}
@@ -148,6 +148,14 @@ func (s *InsightService) CreateInsight(projectName string, insight types.Insight
 	}
 	if insight.Status == "" {
 		return fmt.Errorf("insight status is required")
+	}
+	return nil
+}
+
+// CreateInsight validates and persists an Insight for the given project.
+func (s *InsightService) CreateInsight(projectName string, insight types.Insight) error {
+	if err := validateInsight(insight); err != nil {
+		return err
 	}
 	return s.store.SaveInsight(projectName, insight)
 }
@@ -167,14 +175,8 @@ func (s *InsightService) GetInsight(projectName, insightID string) (types.Insigh
 
 // UpdateInsight validates and persists an updated Insight.
 func (s *InsightService) UpdateInsight(projectName string, insight types.Insight) error {
-	if insight.ID == "" {
-		return fmt.Errorf("insight id is required")
-	}
-	if insight.Title == "" {
-		return fmt.Errorf("insight title is required")
-	}
-	if insight.Status == "" {
-		return fmt.Errorf("insight status is required")
+	if err := validateInsight(insight); err != nil {
+		return err
 	}
 	return s.store.SaveInsight(projectName, insight)
 }

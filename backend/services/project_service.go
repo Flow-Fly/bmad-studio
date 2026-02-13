@@ -116,10 +116,5 @@ func (s *ProjectService) List() ([]types.RegistryEntry, error) {
 // Get reads and returns the project metadata for a specific project.
 // Returns error if the project doesn't exist or the metadata is corrupt.
 func (s *ProjectService) Get(projectName string) (*types.ProjectMeta, error) {
-	meta, err := s.projectStore.ReadProjectMeta(projectName)
-	if err != nil {
-		return nil, err
-	}
-
-	return meta, nil
+	return s.projectStore.ReadProjectMeta(projectName)
 }

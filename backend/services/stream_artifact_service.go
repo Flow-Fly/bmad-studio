@@ -133,19 +133,10 @@ func (s *StreamArtifactService) ReadArtifact(projectName, streamName, artifactPa
 
 // isExcluded checks whether a filename should be excluded from artifact listings.
 func isExcluded(name string) bool {
-	if metadataExclusions[name] {
-		return true
-	}
-	if strings.HasSuffix(name, ".tmp") {
-		return true
-	}
-	if strings.HasSuffix(name, ".swp") {
-		return true
-	}
-	if strings.HasSuffix(name, "~") {
-		return true
-	}
-	return false
+	return metadataExclusions[name] ||
+		strings.HasSuffix(name, ".tmp") ||
+		strings.HasSuffix(name, ".swp") ||
+		strings.HasSuffix(name, "~")
 }
 
 // validateArtifactPath validates and resolves an artifact path within a stream directory.

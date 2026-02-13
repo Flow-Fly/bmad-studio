@@ -58,6 +58,15 @@ func (s *StreamService) SetPhaseDeriver(deriver PhaseDeriver) {
 // streamNameRegex validates stream names: alphanumeric, hyphens, underscores; must start with alphanumeric
 var streamNameRegex = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_-]*$`)
 
+// verifyProjectExists checks the registry and returns an error if the project is not registered.
+func (s *StreamService) verifyProjectExists(projectName string) error {
+	entry, found := s.registryStore.FindByName(projectName)
+	if !found || entry == nil {
+		return fmt.Errorf("project not found: %s", projectName)
+	}
+	return nil
+}
+
 // Create creates a new stream for a project
 func (s *StreamService) Create(projectName, streamName string) (*types.StreamMeta, error) {
 	// Validate stream name
@@ -68,10 +77,8 @@ func (s *StreamService) Create(projectName, streamName string) (*types.StreamMet
 		return nil, fmt.Errorf("invalid stream name: must contain only alphanumeric characters, hyphens, and underscores, and must start with an alphanumeric character")
 	}
 
-	// Verify project exists in registry
-	entry, found := s.registryStore.FindByName(projectName)
-	if !found || entry == nil {
-		return nil, fmt.Errorf("project not found: %s", projectName)
+	if err := s.verifyProjectExists(projectName); err != nil {
+		return nil, err
 	}
 
 	// Check for duplicate stream
@@ -119,10 +126,8 @@ func (s *StreamService) Create(projectName, streamName string) (*types.StreamMet
 
 // List returns all streams for a project, sorted by UpdatedAt descending
 func (s *StreamService) List(projectName string) ([]*types.StreamMeta, error) {
-	// Verify project exists in registry
-	entry, found := s.registryStore.FindByName(projectName)
-	if !found || entry == nil {
-		return nil, fmt.Errorf("project not found: %s", projectName)
+	if err := s.verifyProjectExists(projectName); err != nil {
+		return nil, err
 	}
 
 	// Delegate to StreamStore
@@ -147,10 +152,8 @@ func (s *StreamService) List(projectName string) ([]*types.StreamMeta, error) {
 
 // Get returns a specific stream's metadata
 func (s *StreamService) Get(projectName, streamName string) (*types.StreamMeta, error) {
-	// Verify project exists in registry
-	entry, found := s.registryStore.FindByName(projectName)
-	if !found || entry == nil {
-		return nil, fmt.Errorf("project not found: %s", projectName)
+	if err := s.verifyProjectExists(projectName); err != nil {
+		return nil, err
 	}
 
 	// Delegate to StreamStore
@@ -171,15 +174,12 @@ func (s *StreamService) Get(projectName, streamName string) (*types.StreamMeta, 
 
 // Archive archives a stream with the given outcome ("merged" or "abandoned")
 func (s *StreamService) Archive(projectName, streamName, outcome string) (*types.StreamMeta, error) {
-	// Validate outcome
 	if outcome != string(types.StreamOutcomeMerged) && outcome != string(types.StreamOutcomeAbandoned) {
 		return nil, fmt.Errorf("invalid outcome: must be 'merged' or 'abandoned', got '%s'", outcome)
 	}
 
-	// Verify project exists in registry
-	entry, found := s.registryStore.FindByName(projectName)
-	if !found || entry == nil {
-		return nil, fmt.Errorf("project not found: %s", projectName)
+	if err := s.verifyProjectExists(projectName); err != nil {
+		return nil, err
 	}
 
 	// Verify stream exists and is active
@@ -219,10 +219,8 @@ func (s *StreamService) Archive(projectName, streamName, outcome string) (*types
 
 // UpdateMetadata updates stream metadata fields
 func (s *StreamService) UpdateMetadata(projectName, streamName string, updates map[string]interface{}) (*types.StreamMeta, error) {
-	// Verify project exists
-	entry, found := s.registryStore.FindByName(projectName)
-	if !found || entry == nil {
-		return nil, fmt.Errorf("project not found: %s", projectName)
+	if err := s.verifyProjectExists(projectName); err != nil {
+		return nil, err
 	}
 
 	// Read existing metadata

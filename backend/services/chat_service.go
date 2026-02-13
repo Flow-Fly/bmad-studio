@@ -279,17 +279,8 @@ func (cs *ChatService) consumeStream(
 			persistentMessageID = messageID
 		}
 
-		if done {
-			// Stream ended successfully — save assistant message to history
-			if assistantText != "" {
-				messages = append(messages, providers.Message{Role: "assistant", Content: assistantText})
-				cs.saveConversationMessages(conversationID, messages)
-			}
-			return
-		}
-
-		// No tool calls → stream ended normally (already handled in relayStream)
-		if len(toolCalls) == 0 {
+		// No tool calls or stream ended cleanly — save and return
+		if done || len(toolCalls) == 0 {
 			if assistantText != "" {
 				messages = append(messages, providers.Message{Role: "assistant", Content: assistantText})
 				cs.saveConversationMessages(conversationID, messages)
