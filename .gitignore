@@ -42,6 +42,11 @@ coverage/
 # Go binaries
 backend/*.exe
 backend/backend
+backend/bin/
+
+# Electron-builder output
+release/
+dist-electron/
 
 # Temporary files
 *.tmp

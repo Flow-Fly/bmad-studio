@@ -1,9 +1,37 @@
-import { useConnectionStore } from '../stores/connection.store';
+import { useConnectionStore, type ConnectionStatus } from '../stores/connection.store';
+import { useStreamStore } from '../stores/stream.store';
+import type { Stream } from '../types/stream';
 
 export interface WebSocketEvent {
   type: string;
   payload: unknown;
   timestamp: string;
+}
+
+// WebSocket payload types for stream events
+interface StreamCreatedPayload {
+  projectId: string;
+  streamId: string;
+  name: string;
+}
+
+interface StreamArchivedPayload {
+  projectId: string;
+  streamId: string;
+  outcome: string;
+}
+
+interface StreamUpdatedPayload {
+  projectId: string;
+  streamId: string;
+  changes: Record<string, unknown>;
+}
+
+interface StreamPhaseChangedPayload {
+  projectId: string;
+  streamId: string;
+  phase: string;
+  artifacts: string[];
 }
 
 type EventHandler = (event: WebSocketEvent) => void;
@@ -19,7 +47,7 @@ let intentionalClose = false;
 
 const handlers = new Map<string, Set<EventHandler>>();
 
-function setStatus(status: import('../stores/connection.store').ConnectionStatus) {
+function setStatus(status: ConnectionStatus) {
   useConnectionStore.getState().setStatus(status);
 }
 
@@ -113,9 +141,70 @@ export function on(eventType: string, handler: EventHandler): () => void {
   }
   handlerSet.add(handler);
 
-  const captured = handlerSet;
   return () => {
-    captured.delete(handler);
-    if (captured.size === 0) handlers.delete(eventType);
+    handlerSet.delete(handler);
+    if (handlerSet.size === 0) handlers.delete(eventType);
+  };
+}
+
+/**
+ * Register handlers for stream WebSocket events.
+ * Returns a cleanup function that unsubscribes all handlers.
+ */
+export function registerStreamEventHandlers(): () => void {
+  const cleanups: (() => void)[] = [];
+
+  // stream:created — add new stream to the store
+  cleanups.push(
+    on('stream:created', (event) => {
+      const payload = event.payload as StreamCreatedPayload;
+      const stream: Stream = {
+        name: payload.name,
+        project: payload.projectId,
+        status: 'active',
+        type: 'full',
+        createdAt: event.timestamp,
+        updatedAt: event.timestamp,
+      };
+      useStreamStore.getState().addStream(stream);
+    }),
+  );
+
+  // stream:archived — update stream status
+  cleanups.push(
+    on('stream:archived', (event) => {
+      const payload = event.payload as StreamArchivedPayload;
+      useStreamStore.getState().updateStream(payload.streamId, {
+        status: 'archived',
+        outcome: payload.outcome as 'merged' | 'abandoned',
+      });
+    }),
+  );
+
+  // stream:updated — merge changes into matching stream
+  cleanups.push(
+    on('stream:updated', (event) => {
+      const payload = event.payload as StreamUpdatedPayload;
+      useStreamStore.getState().updateStream(
+        payload.streamId,
+        payload.changes as Partial<Stream>,
+      );
+    }),
+  );
+
+  // stream:phase-changed — update stream phase
+  cleanups.push(
+    on('stream:phase-changed', (event) => {
+      const payload = event.payload as StreamPhaseChangedPayload;
+      useStreamStore.getState().updateStream(payload.streamId, {
+        phase: payload.phase,
+      });
+    }),
+  );
+
+  return () => {
+    for (const cleanup of cleanups) {
+      cleanup();
+    }
   };
 }

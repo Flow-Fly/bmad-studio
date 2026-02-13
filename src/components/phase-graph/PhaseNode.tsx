@@ -1,6 +1,9 @@
-import { CircleCheck, CircleDot, Circle, Lock } from 'lucide-react';
-import type { PhaseGraphNode as PhaseGraphNodeType, NodeVisualState } from '../../types/phases';
-import { formatWorkflowLabel } from '../../stores/phases.store';
+import { CircleCheck, CircleDot, Circle, Lock, FileText } from 'lucide-react';
+import type { PhaseGraphNode as PhaseGraphNodeType, NodeVisualState, PhasesResponse } from '../../types/phases';
+import type { WorkflowStatus } from '../../types/workflow';
+import { formatWorkflowLabel } from '../../lib/phase-utils';
+import { AgentBadge } from './AgentBadge';
+import { ContextDependencyTooltip } from './ContextDependencyTooltip';
 import {
   Tooltip,
   TooltipTrigger,
@@ -26,7 +29,12 @@ interface PhaseNodeProps {
   compact?: boolean;
   focused?: boolean;
   nodeIndex?: number;
+  artifactPath?: string | null;
+  isSuggested?: boolean;
+  phases?: PhasesResponse | null;
+  workflowStatus?: WorkflowStatus | null;
   onFocus?: () => void;
+  onClick?: (workflowId: string, visualState: NodeVisualState) => void;
 }
 
 export function PhaseNode({
@@ -35,7 +43,12 @@ export function PhaseNode({
   compact = false,
   focused = false,
   nodeIndex,
+  artifactPath,
+  isSuggested = false,
+  phases,
+  workflowStatus,
   onFocus,
+  onClick,
 }: PhaseNodeProps) {
   const Icon = STATE_ICONS[visualState];
   const labelText =
@@ -43,9 +56,18 @@ export function PhaseNode({
       ? node.label.substring(0, 10)
       : node.label;
   const isLocked = visualState === 'locked';
+  const hasArtifact = !!artifactPath;
+  const showPulse =
+    isSuggested &&
+    (visualState === 'not-started' || visualState === 'required');
 
-  const tooltipContent = buildTooltipContent(node, visualState);
-  const ariaLabel = buildAriaLabel(node, visualState);
+  const tooltipContent = buildTooltipContent(node, visualState, hasArtifact);
+  const ariaLabel = buildAriaLabel(node, visualState, hasArtifact);
+
+  const handleClick = () => {
+    if (isLocked) return;
+    onClick?.(node.workflow_id, visualState);
+  };
 
   return (
     <Tooltip>
@@ -60,13 +82,16 @@ export function PhaseNode({
             visualState === 'complete' && 'border-success bg-success',
             visualState === 'skipped' && 'border-border-primary bg-bg-tertiary',
             visualState === 'locked' &&
-              'cursor-not-allowed border-border-primary bg-bg-tertiary opacity-60 hover:border-border-primary',
+              'pointer-events-none cursor-not-allowed border-border-primary bg-bg-tertiary opacity-60 hover:border-border-primary',
             visualState === 'conditional' && 'border-warning',
             visualState === 'required' && 'border-accent',
             visualState === 'recommended' && 'border-accent border-dashed',
             visualState === 'optional' && 'border-border-primary border-dashed',
             visualState === 'not-started' && 'border-border-primary',
+            // Pulse animation for suggested starting point
+            showPulse && 'animate-[node-pulse_2s_ease-in-out_infinite]',
           )}
+          id={`node-${node.workflow_id}`}
           role="button"
           tabIndex={focused ? 0 : -1}
           aria-label={ariaLabel}
@@ -74,7 +99,11 @@ export function PhaseNode({
           data-node-index={nodeIndex}
           data-workflow-id={node.workflow_id}
           onFocus={onFocus}
+          onClick={handleClick}
         >
+          {node.agent && (
+            <AgentBadge agent={node.agent} compact={compact} />
+          )}
           <Icon
             className={cn(
               'shrink-0',
@@ -105,10 +134,30 @@ export function PhaseNode({
           >
             {labelText}
           </span>
+          {hasArtifact && (
+            <FileText
+              className={cn(
+                'shrink-0',
+                compact ? 'h-2.5 w-2.5' : 'h-3 w-3',
+                visualState === 'complete'
+                  ? 'text-[var(--status-complete)]'
+                  : 'text-[var(--interactive-muted)]',
+              )}
+              aria-label="Has artifact"
+            />
+          )}
         </div>
       </TooltipTrigger>
-      <TooltipContent className="whitespace-pre-line">
-        {tooltipContent}
+      <TooltipContent className={phases && workflowStatus ? 'p-2' : 'whitespace-pre-line'}>
+        {phases && workflowStatus ? (
+          <ContextDependencyTooltip
+            node={node}
+            phases={phases}
+            workflowStatus={workflowStatus}
+          />
+        ) : (
+          tooltipContent
+        )}
       </TooltipContent>
     </Tooltip>
   );
@@ -117,6 +166,7 @@ export function PhaseNode({
 function buildTooltipContent(
   node: PhaseGraphNodeType,
   visualState: NodeVisualState,
+  hasArtifact: boolean,
 ): string {
   const parts = [node.label];
   parts.push(`Status: ${visualState}`);
@@ -125,6 +175,9 @@ function buildTooltipContent(
   }
   if (node.purpose) {
     parts.push(`Purpose: ${node.purpose}`);
+  }
+  if (hasArtifact) {
+    parts.push('Artifact: available');
   }
   if (visualState === 'locked' && node.unmet_dependencies.length > 0) {
     const depNames = node.unmet_dependencies.map(id => formatWorkflowLabel(id));
@@ -142,8 +195,15 @@ function getWorkflowTypeName(node: PhaseGraphNodeType): string {
 function buildAriaLabel(
   node: PhaseGraphNodeType,
   visualState: NodeVisualState,
+  hasArtifact: boolean = false,
 ): string {
   let label = `${node.label}, Phase ${node.phase_num}, ${getWorkflowTypeName(node)}, ${visualState}`;
+  if (node.agent) {
+    label += `, Agent: ${node.agent}`;
+  }
+  if (hasArtifact) {
+    label += ', artifact available';
+  }
   if (visualState === 'locked' && node.unmet_dependencies.length > 0) {
     const depNames = node.unmet_dependencies.map(id => formatWorkflowLabel(id));
     label += ` — blocked by: ${depNames.join(', ')}`;

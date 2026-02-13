@@ -1,33 +1,101 @@
 @import 'tailwindcss';
 
 /*
- * BMAD Design Tokens → Tailwind v4 Theme
- * Maps --bmad-* CSS custom properties into Tailwind's @theme so they
- * can be used as utility classes (e.g. bg-bg-primary, text-accent).
+ * BMAD Studio Design Tokens — Tailwind v4 Theme
+ * UX Visual Design Foundation: dark-mode only, compact density
+ *
+ * Token groups:
+ *   Surface  — bg-surface-base, bg-surface-raised, etc.
+ *   Phase    — text-phase-analysis, bg-phase-analysis-bg, etc.
+ *   Agent    — text-agent-mary, bg-agent-mary, etc.
+ *   Status   — text-status-complete, bg-status-complete, etc.
+ *   Interactive — text-interactive-default, text-interactive-hover, etc.
+ *
+ * Legacy aliases (bg-bg-primary, text-accent, etc.) are preserved in
+ * the @theme block so existing components continue to work.
  */
 
 @theme {
-  /* Colors */
-  --color-bg-primary: #0d1117;
-  --color-bg-secondary: #161b22;
-  --color-bg-tertiary: #21262d;
-  --color-bg-elevated: #30363d;
+  /* ── Surface Colors ─────────────────────────────────────── */
+  --color-surface-base: #0a0a0b;
+  --color-surface-raised: #141416;
+  --color-surface-overlay: #1c1c20;
+  --color-surface-sunken: #07070a;
+  --color-surface-border: #27272a;
+  --color-surface-border-hover: #3f3f46;
 
-  --color-text-primary: #f0f6fc;
-  --color-text-secondary: #8b949e;
-  --color-text-tertiary: #6e7681;
-  --color-text-muted: #484f58;
+  /* ── Phase Colors (Full Flow) ───────────────────────────── */
+  --color-phase-analysis: #7cacf0;
+  --color-phase-analysis-bg: rgba(124, 172, 240, 0.10);
+  --color-phase-planning: #7ad4a0;
+  --color-phase-planning-bg: rgba(122, 212, 160, 0.10);
+  --color-phase-solutioning: #e4b874;
+  --color-phase-solutioning-bg: rgba(228, 184, 116, 0.10);
+  --color-phase-implementation: #e88a8a;
+  --color-phase-implementation-bg: rgba(232, 138, 138, 0.10);
 
-  --color-accent: #58a6ff;
-  --color-accent-hover: #79c0ff;
-  --color-success: #3fb950;
-  --color-warning: #d29922;
-  --color-error: #f85149;
+  /* ── Phase Colors (Quick Flow) ──────────────────────────── */
+  --color-phase-quickflow-spec: #a78bfa;
+  --color-phase-quickflow-spec-bg: rgba(167, 139, 250, 0.12);
+  --color-phase-quickflow-dev: #c084fc;
+  --color-phase-quickflow-dev-bg: rgba(192, 132, 252, 0.12);
 
-  --color-border-primary: #30363d;
-  --color-border-secondary: #21262d;
+  /* ── Agent Colors ───────────────────────────────────────── */
+  --color-agent-mary: #f0abfc;
+  --color-agent-john: #86efac;
+  --color-agent-winston: #fbbf24;
+  --color-agent-sally: #c4b5fd;
+  --color-agent-bob: #67e8f9;
+  --color-agent-amelia: #fca5a5;
+  --color-agent-barry: #a78bfa;
 
-  /* Spacing */
+  /* ── Status Colors ──────────────────────────────────────── */
+  --color-status-complete: #4ade80;
+  --color-status-active: #60a5fa;
+  --color-status-pending: #71717a;
+  --color-status-skipped: #3f3f46;
+  --color-status-blocked: #ef4444;
+
+  /* ── Interactive Colors ─────────────────────────────────── */
+  --color-interactive-default: #a1a1aa;
+  --color-interactive-hover: #e4e4e7;
+  --color-interactive-active: #ffffff;
+  --color-interactive-muted: #52525b;
+  --color-interactive-accent: #60a5fa;
+
+  /* ── Legacy Color Aliases ───────────────────────────────── */
+  /* DEPRECATED: Kept for backward compat with existing components.
+     New code should use surface-*, interactive-*, status-* tokens. */
+  --color-bg-primary: #0a0a0b;
+  --color-bg-secondary: #141416;
+  --color-bg-tertiary: #1c1c20;
+  --color-bg-elevated: #27272a;
+
+  --color-text-primary: #ffffff;
+  --color-text-secondary: #a1a1aa;
+  --color-text-tertiary: #71717a;
+  --color-text-muted: #52525b;
+
+  --color-accent: #60a5fa;
+  --color-accent-hover: #93c5fd;
+  --color-success: #4ade80;
+  --color-warning: #fbbf24;
+  --color-error: #ef4444;
+
+  --color-border-primary: #27272a;
+  --color-border-secondary: #1c1c20;
+
+  /* ── Spacing Scale (4px base unit) ──────────────────────── */
+  --spacing-1: 4px;
+  --spacing-2: 8px;
+  --spacing-3: 12px;
+  --spacing-4: 16px;
+  --spacing-5: 20px;
+  --spacing-6: 24px;
+  --spacing-8: 32px;
+  --spacing-10: 40px;
+
+  /* Legacy spacing aliases */
   --spacing-xs: 4px;
   --spacing-sm: 8px;
   --spacing-md: 12px;
@@ -36,81 +104,172 @@
   --spacing-2xl: 32px;
   --spacing-3xl: 48px;
 
-  /* Typography */
-  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen,
-    Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
-  --font-mono: 'SF Mono', 'Fira Code', 'Fira Mono', Menlo, Consolas,
-    'DejaVu Sans Mono', monospace;
+  /* ── Typography ─────────────────────────────────────────── */
+  --font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+    'Segoe UI', Roboto, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas,
+    monospace;
 
+  /* Type scale (compact, Linear-density) */
   --text-xs: 11px;
   --text-sm: 12px;
+  --text-base: 13px;
   --text-md: 14px;
   --text-lg: 16px;
   --text-xl: 20px;
+
+  /* Legacy text size aliases */
   --text-2xl: 24px;
   --text-3xl: 32px;
 
   --font-weight-normal: 400;
   --font-weight-medium: 500;
   --font-weight-semibold: 600;
-  --font-weight-bold: 700;
 
   --leading-tight: 1.25;
   --leading-normal: 1.5;
   --leading-relaxed: 1.75;
 
-  /* Border Radius */
+  /* ── Border Radius ──────────────────────────────────────── */
   --radius-sm: 4px;
   --radius-md: 6px;
   --radius-lg: 8px;
   --radius-xl: 12px;
   --radius-full: 9999px;
 
-  /* Shadows */
+  /* ── Shadows ────────────────────────────────────────────── */
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
   --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.4);
   --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.5);
+
+  /* ── Breakpoints ────────────────────────────────────────── */
+  --breakpoint-compact: 1024px;
+  --breakpoint-standard: 1280px;
+  --breakpoint-full: 1440px;
 }
 
 /*
- * Preserve --bmad-* custom properties for backward compatibility.
- * Components can use either Tailwind utilities or var(--bmad-*) directly.
+ * CSS Custom Properties for non-Tailwind usage (var(--*) references).
+ * Maps semantic tokens + backward-compat --bmad-* properties.
  */
 :root {
-  /* Colors */
-  --bmad-color-bg-primary: #0d1117;
-  --bmad-color-bg-secondary: #161b22;
-  --bmad-color-bg-tertiary: #21262d;
-  --bmad-color-bg-elevated: #30363d;
+  /* ── Semantic Surface Tokens ─────────────────────────────── */
+  --surface-base: #0a0a0b;
+  --surface-raised: #141416;
+  --surface-overlay: #1c1c20;
+  --surface-sunken: #07070a;
+  --surface-border: #27272a;
+  --surface-border-hover: #3f3f46;
 
-  --bmad-color-text-primary: #f0f6fc;
-  --bmad-color-text-secondary: #8b949e;
-  --bmad-color-text-tertiary: #6e7681;
-  --bmad-color-text-muted: #484f58;
+  /* ── Phase Colors (Full Flow) ────────────────────────────── */
+  --phase-analysis: #7cacf0;
+  --phase-analysis-bg: rgba(124, 172, 240, 0.10);
+  --phase-planning: #7ad4a0;
+  --phase-planning-bg: rgba(122, 212, 160, 0.10);
+  --phase-solutioning: #e4b874;
+  --phase-solutioning-bg: rgba(228, 184, 116, 0.10);
+  --phase-implementation: #e88a8a;
+  --phase-implementation-bg: rgba(232, 138, 138, 0.10);
 
-  --bmad-color-accent: #58a6ff;
-  --bmad-color-accent-hover: #79c0ff;
-  --bmad-color-success: #3fb950;
-  --bmad-color-warning: #d29922;
-  --bmad-color-error: #f85149;
+  /* ── Phase Colors (Quick Flow) ───────────────────────────── */
+  --phase-quickflow-spec: #a78bfa;
+  --phase-quickflow-spec-bg: rgba(167, 139, 250, 0.12);
+  --phase-quickflow-dev: #c084fc;
+  --phase-quickflow-dev-bg: rgba(192, 132, 252, 0.12);
 
-  --bmad-color-border-primary: #30363d;
-  --bmad-color-border-secondary: #21262d;
+  /* ── Agent Colors ────────────────────────────────────────── */
+  --agent-mary: #f0abfc;
+  --agent-john: #86efac;
+  --agent-winston: #fbbf24;
+  --agent-sally: #c4b5fd;
+  --agent-bob: #67e8f9;
+  --agent-amelia: #fca5a5;
+  --agent-barry: #a78bfa;
 
-  /* Spacing */
-  --bmad-spacing-xs: 4px;
-  --bmad-spacing-sm: 8px;
-  --bmad-spacing-md: 12px;
-  --bmad-spacing-lg: 16px;
-  --bmad-spacing-xl: 24px;
-  --bmad-spacing-2xl: 32px;
+  /* ── Status Colors ───────────────────────────────────────── */
+  --status-complete: #4ade80;
+  --status-active: #60a5fa;
+  --status-pending: #71717a;
+  --status-skipped: #3f3f46;
+  --status-blocked: #ef4444;
+
+  /* ── Interactive Colors ──────────────────────────────────── */
+  --interactive-default: #a1a1aa;
+  --interactive-hover: #e4e4e7;
+  --interactive-active: #ffffff;
+  --interactive-muted: #52525b;
+  --interactive-accent: #60a5fa;
+
+  /* ── Spacing Scale ───────────────────────────────────────── */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+
+  /* ── Typography Tokens ───────────────────────────────────── */
+  --font-size-xs: 11px;
+  --font-size-sm: 12px;
+  --font-size-base: 13px;
+  --font-size-md: 14px;
+  --font-size-lg: 16px;
+  --font-size-xl: 20px;
+  --line-height-xs: 1.4;
+  --line-height-sm: 1.5;
+  --line-height-base: 1.5;
+  --line-height-md: 1.4;
+  --line-height-lg: 1.3;
+  --line-height-xl: 1.2;
+
+  /* ── Transition Tokens ───────────────────────────────────── */
+  --transition-fast: 150ms ease;
+  --transition-normal: 250ms ease;
+  --transition-slow: 350ms ease;
+
+  /* ── Z-Index Scale ───────────────────────────────────────── */
+  --z-base: 0;
+  --z-dropdown: 100;
+  --z-sticky: 200;
+  --z-modal: 300;
+  --z-toast: 400;
+
+  /* ── DEPRECATED --bmad-* aliases ─────────────────────────── */
+  /* These map old --bmad-* tokens to the new semantic system.
+     Existing var(--bmad-*) references will continue to work. */
+  --bmad-color-bg-primary: var(--surface-base);
+  --bmad-color-bg-secondary: var(--surface-raised);
+  --bmad-color-bg-tertiary: var(--surface-overlay);
+  --bmad-color-bg-elevated: var(--surface-border);
+
+  --bmad-color-text-primary: var(--interactive-active);
+  --bmad-color-text-secondary: var(--interactive-default);
+  --bmad-color-text-tertiary: var(--status-pending);
+  --bmad-color-text-muted: var(--interactive-muted);
+
+  --bmad-color-accent: var(--interactive-accent);
+  --bmad-color-accent-hover: #93c5fd;
+  --bmad-color-success: var(--status-complete);
+  --bmad-color-warning: #fbbf24;
+  --bmad-color-error: var(--status-blocked);
+
+  --bmad-color-border-primary: var(--surface-border);
+  --bmad-color-border-secondary: var(--surface-overlay);
+
+  --bmad-spacing-xs: var(--space-1);
+  --bmad-spacing-sm: var(--space-2);
+  --bmad-spacing-md: var(--space-3);
+  --bmad-spacing-lg: var(--space-4);
+  --bmad-spacing-xl: var(--space-6);
+  --bmad-spacing-2xl: var(--space-8);
   --bmad-spacing-3xl: 48px;
 
-  /* Typography */
-  --bmad-font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
-    Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
-  --bmad-font-family-mono: 'SF Mono', 'Fira Code', 'Fira Mono', Menlo,
-    Consolas, 'DejaVu Sans Mono', monospace;
+  --bmad-font-family: ui-sans-serif, system-ui, -apple-system,
+    BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --bmad-font-family-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo,
+    Consolas, monospace;
 
   --bmad-font-size-xs: 11px;
   --bmad-font-size-sm: 12px;
@@ -123,30 +282,25 @@
   --bmad-font-weight-normal: 400;
   --bmad-font-weight-medium: 500;
   --bmad-font-weight-semibold: 600;
-  --bmad-font-weight-bold: 700;
 
   --bmad-line-height-tight: 1.25;
   --bmad-line-height-normal: 1.5;
   --bmad-line-height-relaxed: 1.75;
 
-  /* Border Radius */
   --bmad-radius-sm: 4px;
   --bmad-radius-md: 6px;
   --bmad-radius-lg: 8px;
   --bmad-radius-xl: 12px;
   --bmad-radius-full: 9999px;
 
-  /* Shadows */
   --bmad-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
   --bmad-shadow-md: 0 4px 6px rgba(0, 0, 0, 0.4);
   --bmad-shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.5);
 
-  /* Transitions */
   --bmad-transition-fast: 150ms ease;
   --bmad-transition-normal: 250ms ease;
   --bmad-transition-slow: 350ms ease;
 
-  /* Z-Index Scale */
   --bmad-z-base: 0;
   --bmad-z-dropdown: 100;
   --bmad-z-sticky: 200;
@@ -168,10 +322,10 @@ body {
   padding: 0;
   height: 100%;
   font-family: var(--bmad-font-family);
-  font-size: var(--bmad-font-size-md);
-  line-height: var(--bmad-line-height-normal);
-  background-color: var(--bmad-color-bg-primary);
-  color: var(--bmad-color-text-primary);
+  font-size: var(--font-size-md);
+  line-height: var(--line-height-md);
+  background-color: var(--surface-base);
+  color: var(--interactive-active);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -182,60 +336,84 @@ body {
 
 /* Focus */
 :focus-visible {
-  outline: 2px solid var(--bmad-color-accent);
+  outline: 2px solid var(--interactive-accent);
   outline-offset: 2px;
 }
 
-/* Scrollbar */
+/* ── Scrollbar ──────────────────────────────────────────────── */
+
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 ::-webkit-scrollbar-track {
-  background: var(--bmad-color-bg-secondary);
+  background: var(--surface-raised);
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--bmad-color-bg-elevated);
+  background: var(--surface-border);
   border-radius: var(--bmad-radius-full);
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--bmad-color-border-primary);
+  background: var(--surface-border-hover);
 }
 
-/* Selection */
+/* ── Selection ──────────────────────────────────────────────── */
+
 ::selection {
-  background-color: var(--bmad-color-accent);
-  color: var(--bmad-color-bg-primary);
+  background-color: var(--interactive-accent);
+  color: var(--surface-base);
 }
 
-/* Links */
+/* ── Links ──────────────────────────────────────────────────── */
+
 a {
-  color: var(--bmad-color-accent);
+  color: var(--interactive-accent);
   text-decoration: none;
 }
 a:hover {
-  color: var(--bmad-color-accent-hover);
+  color: var(--interactive-hover);
   text-decoration: underline;
 }
 
-/* Code */
+/* ── Code ───────────────────────────────────────────────────── */
+
 code,
 pre {
   font-family: var(--bmad-font-family-mono);
 }
 pre {
-  background-color: var(--bmad-color-bg-secondary);
-  padding: var(--bmad-spacing-md);
+  background-color: var(--surface-raised);
+  padding: var(--space-3);
   border-radius: var(--bmad-radius-md);
   overflow-x: auto;
 }
 code {
-  background-color: var(--bmad-color-bg-tertiary);
+  background-color: var(--surface-overlay);
   padding: 2px 6px;
   border-radius: var(--bmad-radius-sm);
-  font-size: var(--bmad-font-size-sm);
+  font-size: var(--font-size-sm);
 }
 pre code {
   background: none;
   padding: 0;
+}
+
+/* ── Phase Graph: Suggested Node Pulse ──────────────────────── */
+
+@keyframes node-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--interactive-accent) 40%, transparent); }
+  50% { box-shadow: 0 0 12px 4px color-mix(in srgb, var(--interactive-accent) 20%, transparent); }
+}
+
+/* ── Accessibility: Reduced Motion ──────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
