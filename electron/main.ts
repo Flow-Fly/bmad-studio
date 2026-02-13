@@ -12,6 +12,7 @@ import {
   OpenCodeProcessManager,
   type OpenCodeStatusEvent,
 } from './opencode-process-manager';
+import { OpenCodeClient } from './opencode-client';
 
 // ---------------------------------------------------------------------------
 // Paths & Constants
@@ -63,6 +64,7 @@ let processManager: ProcessManager | null = null;
 
 let opencodeManager: OpenCodeProcessManager | null = null;
 let opencodeConfigured = false; // Track whether config was found
+const opencodeClient = new OpenCodeClient();
 
 function handleSidecarStatusChange(event: ProcessStatusEvent): void {
   console.log('[electron] Sidecar status changed:', event);
@@ -152,6 +154,9 @@ function handleOpenCodeStatusChange(event: OpenCodeStatusEvent): void {
 
   switch (event.status) {
     case 'running':
+      if (event.port) {
+        opencodeClient.initialize(event.port);
+      }
       mainWindow.webContents.send('opencode:server-ready', {
         port: event.port,
       });
@@ -236,6 +241,7 @@ async function startOpenCodeServer(): Promise<void> {
 async function stopOpenCodeServer(): Promise<void> {
   if (opencodeManager) {
     console.log('[electron] Stopping OpenCode server...');
+    opencodeClient.destroy();
     await opencodeManager.shutdown();
     opencodeManager = null;
   }
@@ -302,28 +308,68 @@ function registerIPC(): void {
     };
   });
 
-  // OpenCode Session: create session (placeholder until Story 7.2)
+  // OpenCode Session: create session
   ipcMain.handle('opencode:create-session', async (_event, opts: { title: string; workingDir: string }) => {
-    console.log('[electron] opencode:create-session called (placeholder)', opts);
-    return { code: 'not_implemented', message: 'Session creation requires OpenCode SDK client (Story 7.2)' };
+    if (!opencodeClient.isReady()) {
+      return { code: 'server_unavailable', message: 'OpenCode server is not running' };
+    }
+    try {
+      const result = await opencodeClient.createSession(opts.title);
+      return { sessionId: result.sessionId, title: result.title };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return { code: 'sdk_error', message };
+    }
   });
 
-  // OpenCode Session: send prompt (placeholder until Story 7.2)
-  ipcMain.handle('opencode:send-prompt', async (_event, opts: { sessionId: string }) => {
-    console.log('[electron] opencode:send-prompt called (placeholder)', opts);
-    return { code: 'not_implemented', message: 'Prompt sending requires OpenCode SDK client (Story 7.2)' };
+  // OpenCode Session: send prompt
+  ipcMain.handle('opencode:send-prompt', async (_event, opts: {
+    sessionId: string;
+    model?: { providerID: string; modelID: string };
+    parts: Array<{ type: string; [key: string]: unknown }>;
+  }) => {
+    if (!opencodeClient.isReady()) {
+      return { code: 'server_unavailable', message: 'OpenCode server is not running' };
+    }
+    try {
+      await opencodeClient.sendPrompt(opts.sessionId, opts.parts, opts.model);
+      return { success: true };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return { code: 'sdk_error', message };
+    }
   });
 
-  // OpenCode Session: approve permission (placeholder until Story 7.2)
-  ipcMain.handle('opencode:approve-permission', async (_event, opts: { permissionId: string; approved: boolean }) => {
-    console.log('[electron] opencode:approve-permission called (placeholder)', opts);
-    return { code: 'not_implemented', message: 'Permission approval requires OpenCode SDK client (Story 7.2)' };
+  // OpenCode Session: approve permission
+  ipcMain.handle('opencode:approve-permission', async (_event, opts: {
+    sessionId: string;
+    permissionId: string;
+    approved: boolean;
+  }) => {
+    if (!opencodeClient.isReady()) {
+      return { code: 'server_unavailable', message: 'OpenCode server is not running' };
+    }
+    try {
+      await opencodeClient.approvePermission(opts.sessionId, opts.permissionId, opts.approved);
+      return { success: true };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return { code: 'sdk_error', message };
+    }
   });
 
-  // OpenCode Session: answer question (placeholder until Story 7.2)
+  // OpenCode Session: answer question
   ipcMain.handle('opencode:answer-question', async (_event, opts: { questionId: string; answer: string }) => {
-    console.log('[electron] opencode:answer-question called (placeholder)', opts);
-    return { code: 'not_implemented', message: 'Question answering requires OpenCode SDK client (Story 7.2)' };
+    if (!opencodeClient.isReady()) {
+      return { code: 'server_unavailable', message: 'OpenCode server is not running' };
+    }
+    try {
+      await opencodeClient.answerQuestion(opts.answer);
+      return { success: true };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return { code: 'sdk_error', message };
+    }
   });
 
   // OpenCode: manual re-detection

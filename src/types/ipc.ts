@@ -82,6 +82,7 @@ export interface SendPromptRequest {
 }
 
 export interface ApprovePermissionRequest {
+  sessionId: string;
   permissionId: string;
   approved: boolean;
 }
@@ -146,6 +147,7 @@ export interface PartUpdatedEvent {
 }
 
 export interface PermissionAskedEvent {
+  sessionId: string;
   permissionId: string;
   tool: string;
   params: Record<string, unknown>;
@@ -174,6 +176,7 @@ export interface OpenCodeBridgeAPI {
   createSession: (opts: CreateSessionRequest) => Promise<CreateSessionResponse>;
   sendPrompt: (opts: SendPromptRequest) => Promise<SendPromptResponse>;
   approvePermission: (
+    sessionId: string,
     permissionId: string,
     approved: boolean
   ) => Promise<ApprovePermissionResponse>;

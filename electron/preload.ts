@@ -105,8 +105,8 @@ contextBridge.exposeInMainWorld('opencode', {
     parts: Array<{ type: string; [key: string]: unknown }>;
   }) => ipcRenderer.invoke('opencode:send-prompt', opts),
 
-  approvePermission: (permissionId: string, approved: boolean) =>
-    ipcRenderer.invoke('opencode:approve-permission', { permissionId, approved }),
+  approvePermission: (sessionId: string, permissionId: string, approved: boolean) =>
+    ipcRenderer.invoke('opencode:approve-permission', { sessionId, permissionId, approved }),
 
   answerQuestion: (questionId: string, answer: string) =>
     ipcRenderer.invoke('opencode:answer-question', { questionId, answer }),
@@ -143,6 +143,7 @@ contextBridge.exposeInMainWorld('opencode', {
 
   onPermissionAsked: (
     callback: (data: {
+      sessionId: string;
       permissionId: string;
       tool: string;
       params: Record<string, unknown>;
