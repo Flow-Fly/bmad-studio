@@ -111,6 +111,9 @@ func main() {
 	// Create stream artifact service
 	streamArtifactService := services.NewStreamArtifactService(streamStore)
 
+	// Create worktree service
+	worktreeService := services.NewWorktreeService(registryStore, streamStore)
+
 	// Create and start watcher service for central store stream directories
 	watcherService := services.NewWatcherService(centralStore, streamStore, registryStore, hub)
 	if err := watcherService.Start(); err != nil {
@@ -260,6 +263,7 @@ func main() {
 		Project:        projectService,
 		Stream:          streamService,
 		StreamArtifact:  streamArtifactService,
+		Worktree:        worktreeService,
 	})
 
 	stop := make(chan os.Signal, 1)
