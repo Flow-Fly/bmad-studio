@@ -12,6 +12,8 @@ import {
   OpenCodeProcessManager,
   type OpenCodeStatusEvent,
 } from './opencode-process-manager';
+import { OpenCodeClient } from './opencode-client';
+import { startForwarding, stopForwarding } from './opencode-event-forwarder';
 
 // ---------------------------------------------------------------------------
 // Paths & Constants
@@ -63,6 +65,7 @@ let processManager: ProcessManager | null = null;
 
 let opencodeManager: OpenCodeProcessManager | null = null;
 let opencodeConfigured = false; // Track whether config was found
+const opencodeClient = new OpenCodeClient();
 
 function handleSidecarStatusChange(event: ProcessStatusEvent): void {
   console.log('[electron] Sidecar status changed:', event);
@@ -151,12 +154,27 @@ function handleOpenCodeStatusChange(event: OpenCodeStatusEvent): void {
   if (!mainWindow) return;
 
   switch (event.status) {
-    case 'running':
+    case 'running': {
+      if (event.port) {
+        opencodeClient.initialize(event.port);
+      }
+      // Start SSE event forwarding after client is initialized
+      const sdkClient = opencodeClient.getSdkClient();
+      if (sdkClient) {
+        startForwarding(mainWindow, sdkClient).catch((err) => {
+          console.error('[electron] Failed to start event forwarding:', err);
+        });
+      }
       mainWindow.webContents.send('opencode:server-ready', {
         port: event.port,
       });
       break;
+    }
     case 'restarting':
+      // Stop event forwarding before client is destroyed on restart
+      stopForwarding().catch((err) => {
+        console.error('[electron] Failed to stop event forwarding on restart:', err);
+      });
       mainWindow.webContents.send('opencode:server-restarting', {
         retryCount: event.retryCount,
       });
@@ -236,6 +254,8 @@ async function startOpenCodeServer(): Promise<void> {
 async function stopOpenCodeServer(): Promise<void> {
   if (opencodeManager) {
     console.log('[electron] Stopping OpenCode server...');
+    await stopForwarding();
+    opencodeClient.destroy();
     await opencodeManager.shutdown();
     opencodeManager = null;
   }
@@ -301,6 +321,53 @@ function registerIPC(): void {
       configured: opencodeConfigured,
     };
   });
+
+  // OpenCode Session handlers — all share the same guard/error pattern
+  function handleSdkCall<T>(fn: () => Promise<T>): Promise<T | { code: string; message: string }> {
+    if (!opencodeClient.isReady()) {
+      return Promise.resolve({ code: 'server_unavailable', message: 'OpenCode server is not running' });
+    }
+    return fn().catch((error: unknown) => {
+      const message = error instanceof Error ? error.message : String(error);
+      return { code: 'sdk_error', message };
+    });
+  }
+
+  ipcMain.handle('opencode:create-session', (_event, opts: { title: string; workingDir: string }) =>
+    handleSdkCall(async () => {
+      const result = await opencodeClient.createSession(opts.title);
+      return { sessionId: result.sessionId, title: result.title };
+    })
+  );
+
+  ipcMain.handle('opencode:send-prompt', (_event, opts: {
+    sessionId: string;
+    model?: { providerID: string; modelID: string };
+    parts: Array<{ type: string; [key: string]: unknown }>;
+  }) =>
+    handleSdkCall(async () => {
+      await opencodeClient.sendPrompt(opts.sessionId, opts.parts, opts.model);
+      return { success: true };
+    })
+  );
+
+  ipcMain.handle('opencode:approve-permission', (_event, opts: {
+    sessionId: string;
+    permissionId: string;
+    approved: boolean;
+  }) =>
+    handleSdkCall(async () => {
+      await opencodeClient.approvePermission(opts.sessionId, opts.permissionId, opts.approved);
+      return { success: true };
+    })
+  );
+
+  ipcMain.handle('opencode:answer-question', (_event, opts: { questionId: string; answer: string }) =>
+    handleSdkCall(async () => {
+      await opencodeClient.answerQuestion(opts.answer);
+      return { success: true };
+    })
+  );
 
   // OpenCode: manual re-detection
   ipcMain.handle('opencode:redetect', async () => {

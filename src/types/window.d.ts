@@ -1,5 +1,22 @@
 // Electron IPC API exposed via preload
 
+import type {
+  CreateSessionRequest,
+  CreateSessionResponse,
+  SendPromptRequest,
+  SendPromptResponse,
+  ApprovePermissionResponse,
+  AnswerQuestionResponse,
+  OpenCodeEventChannel,
+  SessionCreatedEvent,
+  SessionStatusEvent,
+  MessageUpdatedEvent,
+  PartUpdatedEvent,
+  PermissionAskedEvent,
+  QuestionAskedEvent,
+  OpenCodeErrorEvent,
+} from './ipc';
+
 export interface ElectronAPI {
   openFolder: () => Promise<string | null>;
   getApiKey: (provider: string) => Promise<string | null>;
@@ -42,6 +59,7 @@ export interface OpenCodeRedetectResult {
 }
 
 export interface OpenCodeAPI {
+  // Server lifecycle (from Epic 6)
   onServerReady: (callback: (data: { port: number }) => void) => () => void;
   onServerRestarting: (callback: (data: { retryCount: number }) => void) => () => void;
   onServerError: (callback: (data: { code: string; message: string }) => void) => () => void;
@@ -57,6 +75,24 @@ export interface OpenCodeAPI {
     version?: string;
     path?: string;
   }>;
+
+  // Session operations (from Story 7.1)
+  createSession: (opts: CreateSessionRequest) => Promise<CreateSessionResponse>;
+  sendPrompt: (opts: SendPromptRequest) => Promise<SendPromptResponse>;
+  approvePermission: (permissionId: string, approved: boolean) => Promise<ApprovePermissionResponse>;
+  answerQuestion: (questionId: string, answer: string) => Promise<AnswerQuestionResponse>;
+
+  // Generic event listener
+  onEvent: <T>(channel: OpenCodeEventChannel, callback: (data: T) => void) => () => void;
+
+  // Typed session event listeners
+  onSessionCreated: (callback: (data: SessionCreatedEvent) => void) => () => void;
+  onSessionStatus: (callback: (data: SessionStatusEvent) => void) => () => void;
+  onMessageUpdated: (callback: (data: MessageUpdatedEvent) => void) => () => void;
+  onPartUpdated: (callback: (data: PartUpdatedEvent) => void) => () => void;
+  onPermissionAsked: (callback: (data: PermissionAskedEvent) => void) => () => void;
+  onQuestionAsked: (callback: (data: QuestionAskedEvent) => void) => () => void;
+  onError: (callback: (data: OpenCodeErrorEvent) => void) => () => void;
 }
 
 declare global {

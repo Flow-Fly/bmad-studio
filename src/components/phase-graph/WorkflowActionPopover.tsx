@@ -1,10 +1,13 @@
-import { FileText } from 'lucide-react';
+import { FileText, Loader2 } from 'lucide-react';
 import { Popover, PopoverTrigger, PopoverContent } from '../ui/popover';
 import { AgentBadge } from './AgentBadge';
 import { formatWorkflowLabel } from '../../lib/phase-utils';
 import type { PhaseGraphNode } from '../../types/phases';
 import { cn } from '../../lib/utils';
 import { useOpenCodeStore } from '../../stores/opencode.store';
+import { useProjectStore } from '../../stores/project.store';
+import { useStreamStore } from '../../stores/stream.store';
+import { WORKFLOW_SKILL_MAP, launchWorkflow } from '../../services/opencode.service';
 
 interface WorkflowActionPopoverProps {
   node: PhaseGraphNode;
@@ -14,20 +17,6 @@ interface WorkflowActionPopoverProps {
   artifactPath?: string | null;
   children: React.ReactNode;
 }
-
-const WORKFLOW_SKILL_MAP: Record<string, string> = {
-  'create-prd': 'bmad:bmm:workflows:create-prd',
-  'create-ux-design': 'bmad:bmm:workflows:create-ux-design',
-  'create-architecture': 'bmad:bmm:workflows:create-architecture',
-  'create-tech-spec': 'bmad:bmm:workflows:create-tech-spec',
-  'check-implementation-readiness': 'bmad:bmm:workflows:check-implementation-readiness',
-  'create-story': 'bmad:bmm:workflows:create-story',
-  'dev-story': 'bmad:bmm:workflows:dev-story',
-  'code-review': 'bmad:bmm:workflows:code-review',
-  'create-ci-setup': 'bmad:bmm:workflows:create-ci-setup',
-  'create-nfr-checklist': 'bmad:bmm:workflows:create-nfr-checklist',
-  'create-atdd-plan': 'bmad:bmm:workflows:create-atdd-plan',
-};
 
 export function WorkflowActionPopover({
   node,
@@ -42,16 +31,32 @@ export function WorkflowActionPopover({
 
   const serverStatus = useOpenCodeStore((state) => state.serverStatus);
   const errorMessage = useOpenCodeStore((state) => state.errorMessage);
+  const sessionLaunching = useOpenCodeStore((state) => state.sessionLaunching);
+  const setSessionLaunching = useOpenCodeStore((state) => state.setSessionLaunching);
+  const setActiveSession = useOpenCodeStore((state) => state.setActiveSession);
+  const setSessionError = useOpenCodeStore((state) => state.setSessionError);
 
-  const isServerReady = serverStatus === 'ready';
+  const project = useProjectStore((state) => state.project);
+  const streams = useStreamStore((state) => state.streams);
+  const activeStreamId = useStreamStore((state) => state.activeStreamId);
+
+  const activeStream = streams.find((s) => s.name === activeStreamId);
+
   const isServerConnecting =
     serverStatus === 'connecting' || serverStatus === 'restarting';
 
-  const buttonText = isServerConnecting
-    ? 'Connecting to OpenCode...'
-    : 'Launch Workflow';
+  const canLaunch = serverStatus === 'ready' && !sessionLaunching && !!project && !!activeStream;
+
+  const buttonText = sessionLaunching
+    ? 'Launching...'
+    : isServerConnecting
+      ? 'Connecting to OpenCode...'
+      : 'Launch Workflow';
 
   function getButtonTooltip(): string | undefined {
+    if (sessionLaunching) {
+      return 'Creating OpenCode session...';
+    }
     switch (serverStatus) {
       case 'not-installed':
         return 'OpenCode not detected — install to enable AI sessions';
@@ -64,6 +69,31 @@ export function WorkflowActionPopover({
         return 'OpenCode server is starting...';
       default:
         return undefined;
+    }
+  }
+
+  async function handleLaunchWorkflow() {
+    if (!canLaunch || !project || !activeStream) return;
+
+    setSessionLaunching(true);
+    setSessionError(null);
+
+    try {
+      const result = await launchWorkflow({
+        workflowId: node.workflow_id,
+        streamName: activeStream.name,
+        projectName: project.projectName,
+        projectRoot: project.projectRoot,
+        worktreePath: activeStream.worktree,
+      });
+
+      setActiveSession(result.sessionId, activeStream.name);
+      onOpenChange(false);
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : 'Failed to launch workflow';
+      console.error('[WorkflowActionPopover] Launch failed:', message);
+      setSessionError(message);
     }
   }
 
@@ -109,11 +139,17 @@ export function WorkflowActionPopover({
             <button
               className={cn(
                 'flex-1 rounded-[var(--radius-md)] px-3 py-1.5 text-[length:var(--text-sm)] font-medium transition-opacity',
-                'bg-accent/20 text-accent opacity-50 cursor-not-allowed'
+                canLaunch
+                  ? 'bg-accent/20 text-accent hover:bg-accent/30 cursor-pointer'
+                  : 'bg-accent/20 text-accent opacity-50 cursor-not-allowed'
               )}
-              disabled={!isServerReady}
-              title={getButtonTooltip() || 'Workflow launch coming in Epic 7'}
+              disabled={!canLaunch}
+              title={getButtonTooltip()}
+              onClick={handleLaunchWorkflow}
             >
+              {sessionLaunching && (
+                <Loader2 className="mr-1.5 inline-block h-3.5 w-3.5 animate-spin" />
+              )}
               {buttonText}
             </button>
             {hasArtifact && (
@@ -130,7 +166,7 @@ export function WorkflowActionPopover({
             )}
           </div>
 
-          {/* Server status message */}
+          {/* Server status messages */}
           {serverStatus === 'not-installed' && (
             <p className="text-[length:var(--text-xs)] text-warning">
               OpenCode not detected — install to enable AI sessions
@@ -149,11 +185,6 @@ export function WorkflowActionPopover({
           {serverStatus === 'restarting' && (
             <p className="text-[length:var(--text-xs)] text-text-muted">
               OpenCode server restarting...
-            </p>
-          )}
-          {serverStatus === 'ready' && (
-            <p className="text-[length:var(--text-xs)] text-text-muted">
-              Full workflow launch integration coming in Epic 7
             </p>
           )}
         </div>

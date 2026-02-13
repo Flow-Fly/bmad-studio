@@ -25,6 +25,12 @@ interface OpenCodeState {
   models: string[];
   defaultProvider: string | null;
 
+  // Active session state
+  activeSessionId: string | null;
+  activeStreamId: string | null;
+  sessionLaunching: boolean;
+  sessionError: string | null;
+
   // Actions
   setServerReady: (port: number) => void;
   setServerRestarting: (retryCount: number) => void;
@@ -38,6 +44,10 @@ interface OpenCodeState {
   setNotInstalled: () => void;
   setNotConfigured: (path: string) => void;
   redetectOpenCode: () => Promise<void>;
+  setActiveSession: (sessionId: string, streamId: string) => void;
+  clearActiveSession: () => void;
+  setSessionLaunching: (launching: boolean) => void;
+  setSessionError: (error: string | null) => void;
 }
 
 export const useOpenCodeStore = create<OpenCodeState>((set) => ({
@@ -55,6 +65,12 @@ export const useOpenCodeStore = create<OpenCodeState>((set) => ({
   providers: [],
   models: [],
   defaultProvider: null,
+
+  // Active session state
+  activeSessionId: null,
+  activeStreamId: null,
+  sessionLaunching: false,
+  sessionError: null,
 
   setServerReady: (port: number) =>
     set({
@@ -122,6 +138,28 @@ export const useOpenCodeStore = create<OpenCodeState>((set) => ({
       models: [],
       defaultProvider: null,
     }),
+
+  setActiveSession: (sessionId: string, streamId: string) =>
+    set({
+      activeSessionId: sessionId,
+      activeStreamId: streamId,
+      sessionLaunching: false,
+      sessionError: null,
+    }),
+
+  clearActiveSession: () =>
+    set({
+      activeSessionId: null,
+      activeStreamId: null,
+      sessionLaunching: false,
+      sessionError: null,
+    }),
+
+  setSessionLaunching: (launching: boolean) =>
+    set({ sessionLaunching: launching }),
+
+  setSessionError: (error: string | null) =>
+    set({ sessionError: error, sessionLaunching: false }),
 
   redetectOpenCode: async () => {
     try {
@@ -221,3 +259,15 @@ export const useOpenCodeConfigured = () =>
 
 export const useOpenCodeProviders = () =>
   useOpenCodeStore((state) => state.providers);
+
+export const useActiveSession = () =>
+  useOpenCodeStore((state) => ({
+    sessionId: state.activeSessionId,
+    streamId: state.activeStreamId,
+  }));
+
+export const useSessionLaunching = () =>
+  useOpenCodeStore((state) => state.sessionLaunching);
+
+export const useSessionError = () =>
+  useOpenCodeStore((state) => state.sessionError);
