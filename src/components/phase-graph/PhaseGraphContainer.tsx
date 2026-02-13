@@ -216,7 +216,7 @@ export function PhaseGraphContainer() {
   const isQuickFlow = phases.track === 'quick' || phases.phases.length <= 2;
 
   if (isQuickFlow) {
-    return renderQuickFlow(phases, nodes, workflowStatus, compact, focusedIndex, setFocusedIndex);
+    return renderQuickFlow(nodes, workflowStatus, compact, focusedIndex, setFocusedIndex);
   }
 
   const columns = buildColumns(phases, nodes);
@@ -360,8 +360,12 @@ function buildColumns(
   }));
 }
 
+const QUICK_FLOW_NODE_COLORS = [
+  'border-[var(--phase-quickflow-spec)] bg-[var(--phase-quickflow-spec-bg)]',
+  'border-[var(--phase-quickflow-dev)] bg-[var(--phase-quickflow-dev-bg)]',
+];
+
 function renderQuickFlow(
-  phases: PhasesResponse,
   nodes: PhaseGraphNode[],
   workflowStatus: import('../../types/workflow').WorkflowStatus,
   compact: boolean,
@@ -369,11 +373,6 @@ function renderQuickFlow(
   setFocusedIndex: (idx: number) => void,
 ) {
   const nodeIndexMap = new Map(nodes.map((n, i) => [n.workflow_id, i]));
-
-  // Quick Flow color mapping
-  const quickFlowColors: Record<string, string> = {};
-  if (nodes.length >= 1) quickFlowColors[nodes[0].workflow_id] = 'border-[var(--phase-quickflow-spec)] bg-[var(--phase-quickflow-spec-bg)]';
-  if (nodes.length >= 2) quickFlowColors[nodes[1].workflow_id] = 'border-[var(--phase-quickflow-dev)] bg-[var(--phase-quickflow-dev-bg)]';
 
   return (
     <TooltipProvider delayDuration={300}>
@@ -400,16 +399,18 @@ function renderQuickFlow(
 
             return (
               <div key={node.workflow_id} className="flex flex-col items-center gap-6">
-                <PhaseNode
-                  node={node}
-                  visualState={visualState}
-                  compact={compact}
-                  focused={nodeIndex === focusedIndex}
-                  nodeIndex={nodeIndex}
-                  artifactPath={artifactPath}
-                  isSuggested={isSuggested}
-                  onFocus={() => setFocusedIndex(nodeIndex)}
-                />
+                <div className={cn('rounded-[var(--radius-md)]', QUICK_FLOW_NODE_COLORS[idx])}>
+                  <PhaseNode
+                    node={node}
+                    visualState={visualState}
+                    compact={compact}
+                    focused={nodeIndex === focusedIndex}
+                    nodeIndex={nodeIndex}
+                    artifactPath={artifactPath}
+                    isSuggested={isSuggested}
+                    onFocus={() => setFocusedIndex(nodeIndex)}
+                  />
+                </div>
                 {/* Vertical edge between nodes */}
                 {idx < nodes.length - 1 && (
                   <div className="h-6 w-px bg-border-primary" aria-hidden="true" />
