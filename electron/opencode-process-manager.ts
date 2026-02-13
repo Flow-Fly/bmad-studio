@@ -32,6 +32,7 @@ export class OpenCodeProcessManager {
   private retryCount = 0;
   private status: OpenCodeServerStatus = 'stopped';
   private isShuttingDown = false;
+  private isRestarting = false;
 
   private readonly config: Required<OpenCodeConfig>;
 
@@ -69,7 +70,7 @@ export class OpenCodeProcessManager {
    * Spawns OpenCode server with random port and retry logic
    */
   async spawn(): Promise<void> {
-    if (this.status === 'running') {
+    if (this.status === 'starting' || this.status === 'running' || this.status === 'restarting') {
       console.log('[OpenCode] Server already running');
       return;
     }
@@ -87,11 +88,13 @@ export class OpenCodeProcessManager {
     console.log('[OpenCode] Restarting server...');
     this.updateStatus('restarting', undefined, this.retryCount);
 
+    this.isRestarting = true;
     await this.terminateProcess();
     await this.sleep(this.config.retryDelayMs);
 
     this.retryCount++;
     if (this.retryCount > this.config.maxRetries) {
+      this.isRestarting = false;
       this.updateStatus(
         'failed',
         `Max retries (${this.config.maxRetries}) exceeded`
@@ -99,6 +102,7 @@ export class OpenCodeProcessManager {
       return;
     }
 
+    this.isRestarting = false;
     await this.attemptSpawn();
   }
 
@@ -163,12 +167,15 @@ export class OpenCodeProcessManager {
 
       // Success
       this.retryCount = 0;
-      this.updateStatus('running', port);
+      this.updateStatus('running');
     } catch (error) {
       console.error('[OpenCode] Spawn failed:', error);
 
       // Retry with new port if retries remaining
       if (this.retryCount < this.config.maxRetries) {
+        this.isRestarting = true;
+        await this.terminateProcess();
+        this.isRestarting = false;
         await this.restart();
       } else {
         this.updateStatus(
@@ -244,7 +251,7 @@ export class OpenCodeProcessManager {
     this.currentPort = null;
 
     // If shutting down normally, don't restart
-    if (this.isShuttingDown) {
+    if (this.isShuttingDown || this.isRestarting) {
       return;
     }
 

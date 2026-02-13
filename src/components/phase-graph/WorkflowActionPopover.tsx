@@ -111,9 +111,7 @@ export function WorkflowActionPopover({
             <button
               className={cn(
                 'flex-1 rounded-[var(--radius-md)] px-3 py-1.5 text-[length:var(--text-sm)] font-medium transition-opacity',
-                isServerReady
-                  ? 'bg-accent/20 text-accent opacity-50 cursor-not-allowed'
-                  : 'bg-accent/20 text-accent opacity-50 cursor-not-allowed'
+                'bg-accent/20 text-accent opacity-50 cursor-not-allowed'
               )}
               disabled={!isServerReady}
               title={getButtonTooltip() || 'Workflow launch coming in Epic 7'}
