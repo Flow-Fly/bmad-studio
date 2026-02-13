@@ -8,6 +8,9 @@ import { PhaseDotIndicator } from '@/components/streams/PhaseDotIndicator';
 import { PhaseGraphContainer } from '@/components/phase-graph/PhaseGraphContainer';
 import { BreadcrumbStrip } from '@/components/phase-graph/BreadcrumbStrip';
 import { ArtifactViewer } from '@/components/artifacts/ArtifactViewer';
+import { ConversationHeader } from '@/components/opencode/ConversationHeader';
+import { ChatPanel } from '@/components/opencode/ChatPanel';
+import { useOpenCodeEvents } from '@/hooks/useOpenCodeEvents';
 import { capitalize, formatRelativeTime } from '@/lib/format-utils';
 import type { NodeVisualState } from '@/types/phases';
 
@@ -24,6 +27,9 @@ export function StreamDetail() {
   const [view, setView] = useState<'graph' | 'artifact' | 'session'>('graph');
   const [artifactPath, setArtifactPath] = useState<string | null>(null);
   const [artifactPhase, setArtifactPhase] = useState<string | undefined>(undefined);
+
+  // Mount OpenCode events hook
+  useOpenCodeEvents();
 
   // Fetch phase data when active stream changes
   useEffect(() => {
@@ -107,18 +113,10 @@ export function StreamDetail() {
           />
         )}
         {view === 'session' && (
-          <div className="flex flex-1 flex-col">
-            {phases && workflowStatus && (
-              <BreadcrumbStrip
-                phases={phases}
-                workflowStatus={workflowStatus}
-                onExpand={() => setView('graph')}
-              />
-            )}
-            <div className="flex flex-1 items-center justify-center">
-              <p className="text-[length:var(--text-sm)] text-interactive-muted">
-                OpenCode session panel — coming in Epic 7
-              </p>
+          <div className="flex h-full flex-col">
+            <ConversationHeader />
+            <div className="flex-1 overflow-hidden">
+              <ChatPanel />
             </div>
           </div>
         )}

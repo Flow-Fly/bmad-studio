@@ -46,6 +46,7 @@ export interface ToolResultPart {
   type: 'tool-result';
   toolCallId: string;
   result: unknown;
+  isError?: boolean;
 }
 
 export type MessagePart = TextPart | ToolCallPart | ToolResultPart;
