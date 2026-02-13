@@ -58,6 +58,17 @@ function spawnGoBackend(): void {
   const binPath = goBackendPath();
   if (!binPath) return; // Dev mode — backend started externally
 
+  if (!fs.existsSync(binPath)) {
+    const msg = `Go backend binary not found at: ${binPath}`;
+    console.error(`[electron] ${msg}`);
+    dialog.showErrorBox(
+      'BMAD Studio — Backend Missing',
+      `${msg}\n\nThe application cannot start without the backend binary. Please reinstall BMAD Studio.`,
+    );
+    app.quit();
+    return;
+  }
+
   console.log(`[electron] Spawning Go backend: ${binPath}`);
   goProcess = spawn(binPath, [], {
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -86,7 +97,7 @@ function killGoBackend(): void {
   }
 }
 
-function waitForPort(port: number, timeoutMs = 10_000): Promise<void> {
+function waitForPort(port: number, timeoutMs = 15_000): Promise<void> {
   const start = Date.now();
   return new Promise((resolve, reject) => {
     function attempt() {

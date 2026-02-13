@@ -10,7 +10,11 @@
     "preview": "vite preview",
     "electron:compile": "tsc --project electron/tsconfig.json",
     "electron:dev": "npm run electron:compile && concurrently \"vite\" \"wait-on http://localhost:3007 && electron .\"",
-    "electron:build": "npm run build && npm run electron:compile && electron-builder"
+    "electron:build": "npm run backend:build && npm run build && npm run electron:compile && electron-builder",
+    "backend:build": "bash scripts/build-backend.sh current",
+    "dist": "npm run backend:build && npm run build && npm run electron:compile && electron-builder",
+    "dist:mac": "npm run backend:build && npm run build && npm run electron:compile && electron-builder --mac",
+    "dist:linux": "npm run backend:build && npm run build && npm run electron:compile && electron-builder --linux"
   },
   "dependencies": {
     "@radix-ui/react-checkbox": "^1.3.3",
