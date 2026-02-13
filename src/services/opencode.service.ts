@@ -179,7 +179,7 @@ export async function sendChatMessage(
 
   if (isIpcError(response)) {
     throw new Error(
-      `Failed to send message: ${(response as IpcErrorResponse).message} (${(response as IpcErrorResponse).code})`,
+      `Failed to send message: ${response.message} (${response.code})`,
     );
   }
 

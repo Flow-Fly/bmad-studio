@@ -15,7 +15,6 @@ export function ChatPanel() {
   const { sessionId } = useActiveSession();
   const status = useSessionStatus();
   const scrollAreaRef = useRef<HTMLDivElement>(null);
-  const viewportRef = useRef<HTMLDivElement | null>(null);
 
   // Get auto-scroll behavior with messages as dependency
   const { scrollRef, isAtBottom, handleScroll, scrollToBottom } = useAutoScroll([
@@ -33,7 +32,6 @@ export function ChatPanel() {
 
     if (!viewport) return undefined;
 
-    viewportRef.current = viewport;
     scrollRef.current = viewport;
 
     // Attach scroll listener

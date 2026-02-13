@@ -8,7 +8,7 @@ export function useAutoScroll(deps: unknown[]) {
   const handleScroll = useCallback(() => {
     const el = scrollRef.current;
     if (!el) return;
-    const threshold = 100; // Updated to match AC3 requirement
+    const threshold = 100;
     const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
     userScrolledRef.current = !atBottom;
     setIsAtBottom(atBottom);

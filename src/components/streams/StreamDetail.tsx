@@ -7,7 +7,6 @@ import { useActiveSession } from '@/stores/opencode.store';
 import { Badge } from '@/components/ui/badge';
 import { PhaseDotIndicator } from '@/components/streams/PhaseDotIndicator';
 import { PhaseGraphContainer } from '@/components/phase-graph/PhaseGraphContainer';
-import { BreadcrumbStrip } from '@/components/phase-graph/BreadcrumbStrip';
 import { ArtifactViewer } from '@/components/artifacts/ArtifactViewer';
 import { ConversationHeader } from '@/components/opencode/ConversationHeader';
 import { ChatPanel } from '@/components/opencode/ChatPanel';
@@ -23,9 +22,6 @@ export function StreamDetail() {
   const fetchPhaseData = usePhaseStore((s) => s.fetchPhaseData);
   const clearPhaseState = usePhaseStore((s) => s.clearPhaseState);
 
-  const phases = usePhaseStore((s) => s.phases);
-  const workflowStatus = usePhaseStore((s) => s.workflowStatus);
-
   const [view, setView] = useState<'graph' | 'artifact' | 'session'>('graph');
   const [artifactPath, setArtifactPath] = useState<string | null>(null);
   const [artifactPhase, setArtifactPhase] = useState<string | undefined>(undefined);
@@ -35,13 +31,9 @@ export function StreamDetail() {
   // Mount OpenCode events hook
   useOpenCodeEvents();
 
-  // Keyboard shortcuts: Escape to return focus from chat to phase graph
   const handleEscapeFromChat = useCallback(() => {
-    if (view === 'session' && sessionId) {
-      // Return focus to the phase graph by switching back to graph view
-      setView('graph');
-    }
-  }, [view, sessionId]);
+    setView('graph');
+  }, []);
 
   useKeyboardShortcuts({
     enabled: view === 'session' && !!sessionId,

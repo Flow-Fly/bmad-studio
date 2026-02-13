@@ -34,20 +34,11 @@ export function ChatInput() {
 
     try {
       setError(null);
-
-      const response = await sendChatMessage(sessionId, trimmedValue);
-
-      if (!response.success) {
-        setError('Failed to send message');
-        return;
-      }
-
-      // Clear input only on successful submission
+      await sendChatMessage(sessionId, trimmedValue);
       setInputValue('');
     } catch (err) {
       console.error('[ChatInput] Send prompt error:', err);
       setError(err instanceof Error ? err.message : 'Failed to send message');
-      // Preserve input text on error so user can retry
     }
   };
 

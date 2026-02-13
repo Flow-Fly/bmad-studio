@@ -15,9 +15,7 @@ import type { Message, MessagePart } from '../types/message';
  * Subscribes on mount and cleans up on unmount.
  */
 export function useOpenCodeEvents() {
-  const { activeSessionId } = useOpenCodeStore((state) => ({
-    activeSessionId: state.activeSessionId,
-  }));
+  const activeSessionId = useOpenCodeStore((state) => state.activeSessionId);
 
   useEffect(() => {
     if (!window.opencode) {
