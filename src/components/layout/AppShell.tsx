@@ -5,6 +5,7 @@ import { EmptyState } from '@/components/layout/EmptyState';
 import { Dashboard } from '@/components/dashboard/Dashboard';
 import { StreamDetail } from '@/components/streams/StreamDetail';
 import { SettingsPanel } from '@/components/settings/SettingsPanel';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import { useStreamStore } from '@/stores/stream.store';
 
 interface AppShellProps {
@@ -31,13 +32,15 @@ export function AppShell({ hasProject, onProjectOpened }: AppShellProps) {
   return (
     <div className="flex min-h-screen min-w-[1024px] flex-row bg-surface-base">
       <ActivityBar activeMode={activeMode} onModeChange={setActiveMode} />
-      <div className="flex min-w-0 flex-1 flex-col border-l-0">
-        {activeMode === 'dashboard' && (
-          <Dashboard onNavigateToStream={handleNavigateToStream} />
-        )}
-        {activeMode === 'stream' && <StreamDetail />}
-        {activeMode === 'settings' && <SettingsPanel />}
-      </div>
+      <TooltipProvider delayDuration={300}>
+        <div className="flex min-w-0 flex-1 flex-col border-l-0">
+          {activeMode === 'dashboard' && (
+            <Dashboard onNavigateToStream={handleNavigateToStream} />
+          )}
+          {activeMode === 'stream' && <StreamDetail />}
+          {activeMode === 'settings' && <SettingsPanel />}
+        </div>
+      </TooltipProvider>
     </div>
   );
 }

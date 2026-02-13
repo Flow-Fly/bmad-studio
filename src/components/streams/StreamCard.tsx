@@ -41,9 +41,10 @@ export function StreamCard({ stream, isActive, onClick }: StreamCardProps) {
       type="button"
       onClick={onClick}
       className={cn(
-        'flex w-full cursor-pointer flex-col gap-1.5 border-l-2 border-transparent rounded-[var(--radius-md)] bg-surface-raised px-3 py-2.5 text-left transition-colors duration-150',
-        'border border-surface-border hover:border-surface-border-hover',
-        isActive && `${activeBorderClass} border-l-2 bg-surface-overlay`,
+        'flex w-full cursor-pointer flex-col gap-1.5 rounded-[var(--radius-md)] border border-surface-border bg-surface-raised px-3 py-2.5 text-left transition-colors duration-150 hover:border-surface-border-hover',
+        isActive
+          ? `border-l-2 ${activeBorderClass} bg-surface-overlay`
+          : 'border-l-2 border-l-transparent',
       )}
     >
       {/* Row 1: Stream name + flow type badge */}
