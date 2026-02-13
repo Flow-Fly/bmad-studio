@@ -27,11 +27,12 @@ type PhaseDeriver interface {
 
 // StreamService manages stream lifecycle operations
 type StreamService struct {
-	streamStore   *storage.StreamStore
-	registryStore *storage.RegistryStore
-	hub           Broadcaster
-	watcherHook   StreamWatcherHook
-	phaseDeriver  PhaseDeriver
+	streamStore     *storage.StreamStore
+	registryStore   *storage.RegistryStore
+	hub             Broadcaster
+	watcherHook     StreamWatcherHook
+	phaseDeriver    PhaseDeriver
+	worktreeService *WorktreeService
 }
 
 // NewStreamService creates a new StreamService
@@ -53,6 +54,12 @@ func (s *StreamService) SetWatcherHook(hook StreamWatcherHook) {
 // Called after WatcherService is initialized.
 func (s *StreamService) SetPhaseDeriver(deriver PhaseDeriver) {
 	s.phaseDeriver = deriver
+}
+
+// SetWorktreeService sets the worktree service for archive-time cleanup.
+// Called after WorktreeService is constructed.
+func (s *StreamService) SetWorktreeService(wt *WorktreeService) {
+	s.worktreeService = wt
 }
 
 // streamNameRegex validates stream names: alphanumeric, hyphens, underscores; must start with alphanumeric
@@ -172,8 +179,10 @@ func (s *StreamService) Get(projectName, streamName string) (*types.StreamMeta, 
 	return meta, nil
 }
 
-// Archive archives a stream with the given outcome ("merged" or "abandoned")
-func (s *StreamService) Archive(projectName, streamName, outcome string) (*types.StreamMeta, error) {
+// Archive archives a stream with the given outcome ("merged" or "abandoned").
+// If the stream has a worktree and force is false, unmerged changes will cause an error.
+// If force is true, the worktree is removed regardless of merge status.
+func (s *StreamService) Archive(projectName, streamName, outcome string, force bool) (*types.StreamMeta, error) {
 	if outcome != string(types.StreamOutcomeMerged) && outcome != string(types.StreamOutcomeAbandoned) {
 		return nil, fmt.Errorf("invalid outcome: must be 'merged' or 'abandoned', got '%s'", outcome)
 	}
@@ -190,6 +199,27 @@ func (s *StreamService) Archive(projectName, streamName, outcome string) (*types
 
 	if meta.Status == types.StreamStatusArchived {
 		return nil, fmt.Errorf("stream already archived: %s-%s", projectName, streamName)
+	}
+
+	// Worktree cleanup before archiving
+	if meta.Worktree != "" && s.worktreeService != nil {
+		status, checkErr := s.worktreeService.CheckMergeStatus(projectName, streamName)
+		if checkErr != nil {
+			// If merge status check fails, proceed only if force=true
+			if !force {
+				return nil, fmt.Errorf("failed to check worktree merge status: %w", checkErr)
+			}
+		}
+
+		if (status != nil && status.Merged) || force {
+			// Branch is merged or force=true — remove worktree
+			if removeErr := s.worktreeService.Remove(projectName, streamName, force); removeErr != nil {
+				return nil, fmt.Errorf("failed to cleanup worktree: %w", removeErr)
+			}
+		} else {
+			// Branch has unmerged changes and force=false
+			return nil, fmt.Errorf("stream has unmerged changes in worktree: %s. Use force=true to delete anyway", meta.Branch)
+		}
 	}
 
 	// Archive the stream

@@ -559,7 +559,7 @@ func TestStreamsHandler_ListStreams_ExcludesArchived(t *testing.T) {
 	// Create and archive a stream
 	_, err = streamService.Create("test-app", "archived-stream")
 	require.NoError(t, err)
-	_, err = streamService.Archive("test-app", "archived-stream", "merged")
+	_, err = streamService.Archive("test-app", "archived-stream", "merged", false)
 	require.NoError(t, err)
 
 	// List streams
@@ -590,7 +590,7 @@ func TestStreamsHandler_AlreadyArchived(t *testing.T) {
 	// Create and archive stream
 	_, err = streamService.Create("test-app", "feature-x")
 	require.NoError(t, err)
-	_, err = streamService.Archive("test-app", "feature-x", "merged")
+	_, err = streamService.Archive("test-app", "feature-x", "merged", false)
 	require.NoError(t, err)
 
 	// Try to archive again - archived streams are in different directory, so returns 404
