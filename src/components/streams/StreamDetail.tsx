@@ -3,6 +3,7 @@ import { GitBranch } from 'lucide-react';
 
 import { useStreamStore } from '@/stores/stream.store';
 import { usePhaseStore } from '@/stores/phase.store';
+import { useActiveSession } from '@/stores/opencode.store';
 import { Badge } from '@/components/ui/badge';
 import { PhaseDotIndicator } from '@/components/streams/PhaseDotIndicator';
 import { PhaseGraphContainer } from '@/components/phase-graph/PhaseGraphContainer';
@@ -11,6 +12,7 @@ import { ArtifactViewer } from '@/components/artifacts/ArtifactViewer';
 import { ConversationHeader } from '@/components/opencode/ConversationHeader';
 import { ChatPanel } from '@/components/opencode/ChatPanel';
 import { useOpenCodeEvents } from '@/hooks/useOpenCodeEvents';
+import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { capitalize, formatRelativeTime } from '@/lib/format-utils';
 import type { NodeVisualState } from '@/types/phases';
 
@@ -28,8 +30,24 @@ export function StreamDetail() {
   const [artifactPath, setArtifactPath] = useState<string | null>(null);
   const [artifactPhase, setArtifactPhase] = useState<string | undefined>(undefined);
 
+  const { sessionId } = useActiveSession();
+
   // Mount OpenCode events hook
   useOpenCodeEvents();
+
+  // Keyboard shortcuts: Escape to return focus from chat to phase graph
+  const handleEscapeFromChat = useCallback(() => {
+    if (view === 'session' && sessionId) {
+      // Return focus to the phase graph by switching back to graph view
+      setView('graph');
+    }
+  }, [view, sessionId]);
+
+  useKeyboardShortcuts({
+    enabled: view === 'session' && !!sessionId,
+    onSectionChange: () => {}, // Not used in this context
+    onEscapeFromChat: handleEscapeFromChat,
+  });
 
   // Fetch phase data when active stream changes
   useEffect(() => {
