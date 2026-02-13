@@ -1,32 +1,7 @@
-import { create } from 'zustand';
-import type { LoadingState } from '../types/project';
 import type { PhasesResponse, PhaseGraphNode, PhaseGraphEdge, NodeVisualState } from '../types/phases';
-import type { WorkflowStatusValue } from '../types/workflow';
+import type { WorkflowStatus, WorkflowStatusValue } from '../types/workflow';
 
-interface PhasesState {
-  phases: PhasesResponse | null;
-  loadingState: LoadingState;
-
-  // Actions
-  updatePhases: (phases: PhasesResponse) => void;
-  setLoadingState: (state: LoadingState) => void;
-  clearPhasesState: () => void;
-}
-
-export const usePhasesStore = create<PhasesState>((set) => ({
-  phases: null,
-  loadingState: { status: 'idle' },
-
-  updatePhases: (phases) =>
-    set({ phases, loadingState: { status: 'success' } }),
-
-  setLoadingState: (loadingState) => set({ loadingState }),
-
-  clearPhasesState: () =>
-    set({ phases: null, loadingState: { status: 'idle' } }),
-}));
-
-// --- Pure utility functions (no store dependency) ---
+// --- Pure utility functions (relocated from phases.store.ts) ---
 
 const UPPERCASE_TOKENS = new Set(['prd', 'ux', 'ci', 'nfr', 'atdd']);
 const STRIP_PREFIXES = ['create-', 'dev-'];
@@ -77,12 +52,12 @@ export function getNodeVisualState(
 }
 
 /**
- * Compute phase graph nodes by reading from both phases and workflow stores.
+ * Compute phase graph nodes by reading from both phases and workflow data.
  * Use this in components or custom hooks.
  */
 export function computePhaseGraphNodes(
   phases: PhasesResponse | null,
-  ws: import('../types/workflow').WorkflowStatus | null,
+  ws: WorkflowStatus | null,
 ): PhaseGraphNode[] {
   if (!phases || !ws) return [];
 

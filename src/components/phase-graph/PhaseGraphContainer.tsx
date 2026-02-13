@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Repeat } from 'lucide-react';
-import { usePhasesStore, computePhaseGraphNodes, computePhaseGraphEdges, getNodeVisualState } from '../../stores/phases.store';
-import { useWorkflowStore } from '../../stores/workflow.store';
+import { computePhaseGraphNodes, computePhaseGraphEdges, getNodeVisualState } from '../../lib/phase-utils';
 import type { PhasesResponse, PhaseGraphNode } from '../../types/phases';
 import { PhaseNode } from './PhaseNode';
 import { TooltipProvider } from '../ui/tooltip';
@@ -22,6 +21,10 @@ interface PhaseColumn {
   nodes: PhaseGraphNode[];
 }
 
+// NOTE: Phase graph data sources (phases + workflow status) will be wired
+// in Story 4-5 (Phase Graph Rendering). Until then, this component renders
+// a skeleton placeholder since there is no data provider.
+
 export function PhaseGraphContainer() {
   const [compact, setCompact] = useState(false);
   const [focusedIndex, setFocusedIndex] = useState(-1);
@@ -30,10 +33,9 @@ export function PhaseGraphContainer() {
   const graphRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
 
-  const phases = usePhasesStore(s => s.phases);
-  const phasesLoading = usePhasesStore(s => s.loadingState);
-  const workflowStatus = useWorkflowStore(s => s.workflowStatus);
-  const nextWorkflow = useWorkflowStore(s => s.nextWorkflow);
+  // Placeholder: phases and workflow status will be provided in Story 4-5
+  const phases: PhasesResponse | null = null;
+  const workflowStatus = null;
 
   const nodes = useMemo(
     () => computePhaseGraphNodes(phases, workflowStatus),
@@ -189,16 +191,7 @@ export function PhaseGraphContainer() {
     [nodes, focusedIndex],
   );
 
-  // Error state
-  if (phasesLoading.status === 'error') {
-    return (
-      <div className="p-12 text-center text-[length:var(--text-md)] text-error">
-        {phasesLoading.error ?? 'Failed to load phases'}
-      </div>
-    );
-  }
-
-  // Loading / no-data skeleton
+  // Loading / no-data skeleton (always shown until Story 4-5 wires data)
   if (!phases || !workflowStatus || !nodes.length) {
     return renderSkeleton();
   }
@@ -206,8 +199,6 @@ export function PhaseGraphContainer() {
   const columns = buildColumns(phases, nodes);
   const currentPhaseNum = workflowStatus.current_phase;
   const nodeIndexMap = new Map(nodes.map((n, i) => [n.workflow_id, i]));
-
-  const next = nextWorkflow();
 
   return (
     <TooltipProvider delayDuration={300}>
@@ -322,9 +313,7 @@ export function PhaseGraphContainer() {
         </div>
 
         {/* Screen reader announcement */}
-        <div className="sr-only" aria-live="polite">
-          {next ? `Current workflow: ${next.id}` : ''}
-        </div>
+        <div className="sr-only" aria-live="polite" />
       </div>
     </TooltipProvider>
   );
