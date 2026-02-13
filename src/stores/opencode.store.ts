@@ -78,21 +78,25 @@ export const useOpenCodeStore = create<OpenCodeState>((set) => ({
       port: null,
     }),
 
-  setDetectionResult: (data) =>
+  setDetectionResult: (data) => {
+    let serverStatus: OpenCodeServerStatus = 'not-installed';
+    if (data.installed && data.config) {
+      serverStatus = 'connecting';
+    } else if (data.installed) {
+      serverStatus = 'not-configured';
+    }
+
     set({
       installed: data.installed,
       configured: !!data.config,
-      opencodePath: data.path || null,
-      opencodeVersion: data.version || null,
-      providers: data.config?.providers || [],
-      models: data.config?.models || [],
-      defaultProvider: data.config?.defaultProvider || null,
-      serverStatus: data.installed
-        ? data.config
-          ? 'connecting'
-          : 'not-configured'
-        : 'not-installed',
-    }),
+      opencodePath: data.path ?? null,
+      opencodeVersion: data.version ?? null,
+      providers: data.config?.providers ?? [],
+      models: data.config?.models ?? [],
+      defaultProvider: data.config?.defaultProvider ?? null,
+      serverStatus,
+    });
+  },
 
   setNotInstalled: () =>
     set({
@@ -126,7 +130,7 @@ export const useOpenCodeStore = create<OpenCodeState>((set) => ({
       if (!result.success) {
         console.error('[OpenCode Store] Re-detection failed:', result.error);
         set({
-          errorMessage: result.error || 'Re-detection failed',
+          errorMessage: result.error ?? 'Re-detection failed',
         });
         return;
       }

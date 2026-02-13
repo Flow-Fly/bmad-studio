@@ -1,11 +1,10 @@
-import { AlertCircle, Loader2, CheckCircle } from 'lucide-react';
+import { AlertCircle, Loader2 } from 'lucide-react';
 import { useSidecarStatus, useErrorMessage } from '@/stores/sidecar.store';
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { cn } from '@/lib/utils';
 
 export function SidecarStatus() {
   const status = useSidecarStatus();

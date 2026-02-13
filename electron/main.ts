@@ -148,34 +148,63 @@ async function stopGoBackend(): Promise<void> {
 function handleOpenCodeStatusChange(event: OpenCodeStatusEvent): void {
   console.log('[electron] OpenCode status changed:', event);
 
-  // Forward status changes to renderer
-  if (mainWindow) {
-    switch (event.status) {
-      case 'not-installed':
-        // Don't send event — renderer assumes not-installed by default
-        console.log('[electron] OpenCode not detected on PATH');
-        break;
-      case 'starting':
-        // No event needed — renderer shows "connecting" until ready/error
-        break;
-      case 'running':
-        mainWindow.webContents.send('opencode:server-ready', {
-          port: event.port,
-        });
-        break;
-      case 'restarting':
-        mainWindow.webContents.send('opencode:server-restarting', {
-          retryCount: event.retryCount,
-        });
-        break;
-      case 'failed':
-        mainWindow.webContents.send('opencode:server-error', {
-          code: 'server_start_failed',
-          message: event.error || 'Unknown error',
-        });
-        break;
-    }
+  if (!mainWindow) return;
+
+  switch (event.status) {
+    case 'running':
+      mainWindow.webContents.send('opencode:server-ready', {
+        port: event.port,
+      });
+      break;
+    case 'restarting':
+      mainWindow.webContents.send('opencode:server-restarting', {
+        retryCount: event.retryCount,
+      });
+      break;
+    case 'failed':
+      mainWindow.webContents.send('opencode:server-error', {
+        code: 'server_start_failed',
+        message: event.error || 'Unknown error',
+      });
+      break;
   }
+}
+
+/**
+ * Runs OpenCode detection + config reading and sends results to renderer.
+ * Returns true if OpenCode is installed and detection events were sent.
+ */
+async function detectAndNotify(): Promise<boolean> {
+  if (!opencodeManager) return false;
+
+  const detection = await opencodeManager.detectOpenCode();
+
+  if (!detection.installed) {
+    console.log('[electron] OpenCode not detected — skipping spawn');
+    mainWindow?.webContents.send('opencode:not-installed', {});
+    return false;
+  }
+
+  console.log('[electron] OpenCode detected at:', detection.path);
+
+  const config = await opencodeManager.readOpenCodeConfig();
+  opencodeConfigured = !!config;
+
+  if (!config) {
+    console.log('[electron] OpenCode detected but not configured');
+    mainWindow?.webContents.send('opencode:not-configured', {
+      path: detection.path,
+    });
+  }
+
+  mainWindow?.webContents.send('opencode:detection-result', {
+    installed: true,
+    path: detection.path,
+    version: detection.version,
+    config: config ?? undefined,
+  });
+
+  return true;
 }
 
 async function startOpenCodeServer(): Promise<void> {
@@ -192,48 +221,8 @@ async function startOpenCodeServer(): Promise<void> {
     handleOpenCodeStatusChange
   );
 
-  // Detect if OpenCode is installed
-  const detectionResult = await opencodeManager.detectOpenCode();
-
-  if (!detectionResult.installed) {
-    console.log('[electron] OpenCode not detected — skipping spawn');
-
-    // Send not-installed event to renderer
-    if (mainWindow) {
-      mainWindow.webContents.send('opencode:not-installed', {});
-    }
-
-    return;
-  }
-
-  console.log('[electron] OpenCode detected at:', detectionResult.path);
-
-  // Try to read config
-  const config = await opencodeManager.readOpenCodeConfig();
-  opencodeConfigured = !!config;
-
-  if (!config) {
-    console.log('[electron] OpenCode detected but not configured');
-
-    // Send not-configured event to renderer
-    if (mainWindow) {
-      mainWindow.webContents.send('opencode:not-configured', {
-        path: detectionResult.path,
-      });
-    }
-
-    // Still try to spawn — OpenCode may work without config
-  }
-
-  // Send detection result to renderer
-  if (mainWindow) {
-    mainWindow.webContents.send('opencode:detection-result', {
-      installed: true,
-      path: detectionResult.path,
-      version: detectionResult.version,
-      config: config || undefined,
-    });
-  }
+  const installed = await detectAndNotify();
+  if (!installed) return;
 
   try {
     await opencodeManager.spawn();
@@ -241,7 +230,6 @@ async function startOpenCodeServer(): Promise<void> {
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     console.error('[electron] OpenCode server failed to start:', errorMessage);
-    // No dialog — app stays functional, workflows just disabled
   }
 }
 
@@ -324,42 +312,10 @@ function registerIPC(): void {
     console.log('[electron] Manual OpenCode re-detection triggered');
 
     try {
-      // Detect OpenCode
-      const detectionResult = await opencodeManager.detectOpenCode();
+      const installed = await detectAndNotify();
 
-      if (!detectionResult.installed) {
-        // Send not-installed event
-        if (mainWindow) {
-          mainWindow.webContents.send('opencode:not-installed', {});
-        }
-
-        return {
-          success: true,
-          installed: false,
-        };
-      }
-
-      // Read config
-      const config = await opencodeManager.readOpenCodeConfig();
-      opencodeConfigured = !!config;
-
-      if (!config) {
-        // Send not-configured event
-        if (mainWindow) {
-          mainWindow.webContents.send('opencode:not-configured', {
-            path: detectionResult.path,
-          });
-        }
-      }
-
-      // Send detection result
-      if (mainWindow) {
-        mainWindow.webContents.send('opencode:detection-result', {
-          installed: true,
-          path: detectionResult.path,
-          version: detectionResult.version,
-          config: config || undefined,
-        });
+      if (!installed) {
+        return { success: true, installed: false };
       }
 
       // Try to spawn if not already running
@@ -367,13 +323,7 @@ function registerIPC(): void {
         await opencodeManager.spawn();
       }
 
-      return {
-        success: true,
-        installed: true,
-        path: detectionResult.path,
-        version: detectionResult.version,
-        config: config || undefined,
-      };
+      return { success: true, installed: true };
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : String(error);

@@ -162,28 +162,22 @@ export class ProcessManager {
     // Send SIGTERM
     this.process.kill('SIGTERM');
 
-    // Wait for graceful shutdown or timeout
-    const shutdownPromise = new Promise<void>((resolve) => {
-      const exitHandler = () => {
-        console.log('[ProcessManager] Process exited gracefully');
-        resolve();
-      };
-      this.process?.once('exit', exitHandler);
-    });
-
-    let timeoutId: NodeJS.Timeout;
-    const timeoutPromise = new Promise<void>((resolve) => {
-      timeoutId = setTimeout(() => {
+    // Wait for graceful shutdown or force-kill on timeout
+    await new Promise<void>((resolve) => {
+      const timeoutId = setTimeout(() => {
         console.log('[ProcessManager] Shutdown timeout, sending SIGKILL');
-        if (this.process && this.process.pid) {
+        if (this.process?.pid) {
           this.process.kill('SIGKILL');
         }
         resolve();
       }, this.shutdownTimeoutMs);
-    });
 
-    await Promise.race([shutdownPromise, timeoutPromise]);
-    clearTimeout(timeoutId!);
+      this.process?.once('exit', () => {
+        clearTimeout(timeoutId);
+        console.log('[ProcessManager] Process exited gracefully');
+        resolve();
+      });
+    });
 
     this.process = null;
     this.status = 'stopped';
@@ -207,7 +201,7 @@ export class ProcessManager {
           console.log('[ProcessManager] Health check passed');
           return;
         }
-      } catch (error) {
+      } catch {
         // Health check failed, retry
       }
 

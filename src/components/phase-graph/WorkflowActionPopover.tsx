@@ -44,34 +44,28 @@ export function WorkflowActionPopover({
   const errorMessage = useOpenCodeStore((state) => state.errorMessage);
 
   const isServerReady = serverStatus === 'ready';
-  const isServerUnavailable =
-    serverStatus === 'not-installed' ||
-    serverStatus === 'not-configured' ||
-    serverStatus === 'error';
   const isServerConnecting =
-    serverStatus === 'connecting' ||
-    serverStatus === 'restarting';
+    serverStatus === 'connecting' || serverStatus === 'restarting';
 
-  const getButtonText = () => {
-    if (isServerConnecting) return 'Connecting to OpenCode...';
-    return 'Launch Workflow';
-  };
+  const buttonText = isServerConnecting
+    ? 'Connecting to OpenCode...'
+    : 'Launch Workflow';
 
-  const getButtonTooltip = () => {
-    if (serverStatus === 'not-installed') {
-      return 'OpenCode not detected — install to enable AI sessions';
+  function getButtonTooltip(): string | undefined {
+    switch (serverStatus) {
+      case 'not-installed':
+        return 'OpenCode not detected — install to enable AI sessions';
+      case 'not-configured':
+        return 'Configure OpenCode to enable AI sessions';
+      case 'error':
+        return `OpenCode unavailable: ${errorMessage}`;
+      case 'connecting':
+      case 'restarting':
+        return 'OpenCode server is starting...';
+      default:
+        return undefined;
     }
-    if (serverStatus === 'not-configured') {
-      return 'Configure OpenCode to enable AI sessions';
-    }
-    if (serverStatus === 'error') {
-      return `OpenCode unavailable: ${errorMessage}`;
-    }
-    if (isServerConnecting) {
-      return 'OpenCode server is starting...';
-    }
-    return undefined;
-  };
+  }
 
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
@@ -120,7 +114,7 @@ export function WorkflowActionPopover({
               disabled={!isServerReady}
               title={getButtonTooltip() || 'Workflow launch coming in Epic 7'}
             >
-              {getButtonText()}
+              {buttonText}
             </button>
             {hasArtifact && (
               <button

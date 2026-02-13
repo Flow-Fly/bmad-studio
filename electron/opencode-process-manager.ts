@@ -1,8 +1,8 @@
-import { ChildProcess, spawn, execSync } from 'child_process';
-import http from 'http';
-import os from 'os';
-import path from 'path';
-import fs from 'fs';
+import { spawn, execSync, type ChildProcess } from 'node:child_process';
+import fs from 'node:fs';
+import http from 'node:http';
+import os from 'node:os';
+import path from 'node:path';
 
 export interface OpenCodeConfig {
   maxRetries?: number; // default 3
@@ -85,13 +85,12 @@ export class OpenCodeProcessManager {
         .split('\n')[0]
         .trim();
 
-      // Try to get version (optional)
+      // Try to get version (optional — not critical if it fails)
       let version: string | undefined;
       try {
         version = execSync('opencode --version', { encoding: 'utf-8', timeout: 5000 }).trim();
       } catch {
-        // Version command failed — not critical
-        version = undefined;
+        // Ignore — version detection is best-effort
       }
 
       const result = {
@@ -112,7 +111,7 @@ export class OpenCodeProcessManager {
   /**
    * Reads OpenCode CLI config file to extract provider/model information
    */
-  async readOpenCodeConfig(): Promise<OpenCodeConfigData | null> {
+  readOpenCodeConfig(): OpenCodeConfigData | null {
     const configPath = this.getConfigPath();
 
     if (!fs.existsSync(configPath)) {
@@ -297,7 +296,7 @@ export class OpenCodeProcessManager {
         await this.checkHealth(port);
         console.log(`[OpenCode] Health check succeeded on port ${port}`);
         return; // Success
-      } catch (error) {
+      } catch {
         // Exponential backoff
         await this.sleep(delay);
         delay = Math.min(delay * 2, maxDelay);
@@ -464,7 +463,6 @@ export class OpenCodeProcessManager {
    */
   getState(): {
     installed: boolean;
-    configured: boolean;
     serverStatus: string;
     port: number | null;
     version?: string;
@@ -472,7 +470,6 @@ export class OpenCodeProcessManager {
   } {
     return {
       installed: this.detectionResult?.installed ?? false,
-      configured: this.detectionResult?.installed && this.detectionResult.path !== undefined,
       serverStatus: this.status,
       port: this.currentPort ?? null,
       version: this.detectionResult?.version,
