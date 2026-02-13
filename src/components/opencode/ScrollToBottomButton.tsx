@@ -6,10 +6,6 @@ interface ScrollToBottomButtonProps {
   onClick: () => void;
 }
 
-/**
- * Fixed button that appears when user scrolls up in chat
- * Clicking it scrolls smoothly back to the bottom
- */
 export function ScrollToBottomButton({
   isVisible,
   onClick,
@@ -18,13 +14,13 @@ export function ScrollToBottomButton({
     <button
       onClick={onClick}
       className={cn(
-        'fixed bottom-20 right-4 z-10',
-        'rounded-full p-3 shadow-lg',
-        'bg-surface-elevated hover:bg-surface-hover',
-        'border border-stroke-default',
+        'absolute bottom-16 right-4 z-10',
+        'rounded-full p-3 shadow-md',
+        'bg-surface-overlay hover:bg-surface-raised',
+        'border border-surface-border',
         'transition-all duration-200',
-        'focus:outline-none focus:ring-2 focus:ring-interactive-focus',
-        isVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'
+        'focus:outline-none focus:ring-2 focus:ring-interactive-accent',
+        isVisible ? 'opacity-100' : 'pointer-events-none opacity-0'
       )}
       aria-label="Scroll to bottom"
     >
