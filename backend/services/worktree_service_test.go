@@ -269,3 +269,86 @@ func TestWorktreeService_Create_ErrorStreamNotActive(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not active")
 }
+
+// --- Switch tests ---
+
+func TestWorktreeService_Switch_Success(t *testing.T) {
+	svc, store, rootDir, _ := setupWorktreeTest(t)
+
+	projectName := "my-project"
+	streamName := "payment-integration"
+
+	// Create a real worktree directory on disk
+	worktreePath := filepath.Join(rootDir, "bmad-wt-"+streamName)
+	err := os.MkdirAll(worktreePath, 0755)
+	require.NoError(t, err)
+
+	// Write stream metadata with worktree fields
+	streamStore := storage.NewStreamStore(store)
+	meta := types.StreamMeta{
+		Name:      streamName,
+		Project:   projectName,
+		Status:    types.StreamStatusActive,
+		Type:      types.StreamTypeFull,
+		Worktree:  worktreePath,
+		Branch:    "stream/" + streamName,
+		CreatedAt: "2026-02-12T10:00:00Z",
+		UpdatedAt: "2026-02-12T10:00:00Z",
+	}
+	err = streamStore.WriteStreamMeta(projectName, streamName, meta)
+	require.NoError(t, err)
+
+	result, err := svc.Switch(projectName, streamName)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	assert.Equal(t, worktreePath, result.WorktreePath)
+	assert.Equal(t, "stream/"+streamName, result.Branch)
+}
+
+func TestWorktreeService_Switch_ErrorNoWorktree(t *testing.T) {
+	svc, _, _, _ := setupWorktreeTest(t)
+
+	projectName := "my-project"
+	streamName := "payment-integration"
+
+	// Stream exists but has no worktree (default from setupWorktreeTest)
+	_, err := svc.Switch(projectName, streamName)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no worktree")
+}
+
+func TestWorktreeService_Switch_ErrorMissingDirectory(t *testing.T) {
+	svc, store, rootDir, _ := setupWorktreeTest(t)
+
+	projectName := "my-project"
+	streamName := "payment-integration"
+
+	// Set worktree metadata pointing to a non-existent path
+	nonExistentPath := filepath.Join(rootDir, "bmad-wt-gone")
+	streamStore := storage.NewStreamStore(store)
+	meta := types.StreamMeta{
+		Name:      streamName,
+		Project:   projectName,
+		Status:    types.StreamStatusActive,
+		Type:      types.StreamTypeFull,
+		Worktree:  nonExistentPath,
+		Branch:    "stream/" + streamName,
+		CreatedAt: "2026-02-12T10:00:00Z",
+		UpdatedAt: "2026-02-12T10:00:00Z",
+	}
+	err := streamStore.WriteStreamMeta(projectName, streamName, meta)
+	require.NoError(t, err)
+
+	_, err = svc.Switch(projectName, streamName)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no longer exists")
+}
+
+func TestWorktreeService_Switch_ErrorStreamNotFound(t *testing.T) {
+	svc, _, _, _ := setupWorktreeTest(t)
+
+	_, err := svc.Switch("my-project", "nonexistent-stream")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not found")
+}
