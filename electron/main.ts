@@ -62,6 +62,7 @@ let processManager: ProcessManager | null = null;
 // ---------------------------------------------------------------------------
 
 let opencodeManager: OpenCodeProcessManager | null = null;
+let opencodeConfigured = false; // Track whether config was found
 
 function handleSidecarStatusChange(event: ProcessStatusEvent): void {
   console.log('[electron] Sidecar status changed:', event);
@@ -192,10 +193,46 @@ async function startOpenCodeServer(): Promise<void> {
   );
 
   // Detect if OpenCode is installed
-  const isInstalled = await opencodeManager.detectOpenCode();
-  if (!isInstalled) {
+  const detectionResult = await opencodeManager.detectOpenCode();
+
+  if (!detectionResult.installed) {
     console.log('[electron] OpenCode not detected — skipping spawn');
+
+    // Send not-installed event to renderer
+    if (mainWindow) {
+      mainWindow.webContents.send('opencode:not-installed', {});
+    }
+
     return;
+  }
+
+  console.log('[electron] OpenCode detected at:', detectionResult.path);
+
+  // Try to read config
+  const config = await opencodeManager.readOpenCodeConfig();
+  opencodeConfigured = !!config;
+
+  if (!config) {
+    console.log('[electron] OpenCode detected but not configured');
+
+    // Send not-configured event to renderer
+    if (mainWindow) {
+      mainWindow.webContents.send('opencode:not-configured', {
+        path: detectionResult.path,
+      });
+    }
+
+    // Still try to spawn — OpenCode may work without config
+  }
+
+  // Send detection result to renderer
+  if (mainWindow) {
+    mainWindow.webContents.send('opencode:detection-result', {
+      installed: true,
+      path: detectionResult.path,
+      version: detectionResult.version,
+      config: config || undefined,
+    });
   }
 
   try {
@@ -257,6 +294,92 @@ function registerIPC(): void {
     const store = readStore();
     delete store[provider];
     writeStore(store);
+  });
+
+  // OpenCode: get current status
+  ipcMain.handle('opencode:get-status', () => {
+    if (!opencodeManager) {
+      return {
+        installed: false,
+        configured: false,
+        serverStatus: 'not-installed',
+        port: null,
+      };
+    }
+
+    const state = opencodeManager.getState();
+    return {
+      ...state,
+      configured: opencodeConfigured,
+    };
+  });
+
+  // OpenCode: manual re-detection
+  ipcMain.handle('opencode:redetect', async () => {
+    if (!opencodeManager) {
+      console.error('[electron] OpenCode manager not initialized');
+      return { success: false, error: 'Manager not initialized' };
+    }
+
+    console.log('[electron] Manual OpenCode re-detection triggered');
+
+    try {
+      // Detect OpenCode
+      const detectionResult = await opencodeManager.detectOpenCode();
+
+      if (!detectionResult.installed) {
+        // Send not-installed event
+        if (mainWindow) {
+          mainWindow.webContents.send('opencode:not-installed', {});
+        }
+
+        return {
+          success: true,
+          installed: false,
+        };
+      }
+
+      // Read config
+      const config = await opencodeManager.readOpenCodeConfig();
+      opencodeConfigured = !!config;
+
+      if (!config) {
+        // Send not-configured event
+        if (mainWindow) {
+          mainWindow.webContents.send('opencode:not-configured', {
+            path: detectionResult.path,
+          });
+        }
+      }
+
+      // Send detection result
+      if (mainWindow) {
+        mainWindow.webContents.send('opencode:detection-result', {
+          installed: true,
+          path: detectionResult.path,
+          version: detectionResult.version,
+          config: config || undefined,
+        });
+      }
+
+      // Try to spawn if not already running
+      if (opencodeManager.getStatus() !== 'running') {
+        await opencodeManager.spawn();
+      }
+
+      return {
+        success: true,
+        installed: true,
+        path: detectionResult.path,
+        version: detectionResult.version,
+        config: config || undefined,
+      };
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      console.error('[electron] Re-detection failed:', errorMessage);
+      return { success: false, error: errorMessage };
+    }
   });
 }
 

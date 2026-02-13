@@ -61,4 +61,69 @@ contextBridge.exposeInMainWorld('opencode', {
     ipcRenderer.on('opencode:server-error', listener);
     return () => ipcRenderer.removeListener('opencode:server-error', listener);
   },
+
+  onDetectionResult: (
+    callback: (data: {
+      installed: boolean;
+      path?: string;
+      version?: string;
+      config?: {
+        providers: Array<{ name: string; configured: boolean }>;
+        models: string[];
+        defaultProvider?: string;
+      };
+    }) => void
+  ) => {
+    const listener = (
+      _event: unknown,
+      data: {
+        installed: boolean;
+        path?: string;
+        version?: string;
+        config?: {
+          providers: Array<{ name: string; configured: boolean }>;
+          models: string[];
+          defaultProvider?: string;
+        };
+      }
+    ) => callback(data);
+    ipcRenderer.on('opencode:detection-result', listener);
+    return () =>
+      ipcRenderer.removeListener('opencode:detection-result', listener);
+  },
+
+  onNotInstalled: (callback: () => void) => {
+    const listener = () => callback();
+    ipcRenderer.on('opencode:not-installed', listener);
+    return () => ipcRenderer.removeListener('opencode:not-installed', listener);
+  },
+
+  onNotConfigured: (callback: (data: { path: string }) => void) => {
+    const listener = (_event: unknown, data: { path: string }) => callback(data);
+    ipcRenderer.on('opencode:not-configured', listener);
+    return () =>
+      ipcRenderer.removeListener('opencode:not-configured', listener);
+  },
+
+  redetect: (): Promise<{
+    success: boolean;
+    installed?: boolean;
+    path?: string;
+    version?: string;
+    config?: {
+      providers: Array<{ name: string; configured: boolean }>;
+      models: string[];
+      defaultProvider?: string;
+    };
+    error?: string;
+  }> => ipcRenderer.invoke('opencode:redetect'),
+
+  getStatus: (): Promise<{
+    installed: boolean;
+    configured: boolean;
+    serverStatus: string;
+    port: number | null;
+    version?: string;
+    path?: string;
+  }> => ipcRenderer.invoke('opencode:get-status'),
 });

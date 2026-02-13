@@ -1,5 +1,8 @@
 import { ChildProcess, spawn, execSync } from 'child_process';
 import http from 'http';
+import os from 'os';
+import path from 'path';
+import fs from 'fs';
 
 export interface OpenCodeConfig {
   maxRetries?: number; // default 3
@@ -9,6 +12,23 @@ export interface OpenCodeConfig {
   healthCheckPath?: string; // default '/health'
   healthCheckTimeoutMs?: number; // default 15000
   shutdownTimeoutMs?: number; // default 5000
+}
+
+export interface OpenCodeDetectionResult {
+  installed: boolean;
+  path?: string; // Full path to opencode binary
+  version?: string; // Optional: parsed from `opencode --version`
+}
+
+export interface OpenCodeProviderConfig {
+  name: string; // e.g., "anthropic", "openai"
+  configured: boolean; // Has API key
+}
+
+export interface OpenCodeConfigData {
+  providers: OpenCodeProviderConfig[];
+  models: string[]; // e.g., ["claude-opus-4", "gpt-4"]
+  defaultProvider?: string;
 }
 
 export type OpenCodeServerStatus =
@@ -51,19 +71,97 @@ export class OpenCodeProcessManager {
     };
   }
 
+  private detectionResult: OpenCodeDetectionResult | null = null;
+
   /**
-   * Detects if OpenCode CLI is installed on PATH
+   * Detects if OpenCode CLI is installed on PATH and returns detection details
    */
-  async detectOpenCode(): Promise<boolean> {
+  async detectOpenCode(): Promise<OpenCodeDetectionResult> {
     try {
       const command =
         process.platform === 'win32' ? 'where opencode' : 'which opencode';
-      execSync(command, { stdio: 'ignore' });
-      return true;
+      const pathResult = execSync(command, { encoding: 'utf-8', timeout: 5000 })
+        .trim()
+        .split('\n')[0]
+        .trim();
+
+      // Try to get version (optional)
+      let version: string | undefined;
+      try {
+        version = execSync('opencode --version', { encoding: 'utf-8', timeout: 5000 }).trim();
+      } catch {
+        // Version command failed — not critical
+        version = undefined;
+      }
+
+      const result = {
+        installed: true,
+        path: pathResult,
+        version,
+      };
+
+      this.detectionResult = result;
+      return result;
     } catch {
-      this.updateStatus('not-installed');
-      return false;
+      const result = { installed: false };
+      this.detectionResult = result;
+      return result;
     }
+  }
+
+  /**
+   * Reads OpenCode CLI config file to extract provider/model information
+   */
+  async readOpenCodeConfig(): Promise<OpenCodeConfigData | null> {
+    const configPath = this.getConfigPath();
+
+    if (!fs.existsSync(configPath)) {
+      console.log('[OpenCode] Config file not found:', configPath);
+      return null; // Not configured
+    }
+
+    try {
+      const configData = fs.readFileSync(configPath, 'utf-8');
+      const config = JSON.parse(configData);
+
+      // Parse providers (structure depends on OpenCode's actual config format)
+      // This is a best-effort parse — adapt based on actual OpenCode config schema
+      const providers: OpenCodeProviderConfig[] = [];
+
+      if (config.providers && Array.isArray(config.providers)) {
+        for (const p of config.providers) {
+          providers.push({
+            name: p.name || 'unknown',
+            configured: !!(p.apiKey || p.apiKeyEnv || p.credentials),
+          });
+        }
+      }
+
+      const models = Array.isArray(config.models) ? config.models : [];
+      const defaultProvider = config.defaultProvider;
+
+      return { providers, models, defaultProvider };
+    } catch (error) {
+      console.error('[OpenCode] Failed to read config:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Gets platform-specific OpenCode config file path
+   */
+  private getConfigPath(): string {
+    const homeDir = os.homedir();
+
+    if (process.platform === 'win32') {
+      return path.join(
+        process.env.APPDATA || homeDir,
+        'opencode',
+        'config.json'
+      );
+    }
+
+    return path.join(homeDir, '.opencode', 'config.json');
   }
 
   /**
@@ -359,5 +457,26 @@ export class OpenCodeProcessManager {
    */
   getPort(): number | null {
     return this.currentPort;
+  }
+
+  /**
+   * Gets the complete current state for renderer initialization
+   */
+  getState(): {
+    installed: boolean;
+    configured: boolean;
+    serverStatus: string;
+    port: number | null;
+    version?: string;
+    path?: string;
+  } {
+    return {
+      installed: this.detectionResult?.installed ?? false,
+      configured: this.detectionResult?.installed && this.detectionResult.path !== undefined,
+      serverStatus: this.status,
+      port: this.currentPort ?? null,
+      version: this.detectionResult?.version,
+      path: this.detectionResult?.path,
+    };
   }
 }
