@@ -63,6 +63,15 @@ type ArtifactDeletedPayload struct {
 	Path string `json:"path"`
 }
 
+// ArtifactStreamEventPayload is the payload for stream-context artifact events
+// Used by the central-store watcher (Story 3.1) to broadcast artifact changes within streams
+type ArtifactStreamEventPayload struct {
+	ProjectID string `json:"projectId"`
+	StreamID  string `json:"streamId"`
+	Filename  string `json:"filename"`
+	Phase     string `json:"phase,omitempty"`
+}
+
 // WorkflowStatusEventPayload is the payload for workflow:status-changed events
 type WorkflowStatusEventPayload struct {
 	WorkflowStatuses map[string]WorkflowCompletionStatus `json:"workflow_statuses"`
@@ -356,6 +365,36 @@ func NewChatToolConfirmEvent(conversationID, messageID, toolID, toolName string,
 		ToolID:         toolID,
 		ToolName:       toolName,
 		Input:          input,
+	})
+}
+
+// NewArtifactStreamCreatedEvent creates an artifact:created event for stream-context artifacts
+func NewArtifactStreamCreatedEvent(projectID, streamID, filename, phase string) *WebSocketEvent {
+	return NewWebSocketEvent(EventTypeArtifactCreated, &ArtifactStreamEventPayload{
+		ProjectID: projectID,
+		StreamID:  streamID,
+		Filename:  filename,
+		Phase:     phase,
+	})
+}
+
+// NewArtifactStreamUpdatedEvent creates an artifact:updated event for stream-context artifacts
+func NewArtifactStreamUpdatedEvent(projectID, streamID, filename, phase string) *WebSocketEvent {
+	return NewWebSocketEvent(EventTypeArtifactUpdated, &ArtifactStreamEventPayload{
+		ProjectID: projectID,
+		StreamID:  streamID,
+		Filename:  filename,
+		Phase:     phase,
+	})
+}
+
+// NewArtifactStreamDeletedEvent creates an artifact:deleted event for stream-context artifacts
+func NewArtifactStreamDeletedEvent(projectID, streamID, filename, phase string) *WebSocketEvent {
+	return NewWebSocketEvent(EventTypeArtifactDeleted, &ArtifactStreamEventPayload{
+		ProjectID: projectID,
+		StreamID:  streamID,
+		Filename:  filename,
+		Phase:     phase,
 	})
 }
 

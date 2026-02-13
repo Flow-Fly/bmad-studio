@@ -14,11 +14,18 @@ type Broadcaster interface {
 	BroadcastEvent(event *types.WebSocketEvent)
 }
 
+// StreamWatcherHook is the interface for notifying the watcher service about stream lifecycle events
+type StreamWatcherHook interface {
+	AddStreamWatch(projectName, streamName string)
+	RemoveStreamWatch(projectName, streamName string)
+}
+
 // StreamService manages stream lifecycle operations
 type StreamService struct {
 	streamStore   *storage.StreamStore
 	registryStore *storage.RegistryStore
 	hub           Broadcaster
+	watcherHook   StreamWatcherHook
 }
 
 // NewStreamService creates a new StreamService
@@ -28,6 +35,12 @@ func NewStreamService(streamStore *storage.StreamStore, registryStore *storage.R
 		registryStore: registryStore,
 		hub:           hub,
 	}
+}
+
+// SetWatcherHook sets the watcher hook for stream lifecycle notifications.
+// Called after WatcherService is initialized.
+func (s *StreamService) SetWatcherHook(hook StreamWatcherHook) {
+	s.watcherHook = hook
 }
 
 // streamNameRegex validates stream names: alphanumeric, hyphens, underscores; must start with alphanumeric
@@ -83,6 +96,11 @@ func (s *StreamService) Create(projectName, streamName string) (*types.StreamMet
 	streamID := projectName + "-" + streamName
 	event := types.NewStreamCreatedEvent(projectName, streamID, streamName)
 	s.hub.BroadcastEvent(event)
+
+	// Notify watcher to add watch for the new stream
+	if s.watcherHook != nil {
+		s.watcherHook.AddStreamWatch(projectName, streamName)
+	}
 
 	return &meta, nil
 }
@@ -148,6 +166,11 @@ func (s *StreamService) Archive(projectName, streamName, outcome string) (*types
 	streamOutcome := types.StreamOutcome(outcome)
 	if err := s.streamStore.ArchiveStream(projectName, streamName, streamOutcome); err != nil {
 		return nil, fmt.Errorf("failed to archive stream: %w", err)
+	}
+
+	// Notify watcher to remove watch for the archived stream (before broadcast)
+	if s.watcherHook != nil {
+		s.watcherHook.RemoveStreamWatch(projectName, streamName)
 	}
 
 	// Broadcast stream:archived event
