@@ -1,6 +1,6 @@
 import { listArtifacts } from './artifact.service';
 import type { ArtifactInfo } from '../types/artifact';
-import type { IpcErrorResponse } from '../types/ipc';
+import type { IpcErrorResponse, SendPromptResponse } from '../types/ipc';
 
 /**
  * Workflow-to-skill command mapping.
@@ -160,4 +160,28 @@ export async function launchWorkflow(
   }
 
   return { sessionId, title };
+}
+
+/**
+ * Sends a chat message to an active OpenCode session.
+ *
+ * @returns The response on success
+ * @throws Error if the send fails or returns an IPC error
+ */
+export async function sendChatMessage(
+  sessionId: string,
+  text: string,
+): Promise<SendPromptResponse> {
+  const response = await window.opencode.sendPrompt({
+    sessionId,
+    parts: [{ type: 'text', text }],
+  });
+
+  if (isIpcError(response)) {
+    throw new Error(
+      `Failed to send message: ${response.message} (${response.code})`,
+    );
+  }
+
+  return response as SendPromptResponse;
 }

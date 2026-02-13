@@ -6,6 +6,7 @@ interface UseKeyboardShortcutsOptions {
   enabled: boolean;
   onSectionChange: (section: SectionId) => void;
   onFocusChatInput?: () => void;
+  onEscapeFromChat?: () => void;
 }
 
 const SECTION_MAP: Record<string, SectionId> = {
@@ -19,11 +20,19 @@ export function useKeyboardShortcuts({
   enabled,
   onSectionChange,
   onFocusChatInput,
+  onEscapeFromChat,
 }: UseKeyboardShortcutsOptions) {
   useEffect(() => {
     if (!enabled) return;
 
     function handleKeydown(e: KeyboardEvent) {
+      // Handle Escape key to return focus from chat to phase graph
+      if (e.key === 'Escape' && onEscapeFromChat) {
+        e.preventDefault();
+        onEscapeFromChat();
+        return;
+      }
+
       if (!e.metaKey) return;
       const section = SECTION_MAP[e.key];
       if (section) {
@@ -38,5 +47,5 @@ export function useKeyboardShortcuts({
 
     window.addEventListener('keydown', handleKeydown);
     return () => window.removeEventListener('keydown', handleKeydown);
-  }, [enabled, onSectionChange, onFocusChatInput]);
+  }, [enabled, onSectionChange, onFocusChatInput, onEscapeFromChat]);
 }
