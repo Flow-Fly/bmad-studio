@@ -27,6 +27,7 @@ type RouterServices struct {
 	Project        *services.ProjectService // Prepared for Story 1.3: REST API endpoints
 	Stream          *services.StreamService
 	StreamArtifact  *services.StreamArtifactService
+	Worktree        *services.WorktreeService
 }
 
 // NewRouter creates and configures the main router with all routes and middleware
@@ -115,6 +116,12 @@ func NewRouterWithServices(svc RouterServices) *chi.Mux {
 									r.Get("/", artifactsHandler.ListArtifacts)
 									r.Get("/*", artifactsHandler.ReadArtifact)
 								})
+							}
+
+							// Worktree route nested under stream
+							if svc.Worktree != nil {
+								worktreesHandler := handlers.NewWorktreesHandler(svc.Worktree)
+								r.Post("/worktree", worktreesHandler.CreateWorktree)
 							}
 						})
 					})
