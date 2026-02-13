@@ -2,7 +2,7 @@ import { useRef, useEffect, useState } from 'react';
 import { Input } from '../ui/input';
 import { cn } from '../../lib/utils';
 import { useActiveSession, useSessionStatus } from '../../stores/opencode.store';
-import type { MessagePart } from '../../types/ipc';
+import { sendChatMessage } from '../../services/opencode.service';
 
 export function ChatInput() {
   const [inputValue, setInputValue] = useState('');
@@ -25,12 +25,8 @@ export function ChatInput() {
   const handleSubmit = async () => {
     const trimmedValue = inputValue.trim();
 
-    // Prevent empty message submission
-    if (!trimmedValue) {
-      return;
-    }
+    if (!trimmedValue) return;
 
-    // Prevent submission if no active session
     if (!sessionId) {
       setError('No active session');
       return;
@@ -39,11 +35,7 @@ export function ChatInput() {
     try {
       setError(null);
 
-      // Convert input text to TextPart
-      const parts: MessagePart[] = [{ type: 'text', text: trimmedValue }];
-
-      // Call IPC bridge to send prompt
-      const response = await window.opencode.sendPrompt({ sessionId, parts });
+      const response = await sendChatMessage(sessionId, trimmedValue);
 
       if (!response.success) {
         setError('Failed to send message');
