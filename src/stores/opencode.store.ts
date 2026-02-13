@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { OpenCodeProviderConfig, OpenCodeConfigData } from '../types/window';
+import type { Message, MessagePart } from '../types/message';
 
 export type OpenCodeServerStatus =
   | 'not-installed'
@@ -8,6 +9,8 @@ export type OpenCodeServerStatus =
   | 'ready'
   | 'restarting'
   | 'error';
+
+export type SessionStatus = 'idle' | 'busy';
 
 interface OpenCodeState {
   // Server connection status
@@ -31,6 +34,10 @@ interface OpenCodeState {
   sessionLaunching: boolean;
   sessionError: string | null;
 
+  // Message management (Story 8.1)
+  messages: Message[];
+  sessionStatus: SessionStatus;
+
   // Actions
   setServerReady: (port: number) => void;
   setServerRestarting: (retryCount: number) => void;
@@ -48,6 +55,12 @@ interface OpenCodeState {
   clearActiveSession: () => void;
   setSessionLaunching: (launching: boolean) => void;
   setSessionError: (error: string | null) => void;
+
+  // Message management actions (Story 8.1)
+  upsertMessage: (message: Message) => void;
+  updatePart: (messageId: string, partIndex: number, partData: Partial<MessagePart>) => void;
+  setSessionStatus: (status: SessionStatus) => void;
+  clearMessages: () => void;
 }
 
 export const useOpenCodeStore = create<OpenCodeState>((set) => ({
@@ -71,6 +84,10 @@ export const useOpenCodeStore = create<OpenCodeState>((set) => ({
   activeStreamId: null,
   sessionLaunching: false,
   sessionError: null,
+
+  // Message management (Story 8.1)
+  messages: [],
+  sessionStatus: 'idle',
 
   setServerReady: (port: number) =>
     set({
@@ -182,6 +199,70 @@ export const useOpenCodeStore = create<OpenCodeState>((set) => ({
       });
     }
   },
+
+  // Message management actions (Story 8.1)
+  upsertMessage: (message: Message) =>
+    set((state) => {
+      const existingIndex = state.messages.findIndex(
+        (m) => m.messageId === message.messageId
+      );
+
+      if (existingIndex >= 0) {
+        // Replace existing message
+        const newMessages = [...state.messages];
+        newMessages[existingIndex] = message;
+        return { messages: newMessages };
+      } else {
+        // Append new message
+        return { messages: [...state.messages, message] };
+      }
+    }),
+
+  updatePart: (messageId: string, partIndex: number, partData: Partial<MessagePart>) =>
+    set((state) => {
+      const messageIndex = state.messages.findIndex(
+        (m) => m.messageId === messageId
+      );
+
+      if (messageIndex < 0) {
+        // Message doesn't exist - create placeholder
+        const newMessage: Message = {
+          messageId,
+          role: 'assistant',
+          parts: [partData as MessagePart],
+        };
+        return { messages: [...state.messages, newMessage] };
+      }
+
+      const message = state.messages[messageIndex];
+
+      // Ensure parts array has enough elements
+      while (message.parts.length <= partIndex) {
+        message.parts.push({ type: 'text', text: '' } as MessagePart);
+      }
+
+      // Merge partial data into existing part
+      const existingPart = message.parts[partIndex];
+      const updatedPart = { ...existingPart, ...partData };
+
+      const newMessages = [...state.messages];
+      newMessages[messageIndex] = {
+        ...message,
+        parts: [
+          ...message.parts.slice(0, partIndex),
+          updatedPart,
+          ...message.parts.slice(partIndex + 1),
+        ],
+      };
+
+      return { messages: newMessages };
+    }),
+
+  setSessionStatus: (status: SessionStatus) =>
+    set({ sessionStatus: status }),
+
+  clearMessages: () =>
+    set({ messages: [], sessionStatus: 'idle' }),
 }));
 
 // Initialize IPC listeners
@@ -271,3 +352,9 @@ export const useSessionLaunching = () =>
 
 export const useSessionError = () =>
   useOpenCodeStore((state) => state.sessionError);
+
+export const useMessages = () =>
+  useOpenCodeStore((state) => state.messages);
+
+export const useSessionStatus = () =>
+  useOpenCodeStore((state) => state.sessionStatus);
