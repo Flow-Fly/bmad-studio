@@ -17,12 +17,23 @@ OUTPUT_DIR="$PROJECT_ROOT/backend/bin"
 
 mkdir -p "$OUTPUT_DIR"
 
+# Map Go arch names to electron-builder arch names for binary output.
+# electron-builder uses x64/arm64, Go uses amd64/arm64.
+go_arch_to_electron() {
+  case "$1" in
+    amd64) echo "x64" ;;
+    *)     echo "$1" ;;
+  esac
+}
+
 build_binary() {
   local goos="$1"
   local goarch="$2"
-  local output_name="bmad-backend-${goos}-${goarch}"
+  local electron_arch
+  electron_arch="$(go_arch_to_electron "$goarch")"
+  local output_name="bmad-backend-${goos}-${electron_arch}"
 
-  echo "[build-backend] Building ${output_name}..."
+  echo "[build-backend] Building ${output_name} (GOOS=${goos} GOARCH=${goarch})..."
   (
     cd "$BACKEND_DIR"
     GOOS="$goos" GOARCH="$goarch" CGO_ENABLED=0 \

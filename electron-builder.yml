@@ -26,5 +26,5 @@ linux:
   target:
     - AppImage
   extraResources:
-    - from: backend/bin/bmad-backend-linux-amd64
+    - from: backend/bin/bmad-backend-linux-x64
       to: bin/bmad-backend
