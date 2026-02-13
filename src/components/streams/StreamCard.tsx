@@ -7,7 +7,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { PhaseDotIndicator } from '@/components/streams/PhaseDotIndicator';
-import { formatRelativeTime } from '@/lib/format-utils';
+import { capitalize, formatRelativeTime } from '@/lib/format-utils';
 
 /**
  * Map a phase name to its Tailwind border-l color class for the active card indicator.
@@ -18,10 +18,6 @@ const PHASE_BORDER_CLASSES: Record<string, string> = {
   solutioning: 'border-l-phase-solutioning',
   implementation: 'border-l-phase-implementation',
 };
-
-function capitalize(s: string): string {
-  return s.charAt(0).toUpperCase() + s.slice(1);
-}
 
 interface StreamCardProps {
   stream: Stream;

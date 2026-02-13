@@ -1,6 +1,5 @@
 import { CircleCheck, CircleX, AlertTriangle } from 'lucide-react';
-import type { PhaseGraphNode } from '../../types/phases';
-import type { PhasesResponse } from '../../types/phases';
+import type { PhaseGraphNode, PhasesResponse } from '../../types/phases';
 import type { WorkflowStatus } from '../../types/workflow';
 import {
   getAgentDescription,

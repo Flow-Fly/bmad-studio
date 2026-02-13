@@ -12,7 +12,7 @@ import {
   TooltipTrigger,
   TooltipProvider,
 } from '@/components/ui/tooltip';
-import { useConnectionStore } from '@/stores/connection.store';
+import { useConnectionStore, type ConnectionStatus } from '@/stores/connection.store';
 
 export type AppMode = 'dashboard' | 'stream' | 'settings';
 
@@ -27,6 +27,24 @@ const MODES: ModeConfig[] = [
   { id: 'stream', label: 'Stream Detail', icon: GitBranch },
   { id: 'settings', label: 'Settings', icon: Settings },
 ];
+
+function getStatusColor(status: ConnectionStatus): string {
+  switch (status) {
+    case 'connected': return 'bg-success';
+    case 'connecting': return 'bg-warning';
+    case 'error': return 'bg-error';
+    default: return 'bg-text-muted';
+  }
+}
+
+function getStatusLabel(status: ConnectionStatus): string {
+  switch (status) {
+    case 'connected': return 'Connected';
+    case 'connecting': return 'Connecting...';
+    case 'error': return 'Connection error';
+    default: return 'Disconnected';
+  }
+}
 
 interface ActivityBarProps {
   activeMode: AppMode;
@@ -71,14 +89,7 @@ export function ActivityBar({ activeMode, onModeChange }: ActivityBarProps) {
     [activeMode, onModeChange],
   );
 
-  const statusColor =
-    connectionStatus === 'connected'
-      ? 'bg-success'
-      : connectionStatus === 'connecting'
-        ? 'bg-warning'
-        : connectionStatus === 'error'
-          ? 'bg-error'
-          : 'bg-text-muted';
+  const statusColor = getStatusColor(connectionStatus);
 
   return (
     <TooltipProvider delayDuration={300}>
@@ -126,13 +137,7 @@ export function ActivityBar({ activeMode, onModeChange }: ActivityBarProps) {
               />
             </TooltipTrigger>
             <TooltipContent side="right">
-              {connectionStatus === 'connected'
-                ? 'Connected'
-                : connectionStatus === 'connecting'
-                  ? 'Connecting...'
-                  : connectionStatus === 'error'
-                    ? 'Connection error'
-                    : 'Disconnected'}
+              {getStatusLabel(connectionStatus)}
             </TooltipContent>
           </Tooltip>
         </div>

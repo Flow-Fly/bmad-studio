@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Repeat } from 'lucide-react';
-import { computePhaseGraphNodes, computePhaseGraphEdges, getNodeVisualState } from '../../lib/phase-utils';
+import { computePhaseGraphNodes, computePhaseGraphEdges, getNodeVisualState, DEV_LOOP_IDS } from '../../lib/phase-utils';
 import type { PhasesResponse, PhaseGraphNode, NodeVisualState } from '../../types/phases';
+import type { WorkflowStatus } from '../../types/workflow';
 import { usePhaseStore } from '../../stores/phase.store';
 import { PhaseNode } from './PhaseNode';
 import { ConditionalGate } from './ConditionalGate';
@@ -15,8 +16,6 @@ const PHASE_ABBR: Record<string, string> = {
   Solutioning: 'Sol',
   Implementation: 'Impl',
 };
-
-const DEV_LOOP_IDS = new Set(['create-story', 'dev-story', 'code-review']);
 
 /** Visual states that allow clicking to open the workflow action popover */
 const ACTIONABLE_STATES = new Set<NodeVisualState>([
@@ -170,13 +169,10 @@ export function PhaseGraphContainer({ onNodeClick }: PhaseGraphContainerProps) {
       if (!workflowStatus) return;
       const artifactPath = workflowStatus.workflow_statuses[workflowId]?.artifact_path;
 
-      if (visualState === 'complete' && artifactPath) {
-        onNodeClick?.(workflowId, visualState, artifactPath);
-        return;
-      }
-
-      if (visualState === 'complete' && !artifactPath) {
-        // No artifact for this completed node — no action
+      if (visualState === 'complete') {
+        if (artifactPath) {
+          onNodeClick?.(workflowId, visualState, artifactPath);
+        }
         return;
       }
 
@@ -559,7 +555,7 @@ const QUICK_FLOW_NODE_COLORS = [
 
 function renderQuickFlow(
   nodes: PhaseGraphNode[],
-  workflowStatus: import('../../types/workflow').WorkflowStatus,
+  workflowStatus: WorkflowStatus,
   phases: PhasesResponse,
   compact: boolean,
   focusedIndex: number,

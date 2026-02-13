@@ -1,6 +1,5 @@
 import { CircleCheck, CircleDot, Circle, Lock, FileText } from 'lucide-react';
-import type { PhaseGraphNode as PhaseGraphNodeType, NodeVisualState } from '../../types/phases';
-import type { PhasesResponse } from '../../types/phases';
+import type { PhaseGraphNode as PhaseGraphNodeType, NodeVisualState, PhasesResponse } from '../../types/phases';
 import type { WorkflowStatus } from '../../types/workflow';
 import { formatWorkflowLabel } from '../../lib/phase-utils';
 import { AgentBadge } from './AgentBadge';

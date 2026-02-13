@@ -8,12 +8,8 @@ import { PhaseDotIndicator } from '@/components/streams/PhaseDotIndicator';
 import { PhaseGraphContainer } from '@/components/phase-graph/PhaseGraphContainer';
 import { BreadcrumbStrip } from '@/components/phase-graph/BreadcrumbStrip';
 import { ArtifactViewer } from '@/components/artifacts/ArtifactViewer';
-import { formatRelativeTime } from '@/lib/format-utils';
+import { capitalize, formatRelativeTime } from '@/lib/format-utils';
 import type { NodeVisualState } from '@/types/phases';
-
-function capitalize(s: string): string {
-  return s.charAt(0).toUpperCase() + s.slice(1);
-}
 
 export function StreamDetail() {
   const activeStreamId = useStreamStore((s) => s.activeStreamId);

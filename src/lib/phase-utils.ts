@@ -3,6 +3,8 @@ import type { WorkflowStatus, WorkflowStatusValue } from '../types/workflow';
 
 // --- Pure utility functions (relocated from phases.store.ts) ---
 
+export const DEV_LOOP_IDS = new Set(['create-story', 'dev-story', 'code-review']);
+
 const UPPERCASE_TOKENS = new Set(['prd', 'ux', 'ci', 'nfr', 'atdd']);
 const STRIP_PREFIXES = ['create-', 'dev-'];
 const SPECIAL_LABELS: Record<string, string> = {

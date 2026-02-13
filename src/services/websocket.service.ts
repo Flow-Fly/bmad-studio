@@ -1,4 +1,4 @@
-import { useConnectionStore } from '../stores/connection.store';
+import { useConnectionStore, type ConnectionStatus } from '../stores/connection.store';
 import { useStreamStore } from '../stores/stream.store';
 import type { Stream } from '../types/stream';
 
@@ -47,7 +47,7 @@ let intentionalClose = false;
 
 const handlers = new Map<string, Set<EventHandler>>();
 
-function setStatus(status: import('../stores/connection.store').ConnectionStatus) {
+function setStatus(status: ConnectionStatus) {
   useConnectionStore.getState().setStatus(status);
 }
 
@@ -141,15 +141,14 @@ export function on(eventType: string, handler: EventHandler): () => void {
   }
   handlerSet.add(handler);
 
-  const captured = handlerSet;
   return () => {
-    captured.delete(handler);
-    if (captured.size === 0) handlers.delete(eventType);
+    handlerSet.delete(handler);
+    if (handlerSet.size === 0) handlers.delete(eventType);
   };
 }
 
 /**
- * Register handlers for all stream and artifact WebSocket events.
+ * Register handlers for stream WebSocket events.
  * Returns a cleanup function that unsubscribes all handlers.
  */
 export function registerStreamEventHandlers(): () => void {
@@ -202,12 +201,6 @@ export function registerStreamEventHandlers(): () => void {
       });
     }),
   );
-
-  // artifact:created, artifact:updated, artifact:deleted — no store update needed now
-  // These events will be used by later stories (artifact viewer in Epic 10)
-  cleanups.push(on('artifact:created', () => {}));
-  cleanups.push(on('artifact:updated', () => {}));
-  cleanups.push(on('artifact:deleted', () => {}));
 
   return () => {
     for (const cleanup of cleanups) {

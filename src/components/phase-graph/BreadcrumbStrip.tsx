@@ -2,10 +2,8 @@ import { CircleCheck, CircleDot, Circle } from 'lucide-react';
 import type { PhasesResponse } from '../../types/phases';
 import type { WorkflowStatus } from '../../types/workflow';
 import { AgentBadge } from './AgentBadge';
-import { formatWorkflowLabel } from '../../lib/phase-utils';
+import { formatWorkflowLabel, DEV_LOOP_IDS } from '../../lib/phase-utils';
 import { cn } from '../../lib/utils';
-
-const DEV_LOOP_IDS = new Set(['create-story', 'dev-story', 'code-review']);
 
 /** Phase name -> CSS custom property color */
 const PHASE_COLORS: Record<string, string> = {
@@ -48,12 +46,12 @@ function buildAriaLabel(
       workflowStatus.current_phase,
       percent,
     );
-    const statusLabel =
-      status === 'complete'
-        ? 'complete'
-        : status === 'active'
-          ? 'in progress'
-          : 'pending';
+    let statusLabel: string;
+    switch (status) {
+      case 'complete': statusLabel = 'complete'; break;
+      case 'active': statusLabel = 'in progress'; break;
+      default: statusLabel = 'pending';
+    }
     return `${phase.name} ${statusLabel}`;
   });
   return `Phase graph breadcrumb: ${parts.join(', ')}. Click to expand.`;

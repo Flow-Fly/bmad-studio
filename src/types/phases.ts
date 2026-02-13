@@ -1,3 +1,5 @@
+import type { WorkflowStatusValue } from './workflow';
+
 export interface WorkflowResponse {
   id: string;
   exec: string | null;
@@ -40,7 +42,7 @@ export interface PhaseGraphNode {
   agent?: string;
   included_by?: string;
   purpose?: string;
-  status: import('./workflow').WorkflowStatusValue;
+  status: WorkflowStatusValue;
   is_current: boolean;
   dependencies_met: boolean;
   unmet_dependencies: string[];
