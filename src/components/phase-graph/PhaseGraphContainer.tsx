@@ -366,7 +366,7 @@ export function PhaseGraphContainer({ onNodeClick }: PhaseGraphContainerProps) {
 
   if (isQuickFlow) {
     return renderQuickFlow(
-      nodes, workflowStatus, compact, focusedIndex, setFocusedIndex,
+      nodes, workflowStatus, phases, compact, focusedIndex, setFocusedIndex,
       handleNodeClick, handleKeydown, handleFocus, focusedNodeId, announceRef,
       popoverNodeId, setPopoverNodeId, onNodeClick,
     );
@@ -451,6 +451,8 @@ export function PhaseGraphContainer({ onNodeClick }: PhaseGraphContainerProps) {
                         nodeIndex={nodeIndex}
                         artifactPath={artifactPath}
                         isSuggested={isSuggested}
+                        phases={phases}
+                        workflowStatus={workflowStatus}
                         onFocus={() => setFocusedIndex(nodeIndex)}
                         onClick={handleNodeClick}
                       />
@@ -558,6 +560,7 @@ const QUICK_FLOW_NODE_COLORS = [
 function renderQuickFlow(
   nodes: PhaseGraphNode[],
   workflowStatus: import('../../types/workflow').WorkflowStatus,
+  phases: PhasesResponse,
   compact: boolean,
   focusedIndex: number,
   setFocusedIndex: (idx: number) => void,
@@ -610,6 +613,8 @@ function renderQuickFlow(
                 nodeIndex={nodeIndex}
                 artifactPath={artifactPath}
                 isSuggested={isSuggested}
+                phases={phases}
+                workflowStatus={workflowStatus}
                 onFocus={() => setFocusedIndex(nodeIndex)}
                 onClick={handleNodeClick}
               />
