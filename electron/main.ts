@@ -154,23 +154,22 @@ function handleOpenCodeStatusChange(event: OpenCodeStatusEvent): void {
   if (!mainWindow) return;
 
   switch (event.status) {
-    case 'running':
+    case 'running': {
       if (event.port) {
         opencodeClient.initialize(event.port);
       }
       // Start SSE event forwarding after client is initialized
-      {
-        const sdkClient = opencodeClient.getSdkClient();
-        if (sdkClient && mainWindow) {
-          startForwarding(mainWindow, sdkClient).catch((err) => {
-            console.error('[electron] Failed to start event forwarding:', err);
-          });
-        }
+      const sdkClient = opencodeClient.getSdkClient();
+      if (sdkClient) {
+        startForwarding(mainWindow, sdkClient).catch((err) => {
+          console.error('[electron] Failed to start event forwarding:', err);
+        });
       }
       mainWindow.webContents.send('opencode:server-ready', {
         port: event.port,
       });
       break;
+    }
     case 'restarting':
       // Stop event forwarding before client is destroyed on restart
       stopForwarding().catch((err) => {
@@ -323,69 +322,52 @@ function registerIPC(): void {
     };
   });
 
-  // OpenCode Session: create session
-  ipcMain.handle('opencode:create-session', async (_event, opts: { title: string; workingDir: string }) => {
+  // OpenCode Session handlers — all share the same guard/error pattern
+  function handleSdkCall<T>(fn: () => Promise<T>): Promise<T | { code: string; message: string }> {
     if (!opencodeClient.isReady()) {
-      return { code: 'server_unavailable', message: 'OpenCode server is not running' };
+      return Promise.resolve({ code: 'server_unavailable', message: 'OpenCode server is not running' });
     }
-    try {
-      const result = await opencodeClient.createSession(opts.title);
-      return { sessionId: result.sessionId, title: result.title };
-    } catch (error) {
+    return fn().catch((error: unknown) => {
       const message = error instanceof Error ? error.message : String(error);
       return { code: 'sdk_error', message };
-    }
-  });
+    });
+  }
 
-  // OpenCode Session: send prompt
-  ipcMain.handle('opencode:send-prompt', async (_event, opts: {
+  ipcMain.handle('opencode:create-session', (_event, opts: { title: string; workingDir: string }) =>
+    handleSdkCall(async () => {
+      const result = await opencodeClient.createSession(opts.title);
+      return { sessionId: result.sessionId, title: result.title };
+    })
+  );
+
+  ipcMain.handle('opencode:send-prompt', (_event, opts: {
     sessionId: string;
     model?: { providerID: string; modelID: string };
     parts: Array<{ type: string; [key: string]: unknown }>;
-  }) => {
-    if (!opencodeClient.isReady()) {
-      return { code: 'server_unavailable', message: 'OpenCode server is not running' };
-    }
-    try {
+  }) =>
+    handleSdkCall(async () => {
       await opencodeClient.sendPrompt(opts.sessionId, opts.parts, opts.model);
       return { success: true };
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      return { code: 'sdk_error', message };
-    }
-  });
+    })
+  );
 
-  // OpenCode Session: approve permission
-  ipcMain.handle('opencode:approve-permission', async (_event, opts: {
+  ipcMain.handle('opencode:approve-permission', (_event, opts: {
     sessionId: string;
     permissionId: string;
     approved: boolean;
-  }) => {
-    if (!opencodeClient.isReady()) {
-      return { code: 'server_unavailable', message: 'OpenCode server is not running' };
-    }
-    try {
+  }) =>
+    handleSdkCall(async () => {
       await opencodeClient.approvePermission(opts.sessionId, opts.permissionId, opts.approved);
       return { success: true };
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      return { code: 'sdk_error', message };
-    }
-  });
+    })
+  );
 
-  // OpenCode Session: answer question
-  ipcMain.handle('opencode:answer-question', async (_event, opts: { questionId: string; answer: string }) => {
-    if (!opencodeClient.isReady()) {
-      return { code: 'server_unavailable', message: 'OpenCode server is not running' };
-    }
-    try {
+  ipcMain.handle('opencode:answer-question', (_event, opts: { questionId: string; answer: string }) =>
+    handleSdkCall(async () => {
       await opencodeClient.answerQuestion(opts.answer);
       return { success: true };
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      return { code: 'sdk_error', message };
-    }
-  });
+    })
+  );
 
   // OpenCode: manual re-detection
   ipcMain.handle('opencode:redetect', async () => {

@@ -25,8 +25,6 @@ export interface LaunchWorkflowOptions {
   workflowId: string;
   streamName: string;
   projectName: string;
-  projectId: string;
-  streamId: string;
   projectRoot: string;
   worktreePath?: string;
 }
@@ -68,20 +66,15 @@ function buildPromptText(
   artifacts: ArtifactInfo[],
   projectRoot: string,
 ): string {
-  const lines: string[] = [`/${skillCommand}`];
+  const artifactLine = artifacts.length > 0
+    ? `\nAvailable artifacts: ${artifacts.map((a) => a.filename).join(', ')}`
+    : '';
 
-  lines.push('');
-  lines.push(`Prior artifacts are available at: ${storePath}`);
+  return `/${skillCommand}
 
-  if (artifacts.length > 0) {
-    const filenames = artifacts.map((a) => a.filename).join(', ');
-    lines.push(`Available artifacts: ${filenames}`);
-  }
+Prior artifacts are available at: ${storePath}${artifactLine}
 
-  lines.push('');
-  lines.push(`The project codebase is at: ${projectRoot}`);
-
-  return lines.join('\n');
+The project codebase is at: ${projectRoot}`;
 }
 
 /**
@@ -104,8 +97,6 @@ export async function launchWorkflow(
     workflowId,
     streamName,
     projectName,
-    projectId,
-    streamId,
     projectRoot,
     worktreePath,
   } = opts;
@@ -131,7 +122,7 @@ export async function launchWorkflow(
   // 2. Fetch prior artifacts for prompt context
   let artifacts: ArtifactInfo[] = [];
   try {
-    artifacts = await listArtifacts(projectId, streamId);
+    artifacts = await listArtifacts(projectName, streamName);
   } catch (err) {
     // Non-fatal: proceed without artifact context
     console.warn(

@@ -42,11 +42,10 @@ export function WorkflowActionPopover({
 
   const activeStream = streams.find((s) => s.name === activeStreamId);
 
-  const isServerReady = serverStatus === 'ready';
   const isServerConnecting =
     serverStatus === 'connecting' || serverStatus === 'restarting';
 
-  const canLaunch = isServerReady && !sessionLaunching && !!project && !!activeStream;
+  const canLaunch = serverStatus === 'ready' && !sessionLaunching && !!project && !!activeStream;
 
   const buttonText = sessionLaunching
     ? 'Launching...'
@@ -84,8 +83,6 @@ export function WorkflowActionPopover({
         workflowId: node.workflow_id,
         streamName: activeStream.name,
         projectName: project.projectName,
-        projectId: project.projectName,
-        streamId: activeStream.name,
         projectRoot: project.projectRoot,
         worktreePath: activeStream.worktree,
       });

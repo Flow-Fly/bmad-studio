@@ -11,19 +11,6 @@
 // ---------------------------------------------------------------------------
 
 /**
- * Request/response channels (renderer -> main via ipcRenderer.invoke).
- */
-export const OpenCodeInvokeChannel = {
-  CreateSession: 'opencode:create-session',
-  SendPrompt: 'opencode:send-prompt',
-  ApprovePermission: 'opencode:approve-permission',
-  AnswerQuestion: 'opencode:answer-question',
-} as const;
-
-export type OpenCodeInvokeChannel =
-  (typeof OpenCodeInvokeChannel)[keyof typeof OpenCodeInvokeChannel];
-
-/**
  * Event channels (main -> renderer via webContents.send / ipcRenderer.on).
  */
 export const OpenCodeEventChannel = {
@@ -79,17 +66,6 @@ export interface SendPromptRequest {
     modelID: string;
   };
   parts: MessagePart[];
-}
-
-export interface ApprovePermissionRequest {
-  sessionId: string;
-  permissionId: string;
-  approved: boolean;
-}
-
-export interface AnswerQuestionRequest {
-  questionId: string;
-  answer: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -165,39 +141,4 @@ export interface OpenCodeErrorEvent {
   sessionId?: string;
   code: string;
   message: string;
-}
-
-// ---------------------------------------------------------------------------
-// Bridge API Interface
-// ---------------------------------------------------------------------------
-
-/**
- * The session-related portion of the `window.opencode` API exposed by the
- * preload script. This extends the existing server lifecycle API.
- */
-export interface OpenCodeBridgeAPI {
-  // Request/response (renderer -> main)
-  createSession: (opts: CreateSessionRequest) => Promise<CreateSessionResponse>;
-  sendPrompt: (opts: SendPromptRequest) => Promise<SendPromptResponse>;
-  approvePermission: (
-    sessionId: string,
-    permissionId: string,
-    approved: boolean
-  ) => Promise<ApprovePermissionResponse>;
-  answerQuestion: (
-    questionId: string,
-    answer: string
-  ) => Promise<AnswerQuestionResponse>;
-
-  // Generic event listener
-  onEvent: <T>(channel: OpenCodeEventChannel, callback: (data: T) => void) => () => void;
-
-  // Typed event listeners
-  onSessionCreated: (callback: (data: SessionCreatedEvent) => void) => () => void;
-  onSessionStatus: (callback: (data: SessionStatusEvent) => void) => () => void;
-  onMessageUpdated: (callback: (data: MessageUpdatedEvent) => void) => () => void;
-  onPartUpdated: (callback: (data: PartUpdatedEvent) => void) => () => void;
-  onPermissionAsked: (callback: (data: PermissionAskedEvent) => void) => () => void;
-  onQuestionAsked: (callback: (data: QuestionAskedEvent) => void) => () => void;
-  onError: (callback: (data: OpenCodeErrorEvent) => void) => () => void;
 }
