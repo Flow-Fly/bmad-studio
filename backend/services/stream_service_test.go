@@ -450,7 +450,7 @@ func TestStreamService_Archive_SuccessWithMergedOutcome(t *testing.T) {
 	hub.events = make([]*types.WebSocketEvent, 0) // Reset events after create
 
 	// Archive stream
-	meta, err := streamService.Archive(projectName, streamName, "merged")
+	meta, err := streamService.Archive(projectName, streamName, "merged", false)
 	require.NoError(t, err)
 	require.NotNil(t, meta)
 
@@ -500,7 +500,7 @@ func TestStreamService_Archive_SuccessWithAbandonedOutcome(t *testing.T) {
 	hub.events = make([]*types.WebSocketEvent, 0)
 
 	// Archive with abandoned outcome
-	meta, err := streamService.Archive(projectName, streamName, "abandoned")
+	meta, err := streamService.Archive(projectName, streamName, "abandoned", false)
 	require.NoError(t, err)
 	assert.Equal(t, types.StreamOutcomeAbandoned, meta.Outcome)
 
@@ -535,7 +535,7 @@ func TestStreamService_Archive_InvalidOutcome(t *testing.T) {
 	require.NoError(t, err)
 
 	// Attempt to archive with invalid outcome
-	_, err = streamService.Archive(projectName, streamName, "cancelled")
+	_, err = streamService.Archive(projectName, streamName, "cancelled", false)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid outcome")
 }
@@ -544,7 +544,7 @@ func TestStreamService_Archive_ProjectNotFound(t *testing.T) {
 	streamService, _, _, _ := setupStreamService(t)
 
 	// Attempt to archive stream for non-existent project
-	_, err := streamService.Archive("nonexistent-project", "feature-1", "merged")
+	_, err := streamService.Archive("nonexistent-project", "feature-1", "merged", false)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "project not found")
 }
@@ -566,7 +566,7 @@ func TestStreamService_Archive_StreamNotFound(t *testing.T) {
 	require.NoError(t, err)
 
 	// Attempt to archive non-existent stream
-	_, err = streamService.Archive(projectName, "nonexistent-stream", "merged")
+	_, err = streamService.Archive(projectName, "nonexistent-stream", "merged", false)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "stream not found")
 }
@@ -592,11 +592,11 @@ func TestStreamService_Archive_AlreadyArchivedError(t *testing.T) {
 	_, err = streamService.Create(projectName, streamName)
 	require.NoError(t, err)
 
-	_, err = streamService.Archive(projectName, streamName, "merged")
+	_, err = streamService.Archive(projectName, streamName, "merged", false)
 	require.NoError(t, err)
 
 	// Attempt to archive again
-	_, err = streamService.Archive(projectName, streamName, "merged")
+	_, err = streamService.Archive(projectName, streamName, "merged", false)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "stream not found")
 }
@@ -623,7 +623,7 @@ func TestStreamService_Archive_BroadcastsEvent(t *testing.T) {
 	require.NoError(t, err)
 	hub.events = make([]*types.WebSocketEvent, 0)
 
-	_, err = streamService.Archive(projectName, streamName, "merged")
+	_, err = streamService.Archive(projectName, streamName, "merged", false)
 	require.NoError(t, err)
 
 	// Verify event
@@ -655,7 +655,7 @@ func TestStreamService_Archive_ExcludedFromList(t *testing.T) {
 	require.NoError(t, err)
 
 	// Archive one stream
-	_, err = streamService.Archive(projectName, "feature-1", "merged")
+	_, err = streamService.Archive(projectName, "feature-1", "merged", false)
 	require.NoError(t, err)
 
 	// List streams - archived should be excluded

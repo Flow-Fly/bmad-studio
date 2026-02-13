@@ -123,6 +123,7 @@ func NewRouterWithServices(svc RouterServices) *chi.Mux {
 								worktreesHandler := handlers.NewWorktreesHandler(svc.Worktree)
 								r.Post("/worktree", worktreesHandler.CreateWorktree)
 								r.Post("/worktree/switch", worktreesHandler.SwitchWorktree)
+								r.Delete("/worktree", worktreesHandler.RemoveWorktree)
 							}
 						})
 					})

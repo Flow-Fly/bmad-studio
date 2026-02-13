@@ -352,3 +352,236 @@ func TestWorktreeService_Switch_ErrorStreamNotFound(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not found")
 }
+
+// --- Remove tests ---
+
+func TestWorktreeService_Remove_Success(t *testing.T) {
+	svc, store, _, _ := setupWorktreeTest(t)
+
+	projectName := "my-project"
+	streamName := "payment-integration"
+
+	// Create a worktree first
+	result, err := svc.Create(projectName, streamName)
+	require.NoError(t, err)
+
+	// Verify worktree directory exists
+	_, err = os.Stat(result.WorktreePath)
+	require.NoError(t, err)
+
+	// Remove the worktree
+	err = svc.Remove(projectName, streamName, false)
+	require.NoError(t, err)
+
+	// Verify worktree directory is gone
+	_, err = os.Stat(result.WorktreePath)
+	assert.True(t, os.IsNotExist(err), "worktree directory should be deleted")
+
+	// Verify stream.json was updated (worktree and branch cleared)
+	streamStore := storage.NewStreamStore(store)
+	meta, err := streamStore.ReadStreamMeta(projectName, streamName)
+	require.NoError(t, err)
+	assert.Empty(t, meta.Worktree)
+	assert.Empty(t, meta.Branch)
+}
+
+func TestWorktreeService_Remove_DirectoryAlreadyDeleted(t *testing.T) {
+	svc, store, _, _ := setupWorktreeTest(t)
+
+	projectName := "my-project"
+	streamName := "payment-integration"
+
+	// Create a worktree
+	result, err := svc.Create(projectName, streamName)
+	require.NoError(t, err)
+
+	// Manually remove the worktree directory (simulating manual deletion)
+	err = os.RemoveAll(result.WorktreePath)
+	require.NoError(t, err)
+
+	// Remove should succeed (prunes stale refs)
+	err = svc.Remove(projectName, streamName, false)
+	require.NoError(t, err)
+
+	// Verify stream.json was updated
+	streamStore := storage.NewStreamStore(store)
+	meta, err := streamStore.ReadStreamMeta(projectName, streamName)
+	require.NoError(t, err)
+	assert.Empty(t, meta.Worktree)
+	assert.Empty(t, meta.Branch)
+}
+
+func TestWorktreeService_Remove_DirtyWorktree_NoForce(t *testing.T) {
+	svc, _, _, _ := setupWorktreeTest(t)
+
+	projectName := "my-project"
+	streamName := "payment-integration"
+
+	// Create a worktree
+	result, err := svc.Create(projectName, streamName)
+	require.NoError(t, err)
+
+	// Create an untracked file in the worktree to make it dirty
+	dirtyFile := filepath.Join(result.WorktreePath, "dirty.txt")
+	err = os.WriteFile(dirtyFile, []byte("uncommitted changes"), 0644)
+	require.NoError(t, err)
+
+	// Remove without force should fail
+	err = svc.Remove(projectName, streamName, false)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unmerged changes")
+}
+
+func TestWorktreeService_Remove_DirtyWorktree_Force(t *testing.T) {
+	svc, store, _, _ := setupWorktreeTest(t)
+
+	projectName := "my-project"
+	streamName := "payment-integration"
+
+	// Create a worktree
+	result, err := svc.Create(projectName, streamName)
+	require.NoError(t, err)
+
+	// Create an untracked file in the worktree to make it dirty
+	dirtyFile := filepath.Join(result.WorktreePath, "dirty.txt")
+	err = os.WriteFile(dirtyFile, []byte("uncommitted changes"), 0644)
+	require.NoError(t, err)
+
+	// Force remove should succeed
+	err = svc.Remove(projectName, streamName, true)
+	require.NoError(t, err)
+
+	// Verify worktree directory is gone
+	_, err = os.Stat(result.WorktreePath)
+	assert.True(t, os.IsNotExist(err), "worktree directory should be deleted")
+
+	// Verify stream.json was updated
+	streamStore := storage.NewStreamStore(store)
+	meta, err := streamStore.ReadStreamMeta(projectName, streamName)
+	require.NoError(t, err)
+	assert.Empty(t, meta.Worktree)
+	assert.Empty(t, meta.Branch)
+}
+
+func TestWorktreeService_Remove_NoWorktree(t *testing.T) {
+	svc, _, _, _ := setupWorktreeTest(t)
+
+	// Stream exists but has no worktree (default from setupWorktreeTest)
+	err := svc.Remove("my-project", "payment-integration", false)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no worktree")
+}
+
+// --- CheckMergeStatus tests ---
+
+func TestWorktreeService_CheckMergeStatus_Merged(t *testing.T) {
+	svc, _, _, repoPath := setupWorktreeTest(t)
+
+	projectName := "my-project"
+	streamName := "payment-integration"
+
+	// Create a worktree (creates branch stream/payment-integration)
+	_, err := svc.Create(projectName, streamName)
+	require.NoError(t, err)
+
+	// The branch was just created from HEAD, so it should be "merged" (same as HEAD)
+	status, err := svc.CheckMergeStatus(projectName, streamName)
+	require.NoError(t, err)
+	require.NotNil(t, status)
+	assert.True(t, status.Merged)
+	assert.Equal(t, "stream/"+streamName, status.Branch)
+
+	_ = repoPath // repoPath used by test setup
+}
+
+func TestWorktreeService_CheckMergeStatus_Unmerged(t *testing.T) {
+	svc, _, _, repoPath := setupWorktreeTest(t)
+
+	projectName := "my-project"
+	streamName := "payment-integration"
+
+	// Create a worktree
+	result, err := svc.Create(projectName, streamName)
+	require.NoError(t, err)
+
+	// Make a commit on the worktree branch (making it diverge from HEAD)
+	newFile := filepath.Join(result.WorktreePath, "feature.txt")
+	err = os.WriteFile(newFile, []byte("new feature"), 0644)
+	require.NoError(t, err)
+	runGit(t, result.WorktreePath, "add", ".")
+	runGit(t, result.WorktreePath, "commit", "-m", "add feature")
+
+	// Now check merge status — the branch has commits not in main HEAD
+	// We need to check from the main repo's perspective
+	status, err := svc.CheckMergeStatus(projectName, streamName)
+	require.NoError(t, err)
+	require.NotNil(t, status)
+	assert.False(t, status.Merged)
+	assert.Equal(t, "stream/"+streamName, status.Branch)
+
+	_ = repoPath
+}
+
+// --- Archive integration tests ---
+
+func TestWorktreeService_ArchiveWithMergedWorktree(t *testing.T) {
+	svc, store, _, _ := setupWorktreeTest(t)
+
+	projectName := "my-project"
+	streamName := "payment-integration"
+
+	// Create a worktree (branch is at same commit as main, so "merged")
+	result, err := svc.Create(projectName, streamName)
+	require.NoError(t, err)
+
+	// Set up stream service with worktree integration
+	streamStore := storage.NewStreamStore(store)
+	registryStore := storage.NewRegistryStore(store)
+	hub := &mockHub{events: make([]*types.WebSocketEvent, 0)}
+	streamService := NewStreamService(streamStore, registryStore, hub)
+	streamService.SetWorktreeService(svc)
+
+	// Archive the stream — worktree is merged, should auto-cleanup
+	meta, err := streamService.Archive(projectName, streamName, "merged", false)
+	require.NoError(t, err)
+	require.NotNil(t, meta)
+	assert.Equal(t, types.StreamStatusArchived, meta.Status)
+
+	// Verify worktree directory is gone
+	_, err = os.Stat(result.WorktreePath)
+	assert.True(t, os.IsNotExist(err), "worktree directory should be deleted after archive")
+}
+
+func TestWorktreeService_ArchiveWithUnmergedWorktree_Error(t *testing.T) {
+	svc, store, _, _ := setupWorktreeTest(t)
+
+	projectName := "my-project"
+	streamName := "payment-integration"
+
+	// Create a worktree
+	result, err := svc.Create(projectName, streamName)
+	require.NoError(t, err)
+
+	// Make a commit on the worktree branch to make it unmerged
+	newFile := filepath.Join(result.WorktreePath, "feature.txt")
+	err = os.WriteFile(newFile, []byte("new feature"), 0644)
+	require.NoError(t, err)
+	runGit(t, result.WorktreePath, "add", ".")
+	runGit(t, result.WorktreePath, "commit", "-m", "add feature")
+
+	// Set up stream service with worktree integration
+	streamStore := storage.NewStreamStore(store)
+	registryStore := storage.NewRegistryStore(store)
+	hub := &mockHub{events: make([]*types.WebSocketEvent, 0)}
+	streamService := NewStreamService(streamStore, registryStore, hub)
+	streamService.SetWorktreeService(svc)
+
+	// Archive should fail — unmerged changes
+	_, err = streamService.Archive(projectName, streamName, "merged", false)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unmerged changes")
+
+	// Verify worktree directory still exists
+	_, err = os.Stat(result.WorktreePath)
+	assert.NoError(t, err, "worktree should still exist when archive fails")
+}

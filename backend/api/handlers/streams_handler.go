@@ -36,6 +36,8 @@ func extractStreamName(w http.ResponseWriter, projectName, streamID string) stri
 func writeStreamServiceError(w http.ResponseWriter, err error) {
 	errMsg := err.Error()
 	switch {
+	case strings.Contains(errMsg, "unmerged changes"):
+		response.WriteError(w, "conflict", errMsg, http.StatusConflict)
 	case strings.Contains(errMsg, "not found"):
 		response.WriteNotFound(w, errMsg)
 	case strings.Contains(errMsg, "already exists"), strings.Contains(errMsg, "already archived"):
@@ -136,6 +138,7 @@ func (h *StreamsHandler) ArchiveStream(w http.ResponseWriter, r *http.Request) {
 
 	var req struct {
 		Outcome string `json:"outcome"`
+		Force   bool   `json:"force"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		response.WriteInvalidRequest(w, "Invalid JSON")
@@ -147,7 +150,7 @@ func (h *StreamsHandler) ArchiveStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	meta, err := h.streamService.Archive(projectName, streamName, req.Outcome)
+	meta, err := h.streamService.Archive(projectName, streamName, req.Outcome, req.Force)
 	if err != nil {
 		writeStreamServiceError(w, err)
 		return
