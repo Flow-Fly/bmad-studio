@@ -122,6 +122,7 @@ func NewRouterWithServices(svc RouterServices) *chi.Mux {
 							if svc.Worktree != nil {
 								worktreesHandler := handlers.NewWorktreesHandler(svc.Worktree)
 								r.Post("/worktree", worktreesHandler.CreateWorktree)
+								r.Post("/worktree/switch", worktreesHandler.SwitchWorktree)
 							}
 						})
 					})
