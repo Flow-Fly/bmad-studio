@@ -128,6 +128,7 @@ contextBridge.exposeInMainWorld('opencode', {
     callback: (data: {
       sessionId: string;
       messageId: string;
+      role: 'user' | 'assistant';
       parts: Array<{ type: string; [key: string]: unknown }>;
     }) => void
   ) => onIpcEvent('opencode:message-updated', callback),
@@ -137,7 +138,9 @@ contextBridge.exposeInMainWorld('opencode', {
       sessionId: string;
       messageId: string;
       partId: string;
+      type: string;
       content: string;
+      delta?: string;
     }) => void
   ) => onIpcEvent('opencode:part-updated', callback),
 
@@ -154,6 +157,6 @@ contextBridge.exposeInMainWorld('opencode', {
     callback: (data: { questionId: string; question: string }) => void
   ) => onIpcEvent('opencode:question-asked', callback),
 
-  onError: (callback: (data: { code: string; message: string }) => void) =>
+  onError: (callback: (data: { sessionId?: string; code: string; message: string }) => void) =>
     onIpcEvent('opencode:error', callback),
 });

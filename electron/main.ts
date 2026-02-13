@@ -13,6 +13,7 @@ import {
   type OpenCodeStatusEvent,
 } from './opencode-process-manager';
 import { OpenCodeClient } from './opencode-client';
+import { startForwarding, stopForwarding } from './opencode-event-forwarder';
 
 // ---------------------------------------------------------------------------
 // Paths & Constants
@@ -157,11 +158,24 @@ function handleOpenCodeStatusChange(event: OpenCodeStatusEvent): void {
       if (event.port) {
         opencodeClient.initialize(event.port);
       }
+      // Start SSE event forwarding after client is initialized
+      {
+        const sdkClient = opencodeClient.getSdkClient();
+        if (sdkClient && mainWindow) {
+          startForwarding(mainWindow, sdkClient).catch((err) => {
+            console.error('[electron] Failed to start event forwarding:', err);
+          });
+        }
+      }
       mainWindow.webContents.send('opencode:server-ready', {
         port: event.port,
       });
       break;
     case 'restarting':
+      // Stop event forwarding before client is destroyed on restart
+      stopForwarding().catch((err) => {
+        console.error('[electron] Failed to stop event forwarding on restart:', err);
+      });
       mainWindow.webContents.send('opencode:server-restarting', {
         retryCount: event.retryCount,
       });
@@ -241,6 +255,7 @@ async function startOpenCodeServer(): Promise<void> {
 async function stopOpenCodeServer(): Promise<void> {
   if (opencodeManager) {
     console.log('[electron] Stopping OpenCode server...');
+    await stopForwarding();
     opencodeClient.destroy();
     await opencodeManager.shutdown();
     opencodeManager = null;
