@@ -131,6 +131,89 @@ func (s *StreamArtifactService) ReadArtifact(projectName, streamName, artifactPa
 	return string(content), nil
 }
 
+// ListDirectoryContents returns the files within a subdirectory of a stream.
+// Used to expand sharded artifacts (e.g., listing files within "prd/").
+func (s *StreamArtifactService) ListDirectoryContents(projectName, streamName, dirPath string) ([]types.StreamArtifactInfo, error) {
+	streamDir := s.streamStore.StreamDir(projectName, streamName)
+
+	// Verify stream directory exists
+	if _, err := os.Stat(streamDir); os.IsNotExist(err) {
+		return nil, fmt.Errorf("stream not found: %s-%s", projectName, streamName)
+	}
+
+	fullPath, err := validateArtifactPath(streamDir, dirPath)
+	if err != nil {
+		return nil, err
+	}
+
+	info, err := os.Stat(fullPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, fmt.Errorf("directory not found: %s", dirPath)
+		}
+		return nil, fmt.Errorf("failed to stat directory: %w", err)
+	}
+
+	if !info.IsDir() {
+		return nil, fmt.Errorf("not a directory: %s", dirPath)
+	}
+
+	entries, err := os.ReadDir(fullPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read directory: %w", err)
+	}
+
+	// Derive phase from the parent directory name
+	phase := DerivePhase(dirPath + "/")
+
+	var artifacts []types.StreamArtifactInfo
+	for _, entry := range entries {
+		name := entry.Name()
+
+		if isExcluded(name) {
+			continue
+		}
+
+		entryInfo, err := entry.Info()
+		if err != nil {
+			continue
+		}
+
+		entryType := "file"
+		if entry.IsDir() {
+			entryType = "directory"
+		}
+
+		artifact := types.StreamArtifactInfo{
+			Filename:   name,
+			Phase:      phase,
+			Type:       entryType,
+			ModifiedAt: entryInfo.ModTime().UTC(),
+			Size:       entryInfo.Size(),
+		}
+
+		if entry.IsDir() {
+			artifact.Size = 0
+		}
+
+		artifacts = append(artifacts, artifact)
+	}
+
+	// Sort: directories first, then files; alphabetical within each group
+	sort.Slice(artifacts, func(i, j int) bool {
+		if artifacts[i].Type != artifacts[j].Type {
+			return artifacts[i].Type == "directory"
+		}
+		return artifacts[i].Filename < artifacts[j].Filename
+	})
+
+	if artifacts == nil {
+		artifacts = []types.StreamArtifactInfo{}
+	}
+
+	return artifacts, nil
+}
+
 // isExcluded checks whether a filename should be excluded from artifact listings.
 func isExcluded(name string) bool {
 	return metadataExclusions[name] ||

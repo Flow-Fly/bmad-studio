@@ -237,3 +237,96 @@ func TestListArtifacts_SortOrder(t *testing.T) {
 	assert.Equal(t, "prd.md", artifacts[3].Filename)
 	assert.Equal(t, "file", artifacts[3].Type)
 }
+
+func TestListDirectoryContents_Basic(t *testing.T) {
+	svc, streamStore, _ := setupStreamArtifactService(t)
+	streamDir := createTestStream(t, streamStore, "myapp", "feature")
+
+	writeTestFile(t, streamDir, "prd/index.md", "# PRD Index")
+	writeTestFile(t, streamDir, "prd/executive-summary.md", "# Summary")
+	writeTestFile(t, streamDir, "prd/functional-requirements.md", "# Functional")
+
+	artifacts, err := svc.ListDirectoryContents("myapp", "feature", "prd")
+	require.NoError(t, err)
+	require.Len(t, artifacts, 3)
+
+	// All should be files, sorted alphabetically
+	expected := []string{"executive-summary.md", "functional-requirements.md", "index.md"}
+	for i, name := range expected {
+		assert.Equal(t, name, artifacts[i].Filename, "position %d", i)
+		assert.Equal(t, "file", artifacts[i].Type)
+		assert.Equal(t, "planning", artifacts[i].Phase, "phase for %s", artifacts[i].Filename)
+	}
+}
+
+func TestListDirectoryContents_ExcludesTmpFiles(t *testing.T) {
+	svc, streamStore, _ := setupStreamArtifactService(t)
+	streamDir := createTestStream(t, streamStore, "myapp", "feature")
+
+	writeTestFile(t, streamDir, "prd/index.md", "# PRD Index")
+	writeTestFile(t, streamDir, "prd/temp.md.tmp", "temp")
+	writeTestFile(t, streamDir, "prd/.backup.swp", "swap")
+
+	artifacts, err := svc.ListDirectoryContents("myapp", "feature", "prd")
+	require.NoError(t, err)
+	require.Len(t, artifacts, 1)
+	assert.Equal(t, "index.md", artifacts[0].Filename)
+}
+
+func TestListDirectoryContents_NotADirectory(t *testing.T) {
+	svc, streamStore, _ := setupStreamArtifactService(t)
+	streamDir := createTestStream(t, streamStore, "myapp", "feature")
+
+	writeTestFile(t, streamDir, "prd.md", "# PRD")
+
+	_, err := svc.ListDirectoryContents("myapp", "feature", "prd.md")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not a directory")
+}
+
+func TestListDirectoryContents_NotFound(t *testing.T) {
+	svc, streamStore, _ := setupStreamArtifactService(t)
+	createTestStream(t, streamStore, "myapp", "feature")
+
+	_, err := svc.ListDirectoryContents("myapp", "feature", "nonexistent")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "directory not found")
+}
+
+func TestListDirectoryContents_PathTraversal(t *testing.T) {
+	svc, streamStore, _ := setupStreamArtifactService(t)
+	createTestStream(t, streamStore, "myapp", "feature")
+
+	traversalPaths := []string{
+		"../../../etc",
+		"../../other-stream",
+		"..",
+	}
+
+	for _, path := range traversalPaths {
+		_, err := svc.ListDirectoryContents("myapp", "feature", path)
+		require.Error(t, err, "expected error for path traversal %q", path)
+		assert.Contains(t, err.Error(), "invalid artifact path", "for path %q", path)
+	}
+}
+
+func TestListDirectoryContents_NonExistentStream(t *testing.T) {
+	svc, _, _ := setupStreamArtifactService(t)
+
+	_, err := svc.ListDirectoryContents("myapp", "nonexistent", "prd")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "stream not found")
+}
+
+func TestListDirectoryContents_EmptyDirectory(t *testing.T) {
+	svc, streamStore, _ := setupStreamArtifactService(t)
+	streamDir := createTestStream(t, streamStore, "myapp", "feature")
+
+	// Create empty directory
+	err := os.MkdirAll(filepath.Join(streamDir, "empty-dir"), 0755)
+	require.NoError(t, err)
+
+	artifacts, err := svc.ListDirectoryContents("myapp", "feature", "empty-dir")
+	require.NoError(t, err)
+	require.Len(t, artifacts, 0)
+}
