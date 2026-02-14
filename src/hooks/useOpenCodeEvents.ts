@@ -74,20 +74,12 @@ export function useOpenCodeEvents() {
 
     const handlePermissionAsked = (payload: PermissionAskedEvent) => {
       console.log('[useOpenCodeEvents] Permission asked:', payload);
-      useOpenCodeStore.getState().enqueuePermission({
-        sessionId: payload.sessionId,
-        permissionId: payload.permissionId,
-        tool: payload.tool,
-        params: payload.params,
-      });
+      useOpenCodeStore.getState().enqueuePermission(payload);
     };
 
     const handleQuestionAsked = (payload: QuestionAskedEvent) => {
       console.log('[useOpenCodeEvents] Question asked:', payload);
-      useOpenCodeStore.getState().enqueueQuestion({
-        questionId: payload.questionId,
-        question: payload.question,
-      });
+      useOpenCodeStore.getState().enqueueQuestion(payload);
     };
 
     const unsubMessageUpdated = window.opencode.onMessageUpdated(handleMessageUpdated);

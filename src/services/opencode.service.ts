@@ -187,10 +187,10 @@ export async function sendChatMessage(
     );
   }
 
-  // Store prompt text for potential retry (Story 9.3)
-  useOpenCodeStore.getState().setLastUserPrompt(text);
-  // Clear any previous session error on successful send
-  useOpenCodeStore.getState().setSessionError(null);
+  // Store prompt for retry & clear any previous session error
+  const store = useOpenCodeStore.getState();
+  store.setLastUserPrompt(text);
+  store.setSessionError(null);
 
   return response as SendPromptResponse;
 }

@@ -22,33 +22,17 @@ export function PermissionDialog() {
   const currentPermission = useCurrentPermission();
   const approveRef = useRef<HTMLButtonElement>(null);
 
-  const handleApprove = useCallback(async () => {
+  const respond = useCallback(async (approved: boolean) => {
     if (!currentPermission) return;
 
     try {
       await window.opencode.approvePermission(
         currentPermission.sessionId,
         currentPermission.permissionId,
-        true,
+        approved,
       );
     } catch (error) {
-      console.error('[PermissionDialog] Failed to approve permission:', error);
-    }
-
-    useOpenCodeStore.getState().dequeuePermission();
-  }, [currentPermission]);
-
-  const handleDeny = useCallback(async () => {
-    if (!currentPermission) return;
-
-    try {
-      await window.opencode.approvePermission(
-        currentPermission.sessionId,
-        currentPermission.permissionId,
-        false,
-      );
-    } catch (error) {
-      console.error('[PermissionDialog] Failed to deny permission:', error);
+      console.error(`[PermissionDialog] Failed to ${approved ? 'approve' : 'deny'} permission:`, error);
     }
 
     useOpenCodeStore.getState().dequeuePermission();
@@ -60,10 +44,10 @@ export function PermissionDialog() {
         // Prevent double-fire if focus is already on the Approve button
         if (document.activeElement === approveRef.current) return;
         e.preventDefault();
-        handleApprove();
+        respond(true);
       }
     },
-    [handleApprove],
+    [respond],
   );
 
   const isOpen = currentPermission !== null;
@@ -75,7 +59,7 @@ export function PermissionDialog() {
         <DialogPrimitive.Content
           onEscapeKeyDown={(e) => {
             e.preventDefault();
-            handleDeny();
+            respond(false);
           }}
           onPointerDownOutside={(e) => e.preventDefault()}
           onInteractOutside={(e) => e.preventDefault()}
@@ -101,10 +85,10 @@ export function PermissionDialog() {
           {/* Footer */}
           <div className="flex flex-col gap-2">
             <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={handleDeny}>
+              <Button variant="outline" onClick={() => respond(false)}>
                 Deny
               </Button>
-              <Button ref={approveRef} onClick={handleApprove}>
+              <Button ref={approveRef} onClick={() => respond(true)}>
                 Approve
               </Button>
             </div>

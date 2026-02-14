@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { RefreshCw, CheckCircle, XCircle } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import {
@@ -57,53 +57,46 @@ export function ServerCrashBanner() {
 
   if (isRestarting) {
     return (
-      <div
-        className={cn(
-          'flex items-center gap-3 rounded-[var(--radius-md)] border p-3',
-          'border-border-primary bg-bg-tertiary',
-        )}
-        role="status"
-        aria-live="polite"
-      >
-        <RefreshCw className="h-4 w-4 shrink-0 text-text-secondary animate-spin" />
-        <p className="text-[length:var(--text-sm)] text-text-secondary">
-          OpenCode restarting...
-        </p>
-      </div>
+      <Banner borderClass="border-border-primary" role="status" aria-live="polite"
+        icon={<RefreshCw className="h-4 w-4 shrink-0 text-text-secondary animate-spin" />}
+        textClass="text-text-secondary" text="OpenCode restarting..." />
     );
   }
 
   if (recovered) {
     return (
-      <div
-        className={cn(
-          'flex items-center gap-3 rounded-[var(--radius-md)] border p-3',
-          'border-border-primary bg-bg-tertiary',
-        )}
-        role="status"
-        aria-live="polite"
-      >
-        <CheckCircle className="h-4 w-4 shrink-0 text-status-active" />
-        <p className="text-[length:var(--text-sm)] text-text-primary">
-          OpenCode restarted. Start a new session from the phase graph.
-        </p>
-      </div>
+      <Banner borderClass="border-border-primary" role="status" aria-live="polite"
+        icon={<CheckCircle className="h-4 w-4 shrink-0 text-status-active" />}
+        textClass="text-text-primary" text="OpenCode restarted. Start a new session from the phase graph." />
     );
   }
 
   // isServerError
   return (
+    <Banner borderClass="border-status-blocked/20" role="alert"
+      icon={<XCircle className="h-4 w-4 shrink-0 text-status-blocked" />}
+      textClass="text-status-blocked" text="OpenCode server failed. Please restart the application." />
+  );
+}
+
+function Banner({ borderClass, icon, textClass, text, ...rest }: {
+  borderClass: string;
+  icon: ReactNode;
+  textClass: string;
+  text: string;
+  role: string;
+  'aria-live'?: 'polite';
+}) {
+  return (
     <div
       className={cn(
         'flex items-center gap-3 rounded-[var(--radius-md)] border p-3',
-        'border-status-blocked/20 bg-bg-tertiary',
+        borderClass, 'bg-bg-tertiary',
       )}
-      role="alert"
+      {...rest}
     >
-      <XCircle className="h-4 w-4 shrink-0 text-status-blocked" />
-      <p className="text-[length:var(--text-sm)] text-status-blocked">
-        OpenCode server failed. Please restart the application.
-      </p>
+      {icon}
+      <p className={cn('text-[length:var(--text-sm)]', textClass)}>{text}</p>
     </div>
   );
 }

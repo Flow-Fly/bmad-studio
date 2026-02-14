@@ -4,9 +4,7 @@ import {
   useMessages,
   useActiveSession,
   useSessionStatus,
-  useSessionError,
   useSessionTimeout as useSessionTimeoutState,
-  useRetrying,
 } from '../../stores/opencode.store';
 import { MessageBlock } from './MessageBlock';
 import { ChatInput } from './ChatInput';
@@ -23,9 +21,7 @@ export function ChatPanel() {
   const messages = useMessages();
   const { sessionId } = useActiveSession();
   const status = useSessionStatus();
-  const sessionError = useSessionError();
   const sessionTimeout = useSessionTimeoutState();
-  const retrying = useRetrying();
   const { waitLonger } = useSessionTimeout();
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
@@ -99,7 +95,7 @@ export function ChatPanel() {
               />
             ))
           )}
-          {(sessionError || retrying) && <ErrorBanner />}
+          <ErrorBanner />
           {sessionTimeout && <TimeoutWarning waitLonger={waitLonger} />}
           <ServerCrashBanner />
         </div>

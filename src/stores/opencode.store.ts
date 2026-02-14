@@ -319,10 +319,7 @@ export const useOpenCodeStore = create<OpenCodeState>((set) => ({
     }),
 
   setSessionStatus: (status: SessionStatus) =>
-    set({
-      sessionStatus: status,
-      ...(status === 'busy' ? { sessionTimeout: false } : {}),
-    }),
+    set({ sessionStatus: status, sessionTimeout: false }),
 
   clearMessages: () =>
     set({ messages: [], sessionStatus: 'idle' }),
