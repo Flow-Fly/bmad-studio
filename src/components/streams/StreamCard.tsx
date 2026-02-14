@@ -23,9 +23,11 @@ interface StreamCardProps {
   stream: Stream;
   isActive: boolean;
   onClick: () => void;
+  /** Optional next suggested workflow label (e.g., "Create PRD") */
+  nextWorkflow?: string | null;
 }
 
-export function StreamCard({ stream, isActive, onClick }: StreamCardProps) {
+export function StreamCard({ stream, isActive, onClick, nextWorkflow }: StreamCardProps) {
   const activeBorderClass = stream.phase
     ? PHASE_BORDER_CLASSES[stream.phase] ?? 'border-l-interactive-accent'
     : 'border-l-interactive-accent';
@@ -73,6 +75,13 @@ export function StreamCard({ stream, isActive, onClick }: StreamCardProps) {
           {formatRelativeTime(stream.updatedAt)}
         </span>
       </div>
+
+      {/* Row 4: Next suggested workflow (optional) */}
+      {nextWorkflow && (
+        <span className="text-[length:var(--text-xs)] text-interactive-muted italic">
+          Next: {nextWorkflow}
+        </span>
+      )}
     </button>
   );
 }

@@ -4,7 +4,7 @@ import { AppShell } from '@/components/layout/AppShell';
 
 import { useProjectStore } from '@/stores/project.store';
 
-import { openProject, loadRecentProjects } from '@/services/project.service';
+import { openProject, loadRecentProjects, fetchRegisteredProjects } from '@/services/project.service';
 import { selectProjectFolder } from '@/services/dialog.service';
 import {
   connect as wsConnect,
@@ -40,7 +40,7 @@ export default function App() {
   // Auto-load last active project on mount
   useEffect(() => {
     (async () => {
-      await loadRecentProjects();
+      await Promise.all([loadRecentProjects(), fetchRegisteredProjects()]);
       const lastPath = useProjectStore.getState().lastActiveProjectPath;
       if (lastPath) {
         await openProject(lastPath);
