@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { ActivityBar, type AppMode } from '@/components/layout/ActivityBar';
 import { EmptyState } from '@/components/layout/EmptyState';
@@ -6,7 +6,9 @@ import { Dashboard } from '@/components/dashboard/Dashboard';
 import { StreamDetail } from '@/components/streams/StreamDetail';
 import { SettingsPanel } from '@/components/settings/SettingsPanel';
 import { SidecarStatus } from '@/components/layout/SidecarStatus';
+import { CommandPalette } from '@/components/command-palette/CommandPalette';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { useProjectStore } from '@/stores/project.store';
 import { useStreamStore } from '@/stores/stream.store';
 import { useHasError } from '@/stores/sidecar.store';
 
@@ -17,12 +19,51 @@ interface AppShellProps {
 
 export function AppShell({ hasProject, onProjectOpened }: AppShellProps) {
   const [activeMode, setActiveMode] = useState<AppMode>('dashboard');
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const hasBackendError = useHasError();
+  const activeProjectName = useProjectStore((s) => s.activeProjectName);
+  const prevProjectRef = useRef(activeProjectName);
+
+  // When active project changes, clear active stream and switch to dashboard
+  useEffect(() => {
+    if (prevProjectRef.current !== null && prevProjectRef.current !== activeProjectName) {
+      useStreamStore.getState().setActiveStream(null);
+      setActiveMode('dashboard');
+    }
+    prevProjectRef.current = activeProjectName;
+  }, [activeProjectName]);
+
+  // Cmd+K to toggle command palette, Cmd+N to create stream
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (!(e.metaKey || e.ctrlKey)) return;
+
+      if (e.key === 'k') {
+        e.preventDefault();
+        setCommandPaletteOpen((prev) => !prev);
+      } else if (e.key === 'n' && activeProjectName) {
+        e.preventDefault();
+        setActiveMode('dashboard');
+        setShowCreateModal(true);
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [activeProjectName]);
 
   const handleNavigateToStream = useCallback((streamName: string) => {
     useStreamStore.getState().setActiveStream(streamName);
     setActiveMode('stream');
   }, []);
+
+  // Artifact navigation navigates to the stream; StreamDetail handles artifact state internally.
+  const handleNavigateToArtifact = useCallback(
+    (streamName: string, _artifactPath: string, _phase?: string) => {
+      handleNavigateToStream(streamName);
+    },
+    [handleNavigateToStream],
+  );
 
   if (!hasProject) {
     return (
@@ -44,12 +85,25 @@ export function AppShell({ hasProject, onProjectOpened }: AppShellProps) {
             </div>
           )}
           {activeMode === 'dashboard' && (
-            <Dashboard onNavigateToStream={handleNavigateToStream} />
+            <Dashboard
+              onNavigateToStream={handleNavigateToStream}
+              showCreateModal={showCreateModal}
+              onCreateModalChange={setShowCreateModal}
+            />
           )}
           {activeMode === 'stream' && <StreamDetail />}
           {activeMode === 'settings' && <SettingsPanel />}
         </div>
       </TooltipProvider>
+      {commandPaletteOpen && (
+        <CommandPalette
+          onClose={() => setCommandPaletteOpen(false)}
+          onNavigateToStream={handleNavigateToStream}
+          onModeChange={setActiveMode}
+          onOpenCreateModal={() => setShowCreateModal(true)}
+          onNavigateToArtifact={handleNavigateToArtifact}
+        />
+      )}
     </div>
   );
 }

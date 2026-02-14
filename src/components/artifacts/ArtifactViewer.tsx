@@ -92,7 +92,7 @@ export function ArtifactViewer({ artifactPath, phase, onBack }: ArtifactViewerPr
           </div>
         )}
         {!loading && !error && content !== null && (
-          <div className={cn('mx-auto max-w-4xl', !isMarkdown && 'font-mono')}>
+          <div className={cn('mx-auto max-w-[720px]', !isMarkdown && 'font-mono')}>
             {isMarkdown ? (
               <MarkdownRenderer content={content} />
             ) : (

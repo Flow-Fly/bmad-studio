@@ -1,5 +1,6 @@
 import { apiFetch, ApiRequestError, API_BASE } from './api.service';
 import type { OpenProjectResponse } from '../types/project';
+import type { RegistryEntry } from '../types/registry';
 import { useProjectStore, type RecentProject } from '../stores/project.store';
 
 export async function openProject(folderPath: string): Promise<void> {
@@ -22,6 +23,21 @@ export async function openProject(folderPath: string): Promise<void> {
     const code = err instanceof ApiRequestError ? err.code : undefined;
     store.setProjectError(message, code);
   }
+}
+
+export async function fetchRegisteredProjects(): Promise<void> {
+  try {
+    const entries = await apiFetch<RegistryEntry[]>(`${API_BASE}/projects`);
+    useProjectStore.getState().setRegisteredProjects(entries);
+  } catch (err) {
+    console.warn('[project.service] Failed to fetch registered projects:', err);
+  }
+}
+
+export async function switchProject(name: string, repoPath: string): Promise<void> {
+  const store = useProjectStore.getState();
+  store.setActiveProject(name);
+  await openProject(repoPath);
 }
 
 export async function loadBmadConfig(): Promise<OpenProjectResponse> {

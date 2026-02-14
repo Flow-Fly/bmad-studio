@@ -3,15 +3,17 @@ import { GitBranch } from 'lucide-react';
 
 import { useStreamStore } from '@/stores/stream.store';
 import { usePhaseStore } from '@/stores/phase.store';
+import { useProjectStore } from '@/stores/project.store';
 import { useActiveSession } from '@/stores/opencode.store';
 import { Badge } from '@/components/ui/badge';
 import { PhaseDotIndicator } from '@/components/streams/PhaseDotIndicator';
 import { PhaseGraphContainer } from '@/components/phase-graph/PhaseGraphContainer';
-import { ArtifactViewer } from '@/components/artifacts/ArtifactViewer';
+import { ArtifactPanel } from '@/components/artifacts/ArtifactPanel';
 import { ConversationHeader } from '@/components/opencode/ConversationHeader';
 import { ChatPanel } from '@/components/opencode/ChatPanel';
 import { useOpenCodeEvents } from '@/hooks/useOpenCodeEvents';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
+import { addRecentItem } from '@/hooks/useRecentItems';
 import { capitalize, formatRelativeTime } from '@/lib/format-utils';
 import type { NodeVisualState } from '@/types/phases';
 
@@ -60,9 +62,20 @@ export function StreamDetail() {
         setArtifactPath(path);
         setArtifactPhase(stream?.phase);
         setView('artifact');
+
+        // Track artifact in recent items
+        const projectName = useProjectStore.getState().activeProjectName;
+        if (activeStreamId && projectName) {
+          addRecentItem({
+            type: 'artifact',
+            filename: path,
+            streamName: activeStreamId,
+            project: projectName,
+          });
+        }
       }
     },
-    [stream?.phase],
+    [stream?.phase, activeStreamId],
   );
 
   const handleBackToGraph = useCallback(() => {
@@ -115,10 +128,10 @@ export function StreamDetail() {
         {view === 'graph' && (
           <PhaseGraphContainer onNodeClick={handleNodeClick} />
         )}
-        {view === 'artifact' && artifactPath && (
-          <ArtifactViewer
-            artifactPath={artifactPath}
-            phase={artifactPhase}
+        {view === 'artifact' && (
+          <ArtifactPanel
+            initialArtifactPath={artifactPath}
+            initialPhase={artifactPhase}
             onBack={handleBackToGraph}
           />
         )}

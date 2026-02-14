@@ -39,60 +39,7 @@ func (s *StreamArtifactService) ListArtifacts(projectName, streamName string) ([
 		return nil, fmt.Errorf("failed to read stream directory: %w", err)
 	}
 
-	var artifacts []types.StreamArtifactInfo
-
-	for _, entry := range entries {
-		name := entry.Name()
-
-		if isExcluded(name) {
-			continue
-		}
-
-		info, err := entry.Info()
-		if err != nil {
-			continue // skip entries we can't stat
-		}
-
-		entryType := "file"
-		if entry.IsDir() {
-			entryType = "directory"
-		}
-
-		// For directories, append "/" to match DerivePhase patterns like "epics/"
-		phaseName := name
-		if entry.IsDir() {
-			phaseName = name + "/"
-		}
-		phase := DerivePhase(phaseName)
-
-		artifact := types.StreamArtifactInfo{
-			Filename:   name,
-			Phase:      phase,
-			Type:       entryType,
-			ModifiedAt: info.ModTime().UTC(),
-			Size:       info.Size(),
-		}
-
-		if entry.IsDir() {
-			artifact.Size = 0 // directories report 0 size per spec
-		}
-
-		artifacts = append(artifacts, artifact)
-	}
-
-	// Sort: directories first, then files; alphabetical within each group
-	sort.Slice(artifacts, func(i, j int) bool {
-		if artifacts[i].Type != artifacts[j].Type {
-			return artifacts[i].Type == "directory"
-		}
-		return artifacts[i].Filename < artifacts[j].Filename
-	})
-
-	if artifacts == nil {
-		artifacts = []types.StreamArtifactInfo{}
-	}
-
-	return artifacts, nil
+	return buildArtifactList(entries, ""), nil
 }
 
 // ReadArtifact reads the content of an artifact file within a stream directory.
@@ -129,6 +76,93 @@ func (s *StreamArtifactService) ReadArtifact(projectName, streamName, artifactPa
 	}
 
 	return string(content), nil
+}
+
+// ListDirectoryContents returns the files within a subdirectory of a stream.
+// Used to expand sharded artifacts (e.g., listing files within "prd/").
+func (s *StreamArtifactService) ListDirectoryContents(projectName, streamName, dirPath string) ([]types.StreamArtifactInfo, error) {
+	streamDir := s.streamStore.StreamDir(projectName, streamName)
+
+	if _, err := os.Stat(streamDir); os.IsNotExist(err) {
+		return nil, fmt.Errorf("stream not found: %s-%s", projectName, streamName)
+	}
+
+	fullPath, err := validateArtifactPath(streamDir, dirPath)
+	if err != nil {
+		return nil, err
+	}
+
+	info, err := os.Stat(fullPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, fmt.Errorf("directory not found: %s", dirPath)
+		}
+		return nil, fmt.Errorf("failed to stat directory: %w", err)
+	}
+
+	if !info.IsDir() {
+		return nil, fmt.Errorf("not a directory: %s", dirPath)
+	}
+
+	entries, err := os.ReadDir(fullPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read directory: %w", err)
+	}
+
+	return buildArtifactList(entries, dirPath+"/"), nil
+}
+
+// buildArtifactList converts directory entries into a sorted artifact list.
+// When phasePrefix is empty, each entry derives its own phase; otherwise the
+// prefix (e.g. "prd/") is used as the phase source for all entries.
+func buildArtifactList(entries []os.DirEntry, phasePrefix string) []types.StreamArtifactInfo {
+	var artifacts []types.StreamArtifactInfo
+
+	for _, entry := range entries {
+		name := entry.Name()
+		if isExcluded(name) {
+			continue
+		}
+
+		info, err := entry.Info()
+		if err != nil {
+			continue
+		}
+
+		entryType := "file"
+		size := info.Size()
+		phaseName := name
+		if entry.IsDir() {
+			entryType = "directory"
+			size = 0
+			phaseName = name + "/"
+		}
+
+		if phasePrefix != "" {
+			phaseName = phasePrefix
+		}
+
+		artifacts = append(artifacts, types.StreamArtifactInfo{
+			Filename:   name,
+			Phase:      DerivePhase(phaseName),
+			Type:       entryType,
+			ModifiedAt: info.ModTime().UTC(),
+			Size:       size,
+		})
+	}
+
+	sort.Slice(artifacts, func(i, j int) bool {
+		if artifacts[i].Type != artifacts[j].Type {
+			return artifacts[i].Type == "directory"
+		}
+		return artifacts[i].Filename < artifacts[j].Filename
+	})
+
+	if artifacts == nil {
+		artifacts = []types.StreamArtifactInfo{}
+	}
+
+	return artifacts
 }
 
 // isExcluded checks whether a filename should be excluded from artifact listings.
