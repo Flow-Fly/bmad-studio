@@ -17,6 +17,7 @@ import type {
   PartUpdatedEvent,
   SessionStatusEvent,
   PermissionAskedEvent,
+  QuestionAskedEvent,
   OpenCodeErrorEvent,
 } from '../src/types/ipc';
 
@@ -143,7 +144,9 @@ function routeEvent(mainWindow: BrowserWindow, event: SdkEvent): void {
       forwardSessionError(mainWindow, event);
       break;
     default:
-      // Other event types are out of scope for this story
+      // The v1 SDK type union doesn't include 'question.asked', but the
+      // server may still emit it.  Handle it via the untyped default path.
+      forwardUnknownEvent(mainWindow, event);
       break;
   }
 }
@@ -244,4 +247,39 @@ function forwardSessionError(
   };
 
   mainWindow.webContents.send(OpenCodeEventChannel.Error, payload);
+}
+
+/**
+ * Handles events not in the v1 SDK type union.
+ * Currently supports 'question.asked' which the server may emit even though
+ * the v1 SDK types don't declare it.
+ */
+function forwardUnknownEvent(
+  mainWindow: BrowserWindow,
+  event: Record<string, unknown>,
+): void {
+  if (event.type === 'question.asked') {
+    forwardQuestionAsked(mainWindow, event);
+  }
+  // Other unknown event types are silently ignored
+}
+
+function forwardQuestionAsked(
+  mainWindow: BrowserWindow,
+  event: Record<string, unknown>,
+): void {
+  const props = event.properties as {
+    id?: string;
+    sessionID?: string;
+    questions?: Array<{ question?: string }>;
+  } | undefined;
+
+  if (!props) return;
+
+  const payload: QuestionAskedEvent = {
+    questionId: props.id ?? '',
+    question: props.questions?.[0]?.question ?? '',
+  };
+
+  mainWindow.webContents.send(OpenCodeEventChannel.QuestionAsked, payload);
 }

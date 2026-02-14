@@ -19,6 +19,11 @@ export interface PermissionRequest {
   params: Record<string, unknown>;
 }
 
+export interface QuestionRequest {
+  questionId: string;
+  question: string;
+}
+
 interface OpenCodeState {
   // Server connection status
   serverStatus: OpenCodeServerStatus;
@@ -48,6 +53,9 @@ interface OpenCodeState {
   // Permission queue (Story 9.1)
   permissionQueue: PermissionRequest[];
 
+  // Question queue (Story 9.2)
+  questionQueue: QuestionRequest[];
+
   // Actions
   setServerReady: (port: number) => void;
   setServerRestarting: (retryCount: number) => void;
@@ -75,6 +83,10 @@ interface OpenCodeState {
   // Permission queue actions (Story 9.1)
   enqueuePermission: (request: PermissionRequest) => void;
   dequeuePermission: () => void;
+
+  // Question queue actions (Story 9.2)
+  enqueueQuestion: (request: QuestionRequest) => void;
+  dequeueQuestion: () => void;
 }
 
 export const useOpenCodeStore = create<OpenCodeState>((set) => ({
@@ -105,6 +117,9 @@ export const useOpenCodeStore = create<OpenCodeState>((set) => ({
 
   // Permission queue (Story 9.1)
   permissionQueue: [],
+
+  // Question queue (Story 9.2)
+  questionQueue: [],
 
   setServerReady: (port: number) =>
     set({
@@ -188,6 +203,7 @@ export const useOpenCodeStore = create<OpenCodeState>((set) => ({
       sessionLaunching: false,
       sessionError: null,
       permissionQueue: [],
+      questionQueue: [],
     }),
 
   setSessionLaunching: (launching: boolean) =>
@@ -290,6 +306,17 @@ export const useOpenCodeStore = create<OpenCodeState>((set) => ({
     set((state) => ({
       permissionQueue: state.permissionQueue.slice(1),
     })),
+
+  // Question queue actions (Story 9.2)
+  enqueueQuestion: (request: QuestionRequest) =>
+    set((state) => ({
+      questionQueue: [...state.questionQueue, request],
+    })),
+
+  dequeueQuestion: () =>
+    set((state) => ({
+      questionQueue: state.questionQueue.slice(1),
+    })),
 }));
 
 // Initialize IPC listeners
@@ -388,3 +415,6 @@ export const useSessionStatus = () =>
 
 export const useCurrentPermission = () =>
   useOpenCodeStore((state) => state.permissionQueue[0] ?? null);
+
+export const useCurrentQuestion = () =>
+  useOpenCodeStore((state) => state.questionQueue[0] ?? null);

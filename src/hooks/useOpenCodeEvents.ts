@@ -6,6 +6,7 @@ import type {
   SessionStatusEvent,
   OpenCodeErrorEvent,
   PermissionAskedEvent,
+  QuestionAskedEvent,
 } from '../types/ipc';
 import type { Message, MessagePart } from '../types/message';
 
@@ -81,11 +82,20 @@ export function useOpenCodeEvents() {
       });
     };
 
+    const handleQuestionAsked = (payload: QuestionAskedEvent) => {
+      console.log('[useOpenCodeEvents] Question asked:', payload);
+      useOpenCodeStore.getState().enqueueQuestion({
+        questionId: payload.questionId,
+        question: payload.question,
+      });
+    };
+
     const unsubMessageUpdated = window.opencode.onMessageUpdated(handleMessageUpdated);
     const unsubPartUpdated = window.opencode.onPartUpdated(handlePartUpdated);
     const unsubSessionStatus = window.opencode.onSessionStatus(handleSessionStatus);
     const unsubError = window.opencode.onError(handleError);
     const unsubPermission = window.opencode.onPermissionAsked(handlePermissionAsked);
+    const unsubQuestion = window.opencode.onQuestionAsked(handleQuestionAsked);
 
     return () => {
       console.log('[useOpenCodeEvents] Unsubscribing from OpenCode events');
@@ -94,6 +104,7 @@ export function useOpenCodeEvents() {
       unsubSessionStatus();
       unsubError();
       unsubPermission();
+      unsubQuestion();
     };
   }, [activeSessionId]);
 }
