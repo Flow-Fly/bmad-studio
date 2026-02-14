@@ -18,6 +18,7 @@ interface AppShellProps {
 
 export function AppShell({ hasProject, onProjectOpened }: AppShellProps) {
   const [activeMode, setActiveMode] = useState<AppMode>('dashboard');
+  const [showCreateModal, setShowCreateModal] = useState(false);
   const hasBackendError = useHasError();
   const activeProjectName = useProjectStore((s) => s.activeProjectName);
   const prevProjectRef = useRef(activeProjectName);
@@ -29,6 +30,21 @@ export function AppShell({ hasProject, onProjectOpened }: AppShellProps) {
       setActiveMode('dashboard');
     }
     prevProjectRef.current = activeProjectName;
+  }, [activeProjectName]);
+
+  // Cmd+N / Ctrl+N keyboard shortcut to open stream creation modal
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'n') {
+        if (activeProjectName) {
+          e.preventDefault();
+          setActiveMode('dashboard');
+          setShowCreateModal(true);
+        }
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
   }, [activeProjectName]);
 
   const handleNavigateToStream = useCallback((streamName: string) => {
@@ -56,7 +72,11 @@ export function AppShell({ hasProject, onProjectOpened }: AppShellProps) {
             </div>
           )}
           {activeMode === 'dashboard' && (
-            <Dashboard onNavigateToStream={handleNavigateToStream} />
+            <Dashboard
+              onNavigateToStream={handleNavigateToStream}
+              showCreateModal={showCreateModal}
+              onCreateModalChange={setShowCreateModal}
+            />
           )}
           {activeMode === 'stream' && <StreamDetail />}
           {activeMode === 'settings' && <SettingsPanel />}

@@ -1,10 +1,11 @@
 import { useMemo } from 'react';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, Plus } from 'lucide-react';
 
 import type { RegistryEntry } from '@/types/registry';
 import type { Stream } from '@/types/stream';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { StreamCard } from '@/components/streams/StreamCard';
 
 interface ProjectOverviewProps {
@@ -13,6 +14,7 @@ interface ProjectOverviewProps {
   isActive: boolean;
   onSelect: () => void;
   onNavigateToStream: (streamName: string) => void;
+  onCreateStream: () => void;
   activeStreamId: string | null;
 }
 
@@ -22,6 +24,7 @@ export function ProjectOverview({
   isActive,
   onSelect,
   onNavigateToStream,
+  onCreateStream,
   activeStreamId,
 }: ProjectOverviewProps) {
   const activeStreams = useMemo(
@@ -77,15 +80,28 @@ export function ProjectOverview({
               onClick={() => onNavigateToStream(stream.name)}
             />
           ))}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="mt-1 self-start"
+            onClick={onCreateStream}
+          >
+            <Plus className="h-3.5 w-3.5" />
+            New Stream
+          </Button>
         </div>
       )}
 
       {/* Active project with no streams */}
       {isActive && activeStreams.length === 0 && (
-        <div className="border-t border-surface-border px-4 py-4 text-center">
+        <div className="flex flex-col items-center gap-2 border-t border-surface-border px-4 py-4">
           <p className="text-[length:var(--text-sm)] text-interactive-muted">
             No active streams
           </p>
+          <Button variant="ghost" size="sm" onClick={onCreateStream}>
+            <Plus className="h-3.5 w-3.5" />
+            New Stream
+          </Button>
         </div>
       )}
     </div>
