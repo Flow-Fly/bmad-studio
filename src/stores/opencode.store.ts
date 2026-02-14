@@ -12,6 +12,13 @@ export type OpenCodeServerStatus =
 
 export type SessionStatus = 'idle' | 'busy';
 
+export interface PermissionRequest {
+  sessionId: string;
+  permissionId: string;
+  tool: string;
+  params: Record<string, unknown>;
+}
+
 interface OpenCodeState {
   // Server connection status
   serverStatus: OpenCodeServerStatus;
@@ -38,6 +45,9 @@ interface OpenCodeState {
   messages: Message[];
   sessionStatus: SessionStatus;
 
+  // Permission queue (Story 9.1)
+  permissionQueue: PermissionRequest[];
+
   // Actions
   setServerReady: (port: number) => void;
   setServerRestarting: (retryCount: number) => void;
@@ -61,6 +71,10 @@ interface OpenCodeState {
   upsertPart: (messageId: string, partId: string, partData: MessagePart) => void;
   setSessionStatus: (status: SessionStatus) => void;
   clearMessages: () => void;
+
+  // Permission queue actions (Story 9.1)
+  enqueuePermission: (request: PermissionRequest) => void;
+  dequeuePermission: () => void;
 }
 
 export const useOpenCodeStore = create<OpenCodeState>((set) => ({
@@ -88,6 +102,9 @@ export const useOpenCodeStore = create<OpenCodeState>((set) => ({
   // Message management (Story 8.1)
   messages: [],
   sessionStatus: 'idle',
+
+  // Permission queue (Story 9.1)
+  permissionQueue: [],
 
   setServerReady: (port: number) =>
     set({
@@ -170,6 +187,7 @@ export const useOpenCodeStore = create<OpenCodeState>((set) => ({
       activeStreamId: null,
       sessionLaunching: false,
       sessionError: null,
+      permissionQueue: [],
     }),
 
   setSessionLaunching: (launching: boolean) =>
@@ -261,6 +279,17 @@ export const useOpenCodeStore = create<OpenCodeState>((set) => ({
 
   clearMessages: () =>
     set({ messages: [], sessionStatus: 'idle' }),
+
+  // Permission queue actions (Story 9.1)
+  enqueuePermission: (request: PermissionRequest) =>
+    set((state) => ({
+      permissionQueue: [...state.permissionQueue, request],
+    })),
+
+  dequeuePermission: () =>
+    set((state) => ({
+      permissionQueue: state.permissionQueue.slice(1),
+    })),
 }));
 
 // Initialize IPC listeners
@@ -356,3 +385,6 @@ export const useMessages = () =>
 
 export const useSessionStatus = () =>
   useOpenCodeStore((state) => state.sessionStatus);
+
+export const useCurrentPermission = () =>
+  useOpenCodeStore((state) => state.permissionQueue[0] ?? null);
