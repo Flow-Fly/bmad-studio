@@ -58,6 +58,17 @@ export interface OpenCodeRedetectResult {
   error?: string;
 }
 
+export interface ValidateProviderResult {
+  success: boolean;
+  error?: string;
+  models?: string[];
+}
+
+export interface WriteConfigResult {
+  success: boolean;
+  error?: string;
+}
+
 export interface OpenCodeAPI {
   // Server lifecycle (from Epic 6)
   onServerReady: (callback: (data: { port: number }) => void) => () => void;
@@ -75,6 +86,19 @@ export interface OpenCodeAPI {
     version?: string;
     path?: string;
   }>;
+
+  // Provider configuration (from Story 11.2)
+  validateProvider: (opts: {
+    provider: string;
+    apiKey: string;
+    endpoint?: string;
+  }) => Promise<ValidateProviderResult>;
+  writeConfig: (opts: {
+    provider: string;
+    apiKey: string;
+    endpoint?: string;
+    models?: string[];
+  }) => Promise<WriteConfigResult>;
 
   // Session operations (from Story 7.1)
   createSession: (opts: CreateSessionRequest) => Promise<CreateSessionResponse>;

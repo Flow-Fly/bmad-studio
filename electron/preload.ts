@@ -85,6 +85,21 @@ contextBridge.exposeInMainWorld('opencode', {
     error?: string;
   }> => ipcRenderer.invoke('opencode:redetect'),
 
+  validateProvider: (opts: {
+    provider: string;
+    apiKey: string;
+    endpoint?: string;
+  }): Promise<{ success: boolean; error?: string; models?: string[] }> =>
+    ipcRenderer.invoke('opencode:validate-provider', opts),
+
+  writeConfig: (opts: {
+    provider: string;
+    apiKey: string;
+    endpoint?: string;
+    models?: string[];
+  }): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke('opencode:write-config', opts),
+
   getStatus: (): Promise<{
     installed: boolean;
     configured: boolean;

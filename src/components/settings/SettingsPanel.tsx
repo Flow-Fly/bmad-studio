@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { OpenCodeSection } from './OpenCodeSection';
+import { ProviderSetupSection } from './ProviderSetupSection';
 import { PreferencesSection } from './PreferencesSection';
 import { AppInfoSection } from './AppInfoSection';
 import { useSettingsStore } from '../../stores/settings.store';
@@ -24,6 +25,7 @@ export function SettingsPanel() {
         </div>
 
         <OpenCodeSection />
+        <ProviderSetupSection />
         <PreferencesSection />
         <AppInfoSection />
       </div>
