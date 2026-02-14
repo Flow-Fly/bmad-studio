@@ -7,6 +7,7 @@ import { cn } from '../../lib/utils';
 import { useOpenCodeStore } from '../../stores/opencode.store';
 import { useProjectStore } from '../../stores/project.store';
 import { useStreamStore } from '../../stores/stream.store';
+import { useIsOffline } from '../../stores/connection.store';
 import { WORKFLOW_SKILL_MAP, launchWorkflow } from '../../services/opencode.service';
 
 interface WorkflowActionPopoverProps {
@@ -40,12 +41,17 @@ export function WorkflowActionPopover({
   const streams = useStreamStore((state) => state.streams);
   const activeStreamId = useStreamStore((state) => state.activeStreamId);
 
+  const isOffline = useIsOffline();
+  const providers = useOpenCodeStore((state) => state.providers);
+
   const activeStream = streams.find((s) => s.name === activeStreamId);
+
+  const hasLocalModels = providers.some((p) => p.name === 'ollama' && p.configured);
 
   const isServerConnecting =
     serverStatus === 'connecting' || serverStatus === 'restarting';
 
-  const canLaunch = serverStatus === 'ready' && !sessionLaunching && !!project && !!activeStream;
+  const canLaunch = serverStatus === 'ready' && !sessionLaunching && !!project && !!activeStream && !isOffline;
 
   const buttonText = sessionLaunching
     ? 'Launching...'
@@ -54,6 +60,9 @@ export function WorkflowActionPopover({
       : 'Launch Workflow';
 
   function getButtonTooltip(): string | undefined {
+    if (isOffline) {
+      return 'Requires internet connection for cloud AI providers';
+    }
     if (sessionLaunching) {
       return 'Creating OpenCode session...';
     }
@@ -165,6 +174,14 @@ export function WorkflowActionPopover({
               </button>
             )}
           </div>
+
+          {/* Offline status message */}
+          {isOffline && (
+            <p className="text-[length:var(--text-xs)] text-warning">
+              Requires internet connection for cloud AI providers
+              {hasLocalModels ? '. Local models (Ollama) may still work.' : ''}
+            </p>
+          )}
 
           {/* Server status messages */}
           {serverStatus === 'not-installed' && (
