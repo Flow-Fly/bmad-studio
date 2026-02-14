@@ -36,6 +36,8 @@ func (h *StreamArtifactsHandler) ListArtifacts(w http.ResponseWriter, r *http.Re
 }
 
 // ReadArtifact handles GET /projects/:id/streams/:sid/artifacts/*
+// If the path resolves to a directory, returns a JSON listing of its contents.
+// If the path resolves to a file, returns the file content as text/plain.
 func (h *StreamArtifactsHandler) ReadArtifact(w http.ResponseWriter, r *http.Request) {
 	projectName := chi.URLParam(r, "id")
 	streamName := extractStreamName(w, projectName, chi.URLParam(r, "sid"))
@@ -49,6 +51,15 @@ func (h *StreamArtifactsHandler) ReadArtifact(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	// Try to list directory contents first; if it fails because
+	// the path is not a directory, fall through to reading file content.
+	dirContents, err := h.artifactService.ListDirectoryContents(projectName, streamName, artifactPath)
+	if err == nil {
+		response.WriteJSON(w, http.StatusOK, dirContents)
+		return
+	}
+
+	// Not a directory — read as file content
 	content, err := h.artifactService.ReadArtifact(projectName, streamName, artifactPath)
 	if err != nil {
 		writeStreamServiceError(w, err)

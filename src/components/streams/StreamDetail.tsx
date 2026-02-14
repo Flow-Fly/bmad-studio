@@ -7,7 +7,7 @@ import { useActiveSession } from '@/stores/opencode.store';
 import { Badge } from '@/components/ui/badge';
 import { PhaseDotIndicator } from '@/components/streams/PhaseDotIndicator';
 import { PhaseGraphContainer } from '@/components/phase-graph/PhaseGraphContainer';
-import { ArtifactViewer } from '@/components/artifacts/ArtifactViewer';
+import { ArtifactPanel } from '@/components/artifacts/ArtifactPanel';
 import { ConversationHeader } from '@/components/opencode/ConversationHeader';
 import { ChatPanel } from '@/components/opencode/ChatPanel';
 import { useOpenCodeEvents } from '@/hooks/useOpenCodeEvents';
@@ -115,10 +115,10 @@ export function StreamDetail() {
         {view === 'graph' && (
           <PhaseGraphContainer onNodeClick={handleNodeClick} />
         )}
-        {view === 'artifact' && artifactPath && (
-          <ArtifactViewer
-            artifactPath={artifactPath}
-            phase={artifactPhase}
+        {view === 'artifact' && (
+          <ArtifactPanel
+            initialArtifactPath={artifactPath}
+            initialPhase={artifactPhase}
             onBack={handleBackToGraph}
           />
         )}

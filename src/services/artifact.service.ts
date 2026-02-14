@@ -25,3 +25,14 @@ export async function readArtifact(
   }
   return response.text();
 }
+
+export async function listDirectoryArtifacts(
+  projectId: string,
+  streamId: string,
+  dirPath: string,
+): Promise<ArtifactInfo[]> {
+  const compositeId = `${projectId}-${streamId}`;
+  return apiFetch<ArtifactInfo[]>(
+    `${API_BASE}/projects/${encodeURIComponent(projectId)}/streams/${encodeURIComponent(compositeId)}/artifacts/${dirPath}`,
+  );
+}
