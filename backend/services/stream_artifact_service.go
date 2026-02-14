@@ -39,60 +39,7 @@ func (s *StreamArtifactService) ListArtifacts(projectName, streamName string) ([
 		return nil, fmt.Errorf("failed to read stream directory: %w", err)
 	}
 
-	var artifacts []types.StreamArtifactInfo
-
-	for _, entry := range entries {
-		name := entry.Name()
-
-		if isExcluded(name) {
-			continue
-		}
-
-		info, err := entry.Info()
-		if err != nil {
-			continue // skip entries we can't stat
-		}
-
-		entryType := "file"
-		if entry.IsDir() {
-			entryType = "directory"
-		}
-
-		// For directories, append "/" to match DerivePhase patterns like "epics/"
-		phaseName := name
-		if entry.IsDir() {
-			phaseName = name + "/"
-		}
-		phase := DerivePhase(phaseName)
-
-		artifact := types.StreamArtifactInfo{
-			Filename:   name,
-			Phase:      phase,
-			Type:       entryType,
-			ModifiedAt: info.ModTime().UTC(),
-			Size:       info.Size(),
-		}
-
-		if entry.IsDir() {
-			artifact.Size = 0 // directories report 0 size per spec
-		}
-
-		artifacts = append(artifacts, artifact)
-	}
-
-	// Sort: directories first, then files; alphabetical within each group
-	sort.Slice(artifacts, func(i, j int) bool {
-		if artifacts[i].Type != artifacts[j].Type {
-			return artifacts[i].Type == "directory"
-		}
-		return artifacts[i].Filename < artifacts[j].Filename
-	})
-
-	if artifacts == nil {
-		artifacts = []types.StreamArtifactInfo{}
-	}
-
-	return artifacts, nil
+	return buildArtifactList(entries, ""), nil
 }
 
 // ReadArtifact reads the content of an artifact file within a stream directory.
@@ -136,7 +83,6 @@ func (s *StreamArtifactService) ReadArtifact(projectName, streamName, artifactPa
 func (s *StreamArtifactService) ListDirectoryContents(projectName, streamName, dirPath string) ([]types.StreamArtifactInfo, error) {
 	streamDir := s.streamStore.StreamDir(projectName, streamName)
 
-	// Verify stream directory exists
 	if _, err := os.Stat(streamDir); os.IsNotExist(err) {
 		return nil, fmt.Errorf("stream not found: %s-%s", projectName, streamName)
 	}
@@ -163,43 +109,48 @@ func (s *StreamArtifactService) ListDirectoryContents(projectName, streamName, d
 		return nil, fmt.Errorf("failed to read directory: %w", err)
 	}
 
-	// Derive phase from the parent directory name
-	phase := DerivePhase(dirPath + "/")
+	return buildArtifactList(entries, dirPath+"/"), nil
+}
 
+// buildArtifactList converts directory entries into a sorted artifact list.
+// When phasePrefix is empty, each entry derives its own phase; otherwise the
+// prefix (e.g. "prd/") is used as the phase source for all entries.
+func buildArtifactList(entries []os.DirEntry, phasePrefix string) []types.StreamArtifactInfo {
 	var artifacts []types.StreamArtifactInfo
+
 	for _, entry := range entries {
 		name := entry.Name()
-
 		if isExcluded(name) {
 			continue
 		}
 
-		entryInfo, err := entry.Info()
+		info, err := entry.Info()
 		if err != nil {
 			continue
 		}
 
 		entryType := "file"
+		size := info.Size()
+		phaseName := name
 		if entry.IsDir() {
 			entryType = "directory"
+			size = 0
+			phaseName = name + "/"
 		}
 
-		artifact := types.StreamArtifactInfo{
+		if phasePrefix != "" {
+			phaseName = phasePrefix
+		}
+
+		artifacts = append(artifacts, types.StreamArtifactInfo{
 			Filename:   name,
-			Phase:      phase,
+			Phase:      DerivePhase(phaseName),
 			Type:       entryType,
-			ModifiedAt: entryInfo.ModTime().UTC(),
-			Size:       entryInfo.Size(),
-		}
-
-		if entry.IsDir() {
-			artifact.Size = 0
-		}
-
-		artifacts = append(artifacts, artifact)
+			ModifiedAt: info.ModTime().UTC(),
+			Size:       size,
+		})
 	}
 
-	// Sort: directories first, then files; alphabetical within each group
 	sort.Slice(artifacts, func(i, j int) bool {
 		if artifacts[i].Type != artifacts[j].Type {
 			return artifacts[i].Type == "directory"
@@ -211,7 +162,7 @@ func (s *StreamArtifactService) ListDirectoryContents(projectName, streamName, d
 		artifacts = []types.StreamArtifactInfo{}
 	}
 
-	return artifacts, nil
+	return artifacts
 }
 
 // isExcluded checks whether a filename should be excluded from artifact listings.

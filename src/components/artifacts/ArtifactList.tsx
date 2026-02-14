@@ -21,6 +21,20 @@ interface ArtifactListProps {
 }
 
 /**
+ * Returns the base filename and (if applicable) the directory-name variant
+ * for an artifact path. Used to map both "prd.md" and "prd" keys.
+ */
+function artifactKeys(path: string): string[] {
+  const baseName = path.split('/').pop() ?? path;
+  const keys = [baseName];
+  const dirName = baseName.replace(/\.md$/, '');
+  if (dirName !== baseName) {
+    keys.push(dirName);
+  }
+  return keys;
+}
+
+/**
  * Map artifact filename to the agent that produced it by matching against
  * workflow output paths and agent assignments from phase data.
  */
@@ -36,25 +50,14 @@ function useArtifactAgentMap(): Record<string, string> {
     for (const workflow of phase.workflows) {
       if (!workflow.agent) continue;
 
-      // Match by workflow output field
-      if (workflow.output) {
-        const baseName = workflow.output.split('/').pop() ?? workflow.output;
-        map[baseName] = workflow.agent;
-        // Also map the directory name for sharded artifacts
-        const dirName = workflow.output.replace(/\.md$/, '');
-        if (dirName !== workflow.output) {
-          map[dirName] = workflow.agent;
-        }
-      }
+      const paths = [
+        workflow.output,
+        workflowStatus.workflow_statuses[workflow.id]?.artifact_path,
+      ].filter(Boolean) as string[];
 
-      // Match by artifact_path from workflow status
-      const status = workflowStatus.workflow_statuses[workflow.id];
-      if (status?.artifact_path) {
-        const baseName = status.artifact_path.split('/').pop() ?? status.artifact_path;
-        map[baseName] = workflow.agent;
-        const dirName = status.artifact_path.replace(/\.md$/, '');
-        if (dirName !== status.artifact_path) {
-          map[dirName] = workflow.agent;
+      for (const path of paths) {
+        for (const key of artifactKeys(path)) {
+          map[key] = workflow.agent;
         }
       }
     }
@@ -73,13 +76,10 @@ function useArtifactCompletionMap(): Record<string, boolean> {
 
   const map: Record<string, boolean> = {};
 
-  for (const [, status] of Object.entries(workflowStatus.workflow_statuses)) {
+  for (const status of Object.values(workflowStatus.workflow_statuses)) {
     if (status.artifact_path) {
-      const baseName = status.artifact_path.split('/').pop() ?? status.artifact_path;
-      map[baseName] = status.is_complete;
-      const dirName = status.artifact_path.replace(/\.md$/, '');
-      if (dirName !== status.artifact_path) {
-        map[dirName] = status.is_complete;
+      for (const key of artifactKeys(status.artifact_path)) {
+        map[key] = status.is_complete;
       }
     }
   }

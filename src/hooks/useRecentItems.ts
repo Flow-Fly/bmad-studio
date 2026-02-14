@@ -1,4 +1,4 @@
-import { useCallback, useSyncExternalStore } from 'react';
+import { useSyncExternalStore } from 'react';
 
 const STORAGE_KEY = 'bmad-studio-recent-items';
 const MAX_ITEMS = 10;
@@ -71,7 +71,6 @@ function getSnapshot(): string {
 
 export function useRecentItems(): {
   recentItems: RecentItem[];
-  addRecent: (item: RecentItem) => void;
 } {
   const raw = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 
@@ -85,9 +84,5 @@ export function useRecentItems(): {
     }
   })();
 
-  const addRecent = useCallback((item: RecentItem) => {
-    addRecentItem(item);
-  }, []);
-
-  return { recentItems: items, addRecent };
+  return { recentItems: items };
 }

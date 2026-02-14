@@ -34,51 +34,36 @@ export function AppShell({ hasProject, onProjectOpened }: AppShellProps) {
     prevProjectRef.current = activeProjectName;
   }, [activeProjectName]);
 
-  // Cmd+N / Ctrl+N keyboard shortcut to open stream creation modal
+  // Cmd+K to toggle command palette, Cmd+N to create stream
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'n') {
-        if (activeProjectName) {
-          e.preventDefault();
-          setActiveMode('dashboard');
-          setShowCreateModal(true);
-        }
+      if (!(e.metaKey || e.ctrlKey)) return;
+
+      if (e.key === 'k') {
+        e.preventDefault();
+        setCommandPaletteOpen((prev) => !prev);
+      } else if (e.key === 'n' && activeProjectName) {
+        e.preventDefault();
+        setActiveMode('dashboard');
+        setShowCreateModal(true);
       }
     }
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [activeProjectName]);
 
-  // Cmd+K / Ctrl+K keyboard shortcut to toggle command palette
-  useEffect(() => {
-    function handleKeyDown(e: KeyboardEvent) {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-        e.preventDefault();
-        setCommandPaletteOpen((prev) => !prev);
-      }
-    }
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
-
   const handleNavigateToStream = useCallback((streamName: string) => {
     useStreamStore.getState().setActiveStream(streamName);
     setActiveMode('stream');
   }, []);
 
+  // Artifact navigation navigates to the stream; StreamDetail handles artifact state internally.
   const handleNavigateToArtifact = useCallback(
     (streamName: string, _artifactPath: string, _phase?: string) => {
-      useStreamStore.getState().setActiveStream(streamName);
-      setActiveMode('stream');
-      // StreamDetail will detect the stream change and show the graph view.
-      // Artifact navigation within a stream is handled by StreamDetail's own state.
+      handleNavigateToStream(streamName);
     },
-    [],
+    [handleNavigateToStream],
   );
-
-  const handleCloseCommandPalette = useCallback(() => {
-    setCommandPaletteOpen(false);
-  }, []);
 
   if (!hasProject) {
     return (
@@ -112,7 +97,7 @@ export function AppShell({ hasProject, onProjectOpened }: AppShellProps) {
       </TooltipProvider>
       {commandPaletteOpen && (
         <CommandPalette
-          onClose={handleCloseCommandPalette}
+          onClose={() => setCommandPaletteOpen(false)}
           onNavigateToStream={handleNavigateToStream}
           onModeChange={setActiveMode}
           onOpenCreateModal={() => setShowCreateModal(true)}
