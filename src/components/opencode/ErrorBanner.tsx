@@ -40,45 +40,52 @@ export function ErrorBanner() {
     useOpenCodeStore.getState().setSessionError(null);
   }, []);
 
-  if (!sessionError) return null;
+  if (!sessionError && !retrying) return null;
 
   return (
     <div
       className={cn(
         'flex items-start gap-3 rounded-[var(--radius-md)] border p-3',
-        'border-status-blocked/20 bg-status-blocked/10',
+        retrying && !sessionError
+          ? 'border-border-primary bg-bg-tertiary'
+          : 'border-status-blocked/20 bg-status-blocked/10',
       )}
       role="alert"
     >
-      <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-status-blocked" />
+      {retrying ? (
+        <Loader2 className="mt-0.5 h-4 w-4 shrink-0 text-text-secondary animate-spin" />
+      ) : (
+        <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-status-blocked" />
+      )}
 
       <div className="flex-1 min-w-0">
-        <p className="text-[length:var(--text-sm)] text-status-blocked">
-          {sessionError}
-        </p>
+        {retrying ? (
+          <p className="text-[length:var(--text-sm)] text-text-secondary">
+            Retrying...
+          </p>
+        ) : (
+          <p className="text-[length:var(--text-sm)] text-status-blocked">
+            {sessionError}
+          </p>
+        )}
       </div>
 
-      <div className="flex shrink-0 items-center gap-2">
-        {retrying ? (
-          <span className="flex items-center gap-1.5 text-[length:var(--text-sm)] text-text-secondary">
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            Retrying...
-          </span>
-        ) : (
-          lastUserPrompt && (
+      {!retrying && (
+        <div className="flex shrink-0 items-center gap-2">
+          {lastUserPrompt && (
             <Button variant="outline" size="sm" onClick={handleRetry}>
               Retry
             </Button>
-          )
-        )}
-        <button
-          onClick={handleDismiss}
-          className="rounded-[var(--radius-sm)] p-0.5 text-text-tertiary hover:bg-bg-tertiary hover:text-text-primary transition-colors"
-          aria-label="Dismiss error"
-        >
-          <X className="h-3.5 w-3.5" />
-        </button>
-      </div>
+          )}
+          <button
+            onClick={handleDismiss}
+            className="rounded-[var(--radius-sm)] p-0.5 text-text-tertiary hover:bg-bg-tertiary hover:text-text-primary transition-colors"
+            aria-label="Dismiss error"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
     </div>
   );
 }

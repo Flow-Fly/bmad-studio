@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { RefreshCw, CheckCircle, XCircle } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import {
@@ -25,6 +25,7 @@ export function ServerCrashBanner() {
   const { sessionId } = useActiveSession();
   const prevStatusRef = useRef<OpenCodeServerStatus>(serverStatus);
   const hadActiveSessionRef = useRef(false);
+  const [recovered, setRecovered] = useState(false);
 
   // Track whether there was an active session when the crash occurred
   useEffect(() => {
@@ -33,19 +34,24 @@ export function ServerCrashBanner() {
     }
   }, [sessionId]);
 
-  // Track previous server status to detect transitions
+  // Detect restarting -> ready transition and persist recovery state
   useEffect(() => {
+    if (prevStatusRef.current === 'restarting' && serverStatus === 'ready') {
+      setRecovered(true);
+    }
+    // Clear recovery state when a new session starts or status goes back to normal flow
+    if (serverStatus === 'connecting' || serverStatus === 'not-installed' || serverStatus === 'not-configured') {
+      setRecovered(false);
+      hadActiveSessionRef.current = false;
+    }
     prevStatusRef.current = serverStatus;
   }, [serverStatus]);
 
-  const previousStatus = prevStatusRef.current;
-  const wasRestarting = previousStatus === 'restarting';
   const isRestarting = serverStatus === 'restarting';
-  const isRecovered = wasRestarting && serverStatus === 'ready';
   const isServerError = serverStatus === 'error' && hadActiveSessionRef.current;
 
   // Only show the banner during crash-related states
-  if (!isRestarting && !isRecovered && !isServerError) {
+  if (!isRestarting && !recovered && !isServerError) {
     return null;
   }
 
@@ -67,7 +73,7 @@ export function ServerCrashBanner() {
     );
   }
 
-  if (isRecovered) {
+  if (recovered) {
     return (
       <div
         className={cn(
