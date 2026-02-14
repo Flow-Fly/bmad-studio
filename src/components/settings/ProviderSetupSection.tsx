@@ -224,35 +224,44 @@ function ProviderCard({
               </label>
               <div className="flex items-center gap-2">
                 <div className="relative flex-1">
-                  <input
-                    type={state.showKey ? 'text' : 'password'}
-                    value={
-                      state.showKey
-                        ? state.apiKey
-                        : state.apiKey
-                          ? maskApiKey(state.apiKey)
-                          : ''
-                    }
-                    onChange={(e) => {
-                      // Only update if showing full key (not masked)
-                      if (state.showKey || !state.apiKey) {
+                  {state.showKey ? (
+                    <input
+                      type="text"
+                      value={state.apiKey}
+                      onChange={(e) =>
                         setState((prev) => ({
                           ...prev,
                           apiKey: e.target.value,
                           validationResult: null,
                           saveResult: null,
-                        }));
+                        }))
                       }
-                    }}
-                    onFocus={() => {
-                      // Switch to show mode on focus if key exists to allow editing
-                      if (state.apiKey && !state.showKey) {
-                        setState((prev) => ({ ...prev, showKey: true }));
+                      placeholder={`Enter ${providerName} API key`}
+                      className="w-full rounded-md border border-border-subtle bg-surface-base px-3 py-2 text-[length:var(--text-sm)] text-interactive-default placeholder:text-interactive-muted focus:border-interactive-active focus:outline-none font-mono"
+                    />
+                  ) : (
+                    <input
+                      type="text"
+                      value={state.apiKey ? maskApiKey(state.apiKey) : ''}
+                      onFocus={() =>
+                        setState((prev) => ({ ...prev, showKey: true }))
                       }
-                    }}
-                    placeholder={`Enter ${providerName} API key`}
-                    className="w-full rounded-md border border-border-subtle bg-surface-base px-3 py-2 text-[length:var(--text-sm)] text-interactive-default placeholder:text-interactive-muted focus:border-interactive-active focus:outline-none font-mono"
-                  />
+                      readOnly={!!state.apiKey}
+                      onChange={(e) => {
+                        if (!state.apiKey) {
+                          setState((prev) => ({
+                            ...prev,
+                            apiKey: e.target.value,
+                            showKey: true,
+                            validationResult: null,
+                            saveResult: null,
+                          }));
+                        }
+                      }}
+                      placeholder={`Enter ${providerName} API key`}
+                      className="w-full rounded-md border border-border-subtle bg-surface-base px-3 py-2 text-[length:var(--text-sm)] text-interactive-default placeholder:text-interactive-muted focus:border-interactive-active focus:outline-none font-mono"
+                    />
+                  )}
                 </div>
                 <button
                   onClick={() =>
