@@ -45,13 +45,15 @@ type ProjectEntry struct {
 
 // Settings represents global application settings
 type Settings struct {
-	DefaultProvider       string                      `json:"default_provider"`
-	DefaultModel          string                      `json:"default_model"`
-	OllamaEndpoint        string                      `json:"ollama_endpoint"`
-	Providers             map[string]ProviderSettings `json:"providers"`
-	BraveSearchAPIKey     string                      `json:"braveSearchApiKey,omitempty"`
-	RecentProjects        []ProjectEntry              `json:"recent_projects,omitempty"`
-	LastActiveProjectPath string                      `json:"last_active_project_path,omitempty"`
+	DefaultProvider        string                      `json:"default_provider"`
+	DefaultModel           string                      `json:"default_model"`
+	OllamaEndpoint         string                      `json:"ollama_endpoint"`
+	Providers              map[string]ProviderSettings `json:"providers"`
+	BraveSearchAPIKey      string                      `json:"braveSearchApiKey,omitempty"`
+	RecentProjects         []ProjectEntry              `json:"recent_projects,omitempty"`
+	LastActiveProjectPath  string                      `json:"last_active_project_path,omitempty"`
+	DefaultWorktreeCreation *bool                      `json:"default_worktree_creation,omitempty"`
+	ArtifactStorePath      string                      `json:"artifact_store_path,omitempty"`
 }
 
 // Provider represents a configured LLM provider
