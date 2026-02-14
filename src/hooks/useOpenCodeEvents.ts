@@ -5,6 +5,8 @@ import type {
   PartUpdatedEvent,
   SessionStatusEvent,
   OpenCodeErrorEvent,
+  PermissionAskedEvent,
+  QuestionAskedEvent,
 } from '../types/ipc';
 import type { Message, MessagePart } from '../types/message';
 
@@ -70,10 +72,22 @@ export function useOpenCodeEvents() {
       useOpenCodeStore.getState().setSessionStatus('idle');
     };
 
+    const handlePermissionAsked = (payload: PermissionAskedEvent) => {
+      console.log('[useOpenCodeEvents] Permission asked:', payload);
+      useOpenCodeStore.getState().enqueuePermission(payload);
+    };
+
+    const handleQuestionAsked = (payload: QuestionAskedEvent) => {
+      console.log('[useOpenCodeEvents] Question asked:', payload);
+      useOpenCodeStore.getState().enqueueQuestion(payload);
+    };
+
     const unsubMessageUpdated = window.opencode.onMessageUpdated(handleMessageUpdated);
     const unsubPartUpdated = window.opencode.onPartUpdated(handlePartUpdated);
     const unsubSessionStatus = window.opencode.onSessionStatus(handleSessionStatus);
     const unsubError = window.opencode.onError(handleError);
+    const unsubPermission = window.opencode.onPermissionAsked(handlePermissionAsked);
+    const unsubQuestion = window.opencode.onQuestionAsked(handleQuestionAsked);
 
     return () => {
       console.log('[useOpenCodeEvents] Unsubscribing from OpenCode events');
@@ -81,6 +95,8 @@ export function useOpenCodeEvents() {
       unsubPartUpdated();
       unsubSessionStatus();
       unsubError();
+      unsubPermission();
+      unsubQuestion();
     };
   }, [activeSessionId]);
 }
