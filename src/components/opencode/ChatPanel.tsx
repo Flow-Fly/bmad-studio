@@ -9,6 +9,7 @@ import { MessageBlock } from './MessageBlock';
 import { ChatInput } from './ChatInput';
 import { ScrollToBottomButton } from './ScrollToBottomButton';
 import { PermissionDialog } from './PermissionDialog';
+import { QuestionDialog } from './QuestionDialog';
 import { useAutoScroll } from '../../hooks/useAutoScroll';
 
 export function ChatPanel() {
@@ -92,6 +93,7 @@ export function ChatPanel() {
       <ScrollToBottomButton isVisible={!isAtBottom} onClick={scrollToBottom} />
       <ChatInput />
       <PermissionDialog />
+      <QuestionDialog />
     </div>
   );
 }
