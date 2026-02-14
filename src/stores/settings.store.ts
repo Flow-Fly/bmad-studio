@@ -33,25 +33,8 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   clearSettingsState: () =>
     set({ settings: null, loading: false, error: null }),
 
-  fetchSettings: async () => {
-    set({ loading: true, error: null });
-    try {
-      await fetchSettingsService();
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : 'Failed to fetch settings';
-      set({ error: message, loading: false });
-    }
-  },
+  // Service functions manage loading/error state directly on the store
+  fetchSettings: () => fetchSettingsService(),
 
-  updateSettings: async (partial: Partial<Settings>) => {
-    set({ loading: true, error: null });
-    try {
-      await updateSettingsService(partial);
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : 'Failed to update settings';
-      set({ error: message, loading: false });
-    }
-  },
+  updateSettings: (partial: Partial<Settings>) => updateSettingsService(partial),
 }));

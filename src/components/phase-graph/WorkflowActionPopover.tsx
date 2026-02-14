@@ -53,11 +53,13 @@ export function WorkflowActionPopover({
 
   const canLaunch = serverStatus === 'ready' && !sessionLaunching && !!project && !!activeStream && !isOffline;
 
-  const buttonText = sessionLaunching
-    ? 'Launching...'
-    : isServerConnecting
-      ? 'Connecting to OpenCode...'
-      : 'Launch Workflow';
+  function getButtonText(): string {
+    if (sessionLaunching) return 'Launching...';
+    if (isServerConnecting) return 'Connecting to OpenCode...';
+    return 'Launch Workflow';
+  }
+
+  const buttonText = getButtonText();
 
   function getButtonTooltip(): string | undefined {
     if (isOffline) {

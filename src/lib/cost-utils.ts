@@ -5,6 +5,8 @@
  * and formatting helpers for currency and token display.
  */
 
+import type { SessionCostEntry, StreamCostSummary } from '../types/ipc';
+
 /** Per-model pricing in USD per 1M tokens. */
 export interface ModelPricing {
   inputPer1M: number;
@@ -83,4 +85,37 @@ export function formatTokenCount(count: number): string {
     return `${(count / 1_000).toFixed(1)}k`;
   }
   return `${count}`;
+}
+
+/**
+ * Aggregates an array of session cost entries into a summary.
+ * Returns null if the array is empty.
+ */
+export function aggregateCostEntries(entries: SessionCostEntry[]): StreamCostSummary | null {
+  if (entries.length === 0) return null;
+
+  let totalInputTokens = 0;
+  let totalOutputTokens = 0;
+  let totalEstimatedCost: number | null = 0;
+  const sessionIds = new Set<string>();
+
+  for (const entry of entries) {
+    totalInputTokens += entry.inputTokens;
+    totalOutputTokens += entry.outputTokens;
+    sessionIds.add(entry.sessionId);
+
+    if (entry.estimatedCost !== null && totalEstimatedCost !== null) {
+      totalEstimatedCost += entry.estimatedCost;
+    } else {
+      totalEstimatedCost = null;
+    }
+  }
+
+  return {
+    totalInputTokens,
+    totalOutputTokens,
+    totalEstimatedCost,
+    sessionCount: sessionIds.size,
+    entries,
+  };
 }

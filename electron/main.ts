@@ -501,18 +501,16 @@ function registerIPC(): void {
         config.providers = providers;
 
         // Update models list (union of all provider models)
-        const allModels: string[] = [];
+        const allModels = new Set<string>();
         for (const p of providers) {
           if (Array.isArray(p.models)) {
             for (const m of p.models as string[]) {
-              if (!allModels.includes(m)) {
-                allModels.push(m);
-              }
+              allModels.add(m);
             }
           }
         }
-        if (allModels.length > 0) {
-          config.models = allModels;
+        if (allModels.size > 0) {
+          config.models = [...allModels];
         }
 
         // Set default provider if none set

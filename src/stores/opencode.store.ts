@@ -1,7 +1,8 @@
 import { create } from 'zustand';
 import type { OpenCodeProviderConfig, OpenCodeConfigData } from '../types/window';
 import type { Message, MessagePart, IdentifiedPart } from '../types/message';
-import type { SessionCostEntry, StreamCostSummary } from '../types/ipc';
+import type { SessionCostEntry } from '../types/ipc';
+import { aggregateCostEntries } from '../lib/cost-utils';
 
 export type OpenCodeServerStatus =
   | 'not-installed'
@@ -492,33 +493,6 @@ export const useSessionCosts = () =>
  * Computes an aggregated cost summary from all session cost entries.
  * Returns null if no cost entries exist.
  */
-export function getStreamCostSummary(): StreamCostSummary | null {
-  const entries = useOpenCodeStore.getState().sessionCosts;
-  if (entries.length === 0) return null;
-
-  let totalInputTokens = 0;
-  let totalOutputTokens = 0;
-  let totalEstimatedCost: number | null = 0;
-  const sessionIds = new Set<string>();
-
-  for (const entry of entries) {
-    totalInputTokens += entry.inputTokens;
-    totalOutputTokens += entry.outputTokens;
-    sessionIds.add(entry.sessionId);
-
-    if (entry.estimatedCost !== null && totalEstimatedCost !== null) {
-      totalEstimatedCost += entry.estimatedCost;
-    } else {
-      // If any entry has unknown cost, aggregate cost becomes null
-      totalEstimatedCost = null;
-    }
-  }
-
-  return {
-    totalInputTokens,
-    totalOutputTokens,
-    totalEstimatedCost,
-    sessionCount: sessionIds.size,
-    entries,
-  };
+export function getStreamCostSummary() {
+  return aggregateCostEntries(useOpenCodeStore.getState().sessionCosts);
 }
