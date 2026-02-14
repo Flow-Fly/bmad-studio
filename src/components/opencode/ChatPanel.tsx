@@ -4,18 +4,29 @@ import {
   useMessages,
   useActiveSession,
   useSessionStatus,
+  useSessionError,
+  useSessionTimeout as useSessionTimeoutState,
+  useRetrying,
 } from '../../stores/opencode.store';
 import { MessageBlock } from './MessageBlock';
 import { ChatInput } from './ChatInput';
 import { ScrollToBottomButton } from './ScrollToBottomButton';
 import { PermissionDialog } from './PermissionDialog';
 import { QuestionDialog } from './QuestionDialog';
+import { ErrorBanner } from './ErrorBanner';
+import { TimeoutWarning } from './TimeoutWarning';
+import { ServerCrashBanner } from './ServerCrashBanner';
 import { useAutoScroll } from '../../hooks/useAutoScroll';
+import { useSessionTimeout } from '../../hooks/useSessionTimeout';
 
 export function ChatPanel() {
   const messages = useMessages();
   const { sessionId } = useActiveSession();
   const status = useSessionStatus();
+  const sessionError = useSessionError();
+  const sessionTimeout = useSessionTimeoutState();
+  const retrying = useRetrying();
+  const { waitLonger } = useSessionTimeout();
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
   // Get auto-scroll behavior with messages as dependency
@@ -74,21 +85,24 @@ export function ChatPanel() {
   return (
     <div className="relative flex h-full flex-col">
       <ScrollArea ref={scrollAreaRef} className="flex-1">
-        {messages.length === 0 ? (
-          <div className="flex h-full items-center justify-center text-interactive-muted">
-            <p>Waiting for messages...</p>
-          </div>
-        ) : (
-          <div className="flex flex-col gap-4 p-4">
-            {messages.map((message, index) => (
+        <div className="flex flex-col gap-4 p-4">
+          {messages.length === 0 ? (
+            <div className="flex h-full items-center justify-center text-interactive-muted">
+              <p>Waiting for messages...</p>
+            </div>
+          ) : (
+            messages.map((message, index) => (
               <MessageBlock
                 key={message.messageId}
                 message={message}
                 isLastAssistant={index === lastAssistantIndex}
               />
-            ))}
-          </div>
-        )}
+            ))
+          )}
+          {(sessionError || retrying) && <ErrorBanner />}
+          {sessionTimeout && <TimeoutWarning waitLonger={waitLonger} />}
+          <ServerCrashBanner />
+        </div>
       </ScrollArea>
       <ScrollToBottomButton isVisible={!isAtBottom} onClick={scrollToBottom} />
       <ChatInput />
