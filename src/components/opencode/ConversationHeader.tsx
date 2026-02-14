@@ -2,6 +2,7 @@ import { useActiveSession } from '../../stores/opencode.store';
 import { useStreamStore } from '../../stores/stream.store';
 import { Bot } from 'lucide-react';
 import { Badge } from '../ui/badge';
+import { CostSummary } from './CostSummary';
 
 export function ConversationHeader() {
   const { streamId } = useActiveSession();
@@ -26,6 +27,10 @@ export function ConversationHeader() {
             {phaseName}
           </Badge>
         </div>
+      </div>
+
+      <div className="ml-auto">
+        <CostSummary />
       </div>
     </div>
   );

@@ -7,8 +7,11 @@ import type {
   OpenCodeErrorEvent,
   PermissionAskedEvent,
   QuestionAskedEvent,
+  SessionCostEvent,
+  SessionCostEntry,
 } from '../types/ipc';
 import type { Message, MessagePart } from '../types/message';
+import { calculateCost } from '../lib/cost-utils';
 
 /**
  * Custom hook to subscribe to OpenCode IPC events and dispatch updates to the store.
@@ -82,12 +85,40 @@ export function useOpenCodeEvents() {
       useOpenCodeStore.getState().enqueueQuestion(payload);
     };
 
+    const handleSessionCost = (payload: SessionCostEvent) => {
+      console.log('[useOpenCodeEvents] Session cost:', payload);
+
+      // Use SDK-reported cost if available, otherwise calculate from pricing map
+      let estimatedCost: number | null = payload.cost;
+      if (estimatedCost === 0 || estimatedCost === undefined) {
+        estimatedCost = calculateCost(
+          payload.modelId,
+          payload.inputTokens,
+          payload.outputTokens,
+        );
+      }
+
+      const entry: SessionCostEntry = {
+        sessionId: payload.sessionId,
+        messageId: payload.messageId,
+        model: payload.modelId,
+        providerId: payload.providerId,
+        inputTokens: payload.inputTokens,
+        outputTokens: payload.outputTokens,
+        estimatedCost,
+        timestamp: Date.now(),
+      };
+
+      useOpenCodeStore.getState().addSessionCost(entry);
+    };
+
     const unsubMessageUpdated = window.opencode.onMessageUpdated(handleMessageUpdated);
     const unsubPartUpdated = window.opencode.onPartUpdated(handlePartUpdated);
     const unsubSessionStatus = window.opencode.onSessionStatus(handleSessionStatus);
     const unsubError = window.opencode.onError(handleError);
     const unsubPermission = window.opencode.onPermissionAsked(handlePermissionAsked);
     const unsubQuestion = window.opencode.onQuestionAsked(handleQuestionAsked);
+    const unsubSessionCost = window.opencode.onSessionCost?.(handleSessionCost);
 
     return () => {
       console.log('[useOpenCodeEvents] Unsubscribing from OpenCode events');
@@ -97,6 +128,7 @@ export function useOpenCodeEvents() {
       unsubError();
       unsubPermission();
       unsubQuestion();
+      unsubSessionCost?.();
     };
   }, [activeSessionId]);
 }

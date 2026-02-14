@@ -15,6 +15,7 @@ import type {
   PermissionAskedEvent,
   QuestionAskedEvent,
   OpenCodeErrorEvent,
+  SessionCostEvent,
 } from './ipc';
 
 export interface ElectronAPI {
@@ -117,6 +118,7 @@ export interface OpenCodeAPI {
   onPermissionAsked: (callback: (data: PermissionAskedEvent) => void) => () => void;
   onQuestionAsked: (callback: (data: QuestionAskedEvent) => void) => () => void;
   onError: (callback: (data: OpenCodeErrorEvent) => void) => () => void;
+  onSessionCost: (callback: (data: SessionCostEvent) => void) => () => void;
 }
 
 declare global {
