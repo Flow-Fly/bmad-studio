@@ -1,9 +1,11 @@
 import { useMemo } from 'react';
-import { ChevronRight, Plus } from 'lucide-react';
+import { ChevronRight, Coins, Plus } from 'lucide-react';
 
 import type { RegistryEntry } from '@/types/registry';
 import type { Stream } from '@/types/stream';
 import { cn } from '@/lib/utils';
+import { formatCost } from '@/lib/cost-utils';
+import { useSessionCosts } from '@/stores/opencode.store';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { StreamCard } from '@/components/streams/StreamCard';
@@ -35,6 +37,26 @@ export function ProjectOverview({
     [streams],
   );
 
+  const sessionCosts = useSessionCosts();
+
+  const costSummary = useMemo(() => {
+    if (sessionCosts.length === 0) return null;
+
+    let totalCost: number | null = 0;
+    const sessionIds = new Set<string>();
+
+    for (const entry of sessionCosts) {
+      sessionIds.add(entry.sessionId);
+      if (entry.estimatedCost !== null && totalCost !== null) {
+        totalCost += entry.estimatedCost;
+      } else {
+        totalCost = null;
+      }
+    }
+
+    return { totalCost, sessionCount: sessionIds.size };
+  }, [sessionCosts]);
+
   return (
     <div
       className={cn(
@@ -63,6 +85,13 @@ export function ProjectOverview({
           <p className="mt-0.5 truncate text-[length:var(--text-xs)] text-interactive-muted">
             {project.repoPath}
           </p>
+          {costSummary && costSummary.totalCost !== null && (
+            <p className="mt-0.5 flex items-center gap-1 text-[length:var(--text-xs)] text-interactive-muted">
+              <Coins className="h-3 w-3" />
+              ~{formatCost(costSummary.totalCost)} across {costSummary.sessionCount}{' '}
+              {costSummary.sessionCount === 1 ? 'session' : 'sessions'}
+            </p>
+          )}
         </div>
         <Badge variant="secondary" className="shrink-0">
           {activeStreams.length} {activeStreams.length === 1 ? 'stream' : 'streams'}

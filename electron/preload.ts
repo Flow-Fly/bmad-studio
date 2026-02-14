@@ -174,4 +174,16 @@ contextBridge.exposeInMainWorld('opencode', {
 
   onError: (callback: (data: { sessionId?: string; code: string; message: string }) => void) =>
     onIpcEvent('opencode:error', callback),
+
+  onSessionCost: (
+    callback: (data: {
+      sessionId: string;
+      messageId: string;
+      modelId: string;
+      providerId: string;
+      inputTokens: number;
+      outputTokens: number;
+      cost: number;
+    }) => void
+  ) => onIpcEvent('opencode:session-cost', callback),
 });
