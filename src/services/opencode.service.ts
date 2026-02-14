@@ -1,6 +1,7 @@
 import { listArtifacts } from './artifact.service';
 import type { ArtifactInfo } from '../types/artifact';
 import type { IpcErrorResponse, SendPromptResponse } from '../types/ipc';
+import { useOpenCodeStore } from '../stores/opencode.store';
 
 /**
  * Workflow-to-skill command mapping.
@@ -153,6 +154,9 @@ export async function launchWorkflow(
         '[opencode.service] Prompt send failed:',
         sendResponse.message,
       );
+    } else {
+      // Store prompt text for potential retry (Story 9.3)
+      useOpenCodeStore.getState().setLastUserPrompt(promptText);
     }
   } catch (err) {
     // Session was created but prompt failed -- log error
@@ -183,5 +187,44 @@ export async function sendChatMessage(
     );
   }
 
+  // Store prompt text for potential retry (Story 9.3)
+  useOpenCodeStore.getState().setLastUserPrompt(text);
+  // Clear any previous session error on successful send
+  useOpenCodeStore.getState().setSessionError(null);
+
   return response as SendPromptResponse;
+}
+
+/**
+ * Retries the last user prompt on a session error.
+ *
+ * Reads the stored `lastUserPrompt` from the store and resends it
+ * using `sendChatMessage`. Manages the `retrying` flag on the store
+ * for UI indication.
+ *
+ * @throws Error if no last prompt is available or if the retry send fails
+ */
+export async function retryLastPrompt(
+  sessionId: string,
+): Promise<void> {
+  const store = useOpenCodeStore.getState();
+  const lastPrompt = store.lastUserPrompt;
+
+  if (!lastPrompt) {
+    throw new Error('No previous prompt available for retry');
+  }
+
+  store.setRetrying(true);
+  store.setSessionError(null);
+
+  try {
+    await sendChatMessage(sessionId, lastPrompt);
+    store.setRetrying(false);
+  } catch (err) {
+    store.setRetrying(false);
+    store.setSessionError(
+      err instanceof Error ? err.message : 'Retry failed',
+    );
+    throw err;
+  }
 }

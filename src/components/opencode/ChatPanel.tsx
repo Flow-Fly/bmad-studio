@@ -4,18 +4,27 @@ import {
   useMessages,
   useActiveSession,
   useSessionStatus,
+  useSessionError,
+  useSessionTimeout as useSessionTimeoutState,
 } from '../../stores/opencode.store';
 import { MessageBlock } from './MessageBlock';
 import { ChatInput } from './ChatInput';
 import { ScrollToBottomButton } from './ScrollToBottomButton';
 import { PermissionDialog } from './PermissionDialog';
 import { QuestionDialog } from './QuestionDialog';
+import { ErrorBanner } from './ErrorBanner';
+import { TimeoutWarning } from './TimeoutWarning';
+import { ServerCrashBanner } from './ServerCrashBanner';
 import { useAutoScroll } from '../../hooks/useAutoScroll';
+import { useSessionTimeout } from '../../hooks/useSessionTimeout';
 
 export function ChatPanel() {
   const messages = useMessages();
   const { sessionId } = useActiveSession();
   const status = useSessionStatus();
+  const sessionError = useSessionError();
+  const sessionTimeout = useSessionTimeoutState();
+  const { waitLonger } = useSessionTimeout();
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
   // Get auto-scroll behavior with messages as dependency
@@ -87,6 +96,9 @@ export function ChatPanel() {
                 isLastAssistant={index === lastAssistantIndex}
               />
             ))}
+            {sessionError && <ErrorBanner />}
+            {sessionTimeout && <TimeoutWarning waitLonger={waitLonger} />}
+            <ServerCrashBanner />
           </div>
         )}
       </ScrollArea>

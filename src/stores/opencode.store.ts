@@ -46,6 +46,11 @@ interface OpenCodeState {
   sessionLaunching: boolean;
   sessionError: string | null;
 
+  // Error recovery & timeout (Story 9.3)
+  lastUserPrompt: string | null;
+  sessionTimeout: boolean;
+  retrying: boolean;
+
   // Message management (Story 8.1)
   messages: Message[];
   sessionStatus: SessionStatus;
@@ -73,6 +78,11 @@ interface OpenCodeState {
   clearActiveSession: () => void;
   setSessionLaunching: (launching: boolean) => void;
   setSessionError: (error: string | null) => void;
+
+  // Error recovery & timeout actions (Story 9.3)
+  setLastUserPrompt: (prompt: string | null) => void;
+  setSessionTimeout: (timeout: boolean) => void;
+  setRetrying: (retrying: boolean) => void;
 
   // Message management actions (Story 8.1)
   upsertMessage: (message: Message) => void;
@@ -110,6 +120,11 @@ export const useOpenCodeStore = create<OpenCodeState>((set) => ({
   activeStreamId: null,
   sessionLaunching: false,
   sessionError: null,
+
+  // Error recovery & timeout (Story 9.3)
+  lastUserPrompt: null,
+  sessionTimeout: false,
+  retrying: false,
 
   // Message management (Story 8.1)
   messages: [],
@@ -202,6 +217,9 @@ export const useOpenCodeStore = create<OpenCodeState>((set) => ({
       activeStreamId: null,
       sessionLaunching: false,
       sessionError: null,
+      lastUserPrompt: null,
+      sessionTimeout: false,
+      retrying: false,
       permissionQueue: [],
       questionQueue: [],
     }),
@@ -211,6 +229,16 @@ export const useOpenCodeStore = create<OpenCodeState>((set) => ({
 
   setSessionError: (error: string | null) =>
     set({ sessionError: error, sessionLaunching: false }),
+
+  // Error recovery & timeout actions (Story 9.3)
+  setLastUserPrompt: (prompt: string | null) =>
+    set({ lastUserPrompt: prompt }),
+
+  setSessionTimeout: (timeout: boolean) =>
+    set({ sessionTimeout: timeout }),
+
+  setRetrying: (retrying: boolean) =>
+    set({ retrying }),
 
   redetectOpenCode: async () => {
     try {
@@ -291,7 +319,10 @@ export const useOpenCodeStore = create<OpenCodeState>((set) => ({
     }),
 
   setSessionStatus: (status: SessionStatus) =>
-    set({ sessionStatus: status }),
+    set({
+      sessionStatus: status,
+      ...(status === 'busy' ? { sessionTimeout: false } : {}),
+    }),
 
   clearMessages: () =>
     set({ messages: [], sessionStatus: 'idle' }),
@@ -418,3 +449,16 @@ export const useCurrentPermission = () =>
 
 export const useCurrentQuestion = () =>
   useOpenCodeStore((state) => state.questionQueue[0] ?? null);
+
+// Error recovery & timeout selectors (Story 9.3)
+export const useLastUserPrompt = () =>
+  useOpenCodeStore((state) => state.lastUserPrompt);
+
+export const useSessionTimeout = () =>
+  useOpenCodeStore((state) => state.sessionTimeout);
+
+export const useRetrying = () =>
+  useOpenCodeStore((state) => state.retrying);
+
+export const useServerStatus = () =>
+  useOpenCodeStore((state) => state.serverStatus);
