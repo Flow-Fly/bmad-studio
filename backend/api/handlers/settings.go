@@ -76,6 +76,12 @@ func (h *SettingsHandler) UpdateSettings(w http.ResponseWriter, r *http.Request)
 				current.Providers[k] = v
 			}
 		}
+		if req.DefaultWorktreeCreation != nil {
+			current.DefaultWorktreeCreation = req.DefaultWorktreeCreation
+		}
+		if req.ArtifactStorePath != "" {
+			current.ArtifactStorePath = req.ArtifactStorePath
+		}
 		result = *current
 	})
 	if err != nil {

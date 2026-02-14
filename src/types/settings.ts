@@ -6,6 +6,8 @@ export interface Settings {
   braveSearchApiKey?: string;
   recent_projects?: ProjectEntry[];
   last_active_project_path?: string;
+  default_worktree_creation?: boolean;
+  artifact_store_path?: string;
 }
 
 export interface ProviderConfig {

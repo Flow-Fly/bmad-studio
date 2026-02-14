@@ -29,6 +29,7 @@ func NewConfigStoreWithPath(path string) *ConfigStore {
 
 // DefaultSettings returns the default settings used when no config file exists.
 func DefaultSettings() types.Settings {
+	defaultWorktree := true
 	return types.Settings{
 		DefaultProvider: "claude",
 		DefaultModel:    "claude-sonnet-4-5-20250929",
@@ -39,6 +40,8 @@ func DefaultSettings() types.Settings {
 			"ollama": {Enabled: false, Endpoint: "http://localhost:11434"},
 			"gemini": {Enabled: false},
 		},
+		DefaultWorktreeCreation: &defaultWorktree,
+		ArtifactStorePath:       "~/.bmad-studio",
 	}
 }
 

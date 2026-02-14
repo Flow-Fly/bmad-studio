@@ -19,6 +19,7 @@ import type {
   PermissionAskedEvent,
   QuestionAskedEvent,
   OpenCodeErrorEvent,
+  SessionCostEvent,
 } from '../src/types/ipc';
 
 /**
@@ -168,6 +169,21 @@ function forwardMessageUpdated(
   };
 
   mainWindow.webContents.send(OpenCodeEventChannel.MessageUpdated, payload);
+
+  // Forward cost data from assistant messages that have token usage
+  if (info.role === 'assistant' && 'tokens' in info && info.tokens) {
+    const costPayload: SessionCostEvent = {
+      sessionId: info.sessionID,
+      messageId: info.id,
+      modelId: info.modelID,
+      providerId: info.providerID,
+      inputTokens: info.tokens.input,
+      outputTokens: info.tokens.output,
+      cost: info.cost,
+    };
+
+    mainWindow.webContents.send(OpenCodeEventChannel.SessionCost, costPayload);
+  }
 }
 
 function forwardPartUpdated(

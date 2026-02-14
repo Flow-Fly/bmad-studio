@@ -3,6 +3,7 @@ import { useEffect, useCallback, useRef } from 'react';
 import { AppShell } from '@/components/layout/AppShell';
 
 import { useProjectStore } from '@/stores/project.store';
+import { useConnectionStore } from '@/stores/connection.store';
 
 import { openProject, loadRecentProjects, fetchRegisteredProjects } from '@/services/project.service';
 import { selectProjectFolder } from '@/services/dialog.service';
@@ -21,6 +22,9 @@ export default function App() {
   const project = useProjectStore(s => s.project);
   const loadingState = useProjectStore(s => s.loadingState);
 
+  const initConnectivityMonitoring = useConnectionStore(s => s.initConnectivityMonitoring);
+  const cleanupConnectivityMonitoring = useConnectionStore(s => s.cleanupConnectivityMonitoring);
+
   // Refs for cleanup
   const wsEventCleanupRef = useRef<(() => void) | null>(null);
 
@@ -36,6 +40,12 @@ export default function App() {
     wsEventCleanupRef.current = registerStreamEventHandlers();
     fetchStreams(projectName);
   }
+
+  // Initialize connectivity monitoring
+  useEffect(() => {
+    initConnectivityMonitoring();
+    return () => cleanupConnectivityMonitoring();
+  }, [initConnectivityMonitoring, cleanupConnectivityMonitoring]);
 
   // Auto-load last active project on mount
   useEffect(() => {

@@ -85,6 +85,21 @@ contextBridge.exposeInMainWorld('opencode', {
     error?: string;
   }> => ipcRenderer.invoke('opencode:redetect'),
 
+  validateProvider: (opts: {
+    provider: string;
+    apiKey: string;
+    endpoint?: string;
+  }): Promise<{ success: boolean; error?: string; models?: string[] }> =>
+    ipcRenderer.invoke('opencode:validate-provider', opts),
+
+  writeConfig: (opts: {
+    provider: string;
+    apiKey: string;
+    endpoint?: string;
+    models?: string[];
+  }): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke('opencode:write-config', opts),
+
   getStatus: (): Promise<{
     installed: boolean;
     configured: boolean;
@@ -159,4 +174,16 @@ contextBridge.exposeInMainWorld('opencode', {
 
   onError: (callback: (data: { sessionId?: string; code: string; message: string }) => void) =>
     onIpcEvent('opencode:error', callback),
+
+  onSessionCost: (
+    callback: (data: {
+      sessionId: string;
+      messageId: string;
+      modelId: string;
+      providerId: string;
+      inputTokens: number;
+      outputTokens: number;
+      cost: number;
+    }) => void
+  ) => onIpcEvent('opencode:session-cost', callback),
 });

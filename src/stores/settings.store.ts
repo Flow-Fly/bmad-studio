@@ -1,5 +1,9 @@
 import { create } from 'zustand';
 import type { Settings } from '../types/settings';
+import {
+  fetchSettings as fetchSettingsService,
+  updateSettings as updateSettingsService,
+} from '../services/settings.service';
 
 interface SettingsState {
   settings: Settings | null;
@@ -11,6 +15,8 @@ interface SettingsState {
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
   clearSettingsState: () => void;
+  fetchSettings: () => Promise<void>;
+  updateSettings: (partial: Partial<Settings>) => Promise<void>;
 }
 
 export const useSettingsStore = create<SettingsState>((set) => ({
@@ -26,4 +32,9 @@ export const useSettingsStore = create<SettingsState>((set) => ({
 
   clearSettingsState: () =>
     set({ settings: null, loading: false, error: null }),
+
+  // Service functions manage loading/error state directly on the store
+  fetchSettings: () => fetchSettingsService(),
+
+  updateSettings: (partial: Partial<Settings>) => updateSettingsService(partial),
 }));

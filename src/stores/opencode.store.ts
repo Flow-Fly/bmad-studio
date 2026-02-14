@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import type { OpenCodeProviderConfig, OpenCodeConfigData } from '../types/window';
 import type { Message, MessagePart, IdentifiedPart } from '../types/message';
+import type { SessionCostEntry } from '../types/ipc';
+import { aggregateCostEntries } from '../lib/cost-utils';
 
 export type OpenCodeServerStatus =
   | 'not-installed'
@@ -61,6 +63,9 @@ interface OpenCodeState {
   // Question queue (Story 9.2)
   questionQueue: QuestionRequest[];
 
+  // Cost tracking (Story 11.4)
+  sessionCosts: SessionCostEntry[];
+
   // Actions
   setServerReady: (port: number) => void;
   setServerRestarting: (retryCount: number) => void;
@@ -97,6 +102,10 @@ interface OpenCodeState {
   // Question queue actions (Story 9.2)
   enqueueQuestion: (request: QuestionRequest) => void;
   dequeueQuestion: () => void;
+
+  // Cost tracking actions (Story 11.4)
+  addSessionCost: (entry: SessionCostEntry) => void;
+  clearCosts: () => void;
 }
 
 export const useOpenCodeStore = create<OpenCodeState>((set) => ({
@@ -135,6 +144,9 @@ export const useOpenCodeStore = create<OpenCodeState>((set) => ({
 
   // Question queue (Story 9.2)
   questionQueue: [],
+
+  // Cost tracking (Story 11.4)
+  sessionCosts: [],
 
   setServerReady: (port: number) =>
     set({
@@ -345,6 +357,19 @@ export const useOpenCodeStore = create<OpenCodeState>((set) => ({
     set((state) => ({
       questionQueue: state.questionQueue.slice(1),
     })),
+
+  // Cost tracking actions (Story 11.4)
+  addSessionCost: (entry: SessionCostEntry) =>
+    set((state) => {
+      // Deduplicate by messageId to avoid double-counting from repeated events
+      const exists = state.sessionCosts.some(
+        (c) => c.messageId === entry.messageId,
+      );
+      if (exists) return state;
+      return { sessionCosts: [...state.sessionCosts, entry] };
+    }),
+
+  clearCosts: () => set({ sessionCosts: [] }),
 }));
 
 // Initialize IPC listeners
@@ -459,3 +484,15 @@ export const useRetrying = () =>
 
 export const useServerStatus = () =>
   useOpenCodeStore((state) => state.serverStatus);
+
+// Cost tracking selectors (Story 11.4)
+export const useSessionCosts = () =>
+  useOpenCodeStore((state) => state.sessionCosts);
+
+/**
+ * Computes an aggregated cost summary from all session cost entries.
+ * Returns null if no cost entries exist.
+ */
+export function getStreamCostSummary() {
+  return aggregateCostEntries(useOpenCodeStore.getState().sessionCosts);
+}

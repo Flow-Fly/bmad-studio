@@ -20,6 +20,7 @@ export const OpenCodeEventChannel = {
   PartUpdated: 'opencode:part-updated',
   PermissionAsked: 'opencode:permission-asked',
   QuestionAsked: 'opencode:question-asked',
+  SessionCost: 'opencode:session-cost',
   Error: 'opencode:error',
 } as const;
 
@@ -142,4 +143,42 @@ export interface OpenCodeErrorEvent {
   sessionId?: string;
   code: string;
   message: string;
+}
+
+// ---------------------------------------------------------------------------
+// Cost Tracking Types (Story 11.4)
+// ---------------------------------------------------------------------------
+
+/** Payload sent when an assistant message includes token/cost data. */
+export interface SessionCostEvent {
+  sessionId: string;
+  messageId: string;
+  modelId: string;
+  providerId: string;
+  inputTokens: number;
+  outputTokens: number;
+  /** Total cost in USD as reported by the SDK. */
+  cost: number;
+}
+
+/** Per-message cost entry stored in the OpenCode store. */
+export interface SessionCostEntry {
+  sessionId: string;
+  messageId: string;
+  model: string;
+  providerId: string;
+  inputTokens: number;
+  outputTokens: number;
+  /** Estimated cost in USD (from SDK or calculated from pricing map). */
+  estimatedCost: number | null;
+  timestamp: number;
+}
+
+/** Aggregated cost summary across all session cost entries. */
+export interface StreamCostSummary {
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  totalEstimatedCost: number | null;
+  sessionCount: number;
+  entries: SessionCostEntry[];
 }

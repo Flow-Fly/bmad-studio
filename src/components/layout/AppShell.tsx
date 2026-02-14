@@ -6,6 +6,7 @@ import { Dashboard } from '@/components/dashboard/Dashboard';
 import { StreamDetail } from '@/components/streams/StreamDetail';
 import { SettingsPanel } from '@/components/settings/SettingsPanel';
 import { SidecarStatus } from '@/components/layout/SidecarStatus';
+import { OfflineBanner } from '@/components/layout/OfflineBanner';
 import { CommandPalette } from '@/components/command-palette/CommandPalette';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useProjectStore } from '@/stores/project.store';
@@ -79,6 +80,7 @@ export function AppShell({ hasProject, onProjectOpened }: AppShellProps) {
       <TooltipProvider delayDuration={300}>
         <div className="flex min-w-0 flex-1 flex-col border-l-0">
           <SidecarStatus />
+          <OfflineBanner />
           {hasBackendError && (
             <div className="border-b border-warning bg-warning/10 px-4 py-2 text-sm text-warning">
               Backend is unavailable. Stream management and artifact tracking may not work.
