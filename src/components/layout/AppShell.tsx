@@ -6,6 +6,7 @@ import { Dashboard } from '@/components/dashboard/Dashboard';
 import { StreamDetail } from '@/components/streams/StreamDetail';
 import { SettingsPanel } from '@/components/settings/SettingsPanel';
 import { SidecarStatus } from '@/components/layout/SidecarStatus';
+import { CommandPalette } from '@/components/command-palette/CommandPalette';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useProjectStore } from '@/stores/project.store';
 import { useStreamStore } from '@/stores/stream.store';
@@ -19,6 +20,7 @@ interface AppShellProps {
 export function AppShell({ hasProject, onProjectOpened }: AppShellProps) {
   const [activeMode, setActiveMode] = useState<AppMode>('dashboard');
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const hasBackendError = useHasError();
   const activeProjectName = useProjectStore((s) => s.activeProjectName);
   const prevProjectRef = useRef(activeProjectName);
@@ -47,9 +49,35 @@ export function AppShell({ hasProject, onProjectOpened }: AppShellProps) {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [activeProjectName]);
 
+  // Cmd+K / Ctrl+K keyboard shortcut to toggle command palette
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setCommandPaletteOpen((prev) => !prev);
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   const handleNavigateToStream = useCallback((streamName: string) => {
     useStreamStore.getState().setActiveStream(streamName);
     setActiveMode('stream');
+  }, []);
+
+  const handleNavigateToArtifact = useCallback(
+    (streamName: string, _artifactPath: string, _phase?: string) => {
+      useStreamStore.getState().setActiveStream(streamName);
+      setActiveMode('stream');
+      // StreamDetail will detect the stream change and show the graph view.
+      // Artifact navigation within a stream is handled by StreamDetail's own state.
+    },
+    [],
+  );
+
+  const handleCloseCommandPalette = useCallback(() => {
+    setCommandPaletteOpen(false);
   }, []);
 
   if (!hasProject) {
@@ -82,6 +110,15 @@ export function AppShell({ hasProject, onProjectOpened }: AppShellProps) {
           {activeMode === 'settings' && <SettingsPanel />}
         </div>
       </TooltipProvider>
+      {commandPaletteOpen && (
+        <CommandPalette
+          onClose={handleCloseCommandPalette}
+          onNavigateToStream={handleNavigateToStream}
+          onModeChange={setActiveMode}
+          onOpenCreateModal={() => setShowCreateModal(true)}
+          onNavigateToArtifact={handleNavigateToArtifact}
+        />
+      )}
     </div>
   );
 }
